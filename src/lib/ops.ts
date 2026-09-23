@@ -79,6 +79,10 @@ export function addRound(b: Block, date: string, type: SetType): void {
   for (const ex of b.exercises) ex.sets.push(makeSet(ex, date, type));
 }
 
+export function setRoundType(b: Block, index: number, type: SetType): void {
+  for (const ex of b.exercises) if (ex.sets[index]) ex.sets[index].type = type;
+}
+
 export function nextSetType(t: SetType): SetType {
   return t === "warmup" ? "working" : t === "working" ? "backoff" : "warmup";
 }

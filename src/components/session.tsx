@@ -18,6 +18,7 @@ import {
   newSimple,
   nextSetType,
   setLabels,
+  setRoundType,
   type SimpleSection as SimpleSectionKey,
 } from "../lib/ops";
 import { findRepeatSource } from "../lib/recent";
@@ -531,7 +532,12 @@ function ExerciseEditor({
               label={labels[k]}
               st={st}
               exName={e.name}
-              onCycle={() => upSet(st.id, (x) => (x.type = nextSetType(x.type)))}
+              onCycle={() =>
+                update((d) => {
+                  const blk = findBlock(findSession(d, s.id), b.id);
+                  setRoundType(blk, k, nextSetType(findExercise(blk, e.id).sets[k].type));
+                })
+              }
               onWeight={(v) => upSet(st.id, (x) => (x.weight = v))}
               onReps={(v) => upSet(st.id, (x) => (x.reps = v))}
               onRemove={() => undoable(`Set ${labels[k]} deleted`, (d) => {

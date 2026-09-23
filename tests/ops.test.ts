@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Block, SetType, WorkSet } from "../shared/types";
-import { addToBlock } from "../src/lib/ops";
+import { addToBlock, setRoundType } from "../src/lib/ops";
 
 const DATE = "2026-09-23";
 const set = (type: SetType, weight: number | null, reps: number | null): WorkSet => ({ id: crypto.randomUUID(), type, weight, reps });
@@ -34,5 +34,20 @@ describe("superset sets stay in sync", () => {
     const b: Block = { id: "b", exercises: [] };
     addToBlock(b, "Pull-up", DATE);
     expect(b.exercises.map((e) => [e.name, e.sets.length])).toEqual([["Pull-up", 1]]);
+  });
+
+  it("changing a set's type changes that round in every exercise", () => {
+    const b: Block = {
+      id: "b",
+      exercises: [
+        { id: "e1", name: "Push-up", comment: "", sets: [set("warmup", 0, 5), set("warmup", 0, 8)] },
+        { id: "e2", name: "Pull-up", comment: "", sets: [set("warmup", 0, 3), set("warmup", 0, 5)] },
+      ],
+    };
+    setRoundType(b, 1, "working");
+    expect(types(b)).toEqual([
+      ["warmup", "working"],
+      ["warmup", "working"],
+    ]);
   });
 });
