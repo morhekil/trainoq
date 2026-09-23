@@ -63,6 +63,18 @@ export function newExercise(name: string, date: string): MainExercise {
   return ex;
 }
 
+/** Every exercise in a superset has the same set types, so a new one copies them from the block. */
+export function addToBlock(b: Block, name: string, date: string): void {
+  const [first] = b.exercises;
+  if (!first) {
+    b.exercises.push(newExercise(name, date));
+    return;
+  }
+  const ex: MainExercise = { id: uid(), name, sets: [], comment: "" };
+  for (const s of first.sets) ex.sets.push(makeSet(ex, date, s.type));
+  b.exercises.push(ex);
+}
+
 export function addRound(b: Block, date: string, type: SetType): void {
   for (const ex of b.exercises) ex.sets.push(makeSet(ex, date, type));
 }

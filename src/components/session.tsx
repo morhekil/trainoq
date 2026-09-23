@@ -5,6 +5,7 @@ import { useTick } from "../lib/hooks";
 import { lastTime } from "../lib/library";
 import {
   addRound,
+  addToBlock,
   blockLetter,
   copyMain,
   copySimple,
@@ -293,7 +294,7 @@ function MainSection({ s }: { s: Session }) {
         openPicker({
           section: "main",
           title: "Superset – second exercise",
-          onPick: (second) => update((d) => findBlock(findSession(d, s.id), blockId).exercises.push(newExercise(second, date))),
+          onPick: (second) => update((d) => addToBlock(findBlock(findSession(d, s.id), blockId), second, date)),
         });
       },
     });
@@ -356,7 +357,7 @@ function BlockCard({ s, b, index, count }: { s: Session; b: Block; index: number
     openPicker({
       section: "main",
       title: "Add to superset",
-      onPick: (name) => upBlock((x) => x.exercises.push(newExercise(name, date))),
+      onPick: (name) => upBlock((x) => addToBlock(x, name, date)),
     });
 
   const blockMenu = () =>
