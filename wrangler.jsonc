@@ -1,0 +1,23 @@
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "trainoq",
+	"main": "worker/index.ts",
+	"compatibility_date": "2026-09-01",
+	"assets": {
+		"not_found_handling": "single-page-application",
+		"run_worker_first": [
+			"/api/*"
+		]
+	},
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "trainoq",
+			"migrations_dir": "migrations",
+			"database_id": "25ebf2f1-9953-41a5-ba5f-06b5eea54eb6"
+		}
+	],
+	"observability": {
+		"enabled": true
+	}
+}
