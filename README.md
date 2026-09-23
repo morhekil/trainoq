@@ -52,7 +52,7 @@ Custom domain: Workers & Pages → trainoq → Settings → Domains & Routes, or
 ## Layout
 
 ```
-shared/     data model, share-text formatter, starter exercise list (used by app + worker)
+shared/     data model, share-text formatter, starter exercise list (seed-exercises.ts)
 worker/     API: auth.ts (password → signed cookie), db.ts (D1 queries), index.ts (routes)
 src/        React app
   lib/      store.ts (local-first sync), library.ts (exercise search/history), ops.ts (edits)
