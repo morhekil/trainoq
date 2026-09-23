@@ -17,6 +17,7 @@ import {
   newExercise,
   newSimple,
   nextSetType,
+  removeRound,
   setLabels,
   setRoundType,
   type SimpleSection as SimpleSectionKey,
@@ -532,6 +533,7 @@ function ExerciseEditor({
               label={labels[k]}
               st={st}
               exName={e.name}
+              noun={superset ? "round" : "set"}
               onCycle={() =>
                 update((d) => {
                   const blk = findBlock(findSession(d, s.id), b.id);
@@ -540,22 +542,14 @@ function ExerciseEditor({
               }
               onWeight={(v) => upSet(st.id, (x) => (x.weight = v))}
               onReps={(v) => upSet(st.id, (x) => (x.reps = v))}
-              onRemove={() => undoable(`Set ${labels[k]} deleted`, (d) => {
-                const x = findExercise(findBlock(findSession(d, s.id), b.id), e.id);
-                x.sets = x.sets.filter((y) => y.id !== st.id);
-              })}
+              onRemove={() =>
+                undoable(`${superset ? "Round" : "Set"} ${labels[k]} deleted`, (d) => removeRound(findBlock(findSession(d, s.id), b.id), k))
+              }
             />
           ))}
         </div>
       )}
-      {superset ? (
-        <button type="button" className="link-btn subtle" onClick={() => upEx((x) => x.sets.push(makeSet(x, date)))}>
-          <Icon name="plus" size={14} />
-          Extra set
-        </button>
-      ) : (
-        <AddSetButtons noun="Set" lastType={e.sets.at(-1)?.type} onAdd={(t) => upEx((x) => x.sets.push(makeSet(x, date, t)))} />
-      )}
+      {!superset && <AddSetButtons noun="Set" lastType={e.sets.at(-1)?.type} onAdd={(t) => upEx((x) => x.sets.push(makeSet(x, date, t)))} />}
     </div>
   );
 }
@@ -566,6 +560,7 @@ function SetRow({
   label,
   st,
   exName,
+  noun,
   onCycle,
   onWeight,
   onReps,
@@ -574,6 +569,7 @@ function SetRow({
   label: string;
   st: WorkSet;
   exName: string;
+  noun: string;
   onCycle: () => void;
   onWeight: (v: number | null) => void;
   onReps: (v: number | null) => void;
@@ -591,7 +587,7 @@ function SetRow({
       </button>
       <Stepper value={st.weight} onChange={onWeight} step={2.5} decimal placeholder="–" label={`${exName} ${label} weight`} />
       <Stepper value={st.reps} onChange={onReps} step={1} placeholder="–" label={`${exName} ${label} reps`} />
-      <button type="button" className="icon-btn small" aria-label={`Delete set ${label}`} onClick={onRemove}>
+      <button type="button" className="icon-btn small" aria-label={`Delete ${noun} ${label}`} onClick={onRemove}>
         <Icon name="x" size={16} />
       </button>
     </div>

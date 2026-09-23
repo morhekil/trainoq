@@ -974,13 +974,6 @@ textarea {
 
 /* ---------------------------------------------------------------- fixes after phone testing */
 
-.link-btn.subtle {
-  color: var(--muted);
-  font-size: 13px;
-  min-height: 32px;
-  padding: 4px 2px;
-}
-
 .banner.floating {
   position: fixed;
   left: 12px;

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { Block, SetType, WorkSet } from "../shared/types";
-import { addToBlock, setRoundType } from "../src/lib/ops";
+import { addToBlock, removeRound, setRoundType } from "../src/lib/ops";
 
 const DATE = "2026-09-23";
 const set = (type: SetType, weight: number | null, reps: number | null): WorkSet => ({ id: crypto.randomUUID(), type, weight, reps });
@@ -48,6 +48,27 @@ describe("superset sets stay in sync", () => {
     expect(types(b)).toEqual([
       ["warmup", "working"],
       ["warmup", "working"],
+    ]);
+  });
+
+  it("deleting a set deletes that round from every exercise", () => {
+    const b: Block = {
+      id: "b",
+      exercises: [
+        { id: "e1", name: "Push-up", comment: "", sets: [set("warmup", 0, 5), set("working", 10, 10), set("backoff", 0, 12)] },
+        { id: "e2", name: "Pull-up", comment: "", sets: [set("warmup", 0, 3), set("working", 5, 6), set("backoff", 0, 8)] },
+      ],
+    };
+    removeRound(b, 1);
+    expect(b.exercises.map((e) => e.sets.map((s) => [s.type, s.weight, s.reps]))).toEqual([
+      [
+        ["warmup", 0, 5],
+        ["backoff", 0, 12],
+      ],
+      [
+        ["warmup", 0, 3],
+        ["backoff", 0, 8],
+      ],
     ]);
   });
 });

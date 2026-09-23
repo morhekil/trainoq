@@ -13,7 +13,8 @@ Runs on Cloudflare: a Worker serves the app and a small JSON API, data lives in 
 - **Main** – single exercises or supersets (A, B1/B2/B3…). Each set has a type:
   - `W1 W2` warm-up (dashed), `1 2 3` working (solid), `B1` back-off (tinted). Tap the label to change type.
   - **+ Set / + Round → Warm-up | Working | Back-off.** A new set copies the last set of that type; the first working or back-off set starts from what you did last session. Correct with the ± buttons (2.5 kg / 1 rep) or type.
-  - A round adds one set to every exercise in the superset. "Extra set" adds to one exercise only; ✕ removes a set (with Undo).
+  - Every exercise in a superset has the same sets. A round adds one set to each exercise, changing a set's type changes it for the whole round, and ✕ removes the whole round (with Undo). An exercise added to a superset gets the same set types as the others. Weights and reps stay per exercise.
+  - ✕ on a single exercise removes one set (with Undo).
   - "Last Tue 22 Sep: …" under each exercise shows the previous session.
 - **Exercise search** – full-screen picker: recent first, starter list, search by name or alias (`rdl`, `ohp`). If it's not there, "Use "…"" saves what you typed and it shows up in search from then on.
 - **Repeat** – an empty section offers "Repeat <last date>" to copy the last session's warm-up, main structure (no sets) or cool-down.

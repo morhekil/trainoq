@@ -83,6 +83,10 @@ export function setRoundType(b: Block, index: number, type: SetType): void {
   for (const ex of b.exercises) if (ex.sets[index]) ex.sets[index].type = type;
 }
 
+export function removeRound(b: Block, index: number): void {
+  for (const ex of b.exercises) ex.sets.splice(index, 1);
+}
+
 export function nextSetType(t: SetType): SetType {
   return t === "warmup" ? "working" : t === "working" ? "backoff" : "warmup";
 }
