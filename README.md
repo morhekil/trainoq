@@ -59,7 +59,7 @@ src/        React app
   lib/      store.ts (local-first sync), library.ts (exercise search/history), ops.ts (edits)
   components/
 migrations/ D1 schema
-tests/      formatter tests (npm test)
+tests/      unit tests (npm test)
 ```
 
 ### Data model
