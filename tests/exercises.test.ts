@@ -18,4 +18,10 @@ describe("starter exercise list", () => {
     expect(names("tke", "warmup")).toContain("Terminal knee extension");
     expect(names("band row", "main")).toContain("Band row");
   });
+
+  it("puts the plain exercise first however the hyphen is typed", () => {
+    for (const q of ["push-up", "push up", "pushup"]) expect(names(q, "main")[0]).toBe("Push-up");
+    for (const q of ["pull up", "pullup"]) expect(names(q, "main")[0]).toBe("Pull-up");
+    expect(names("muscleup", "main")[0]).toBe("Muscle-up");
+  });
 });

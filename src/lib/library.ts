@@ -133,15 +133,20 @@ export function searchExercises(query: string, section: Section): SearchGroup[] 
   }
 
   const tokens = q.split(" ");
+  // "push up", "push-up" and "pushup" all mean the same exercise
+  const flat = (s: string) => s.replace(/[\s-]/g, "");
+  const fq = flat(q);
   const scored: { item: LibItem; score: number }[] = [];
   for (const item of items) {
     const hay = `${item.key} ${item.aliases.toLowerCase()}`;
-    if (!tokens.every((t) => hay.includes(t))) continue;
+    const flatHay = flat(hay);
+    if (!tokens.every((t) => hay.includes(t) || flatHay.includes(flat(t)))) continue;
+    const fk = flat(item.key);
     let score = 0;
-    if (item.key === q) score += 1000;
-    if (item.key.startsWith(q)) score += 200;
+    if (fk === fq) score += 1000;
+    if (fk.startsWith(fq)) score += 200;
     if (item.key.split(/[\s-]/).some((w) => w.startsWith(tokens[0]))) score += 80;
-    if (!tokens.every((t) => item.key.includes(t))) score -= 40; // matched only via alias
+    if (!tokens.every((t) => fk.includes(flat(t)))) score -= 40; // matched only via alias
     score += Math.min(item.uses[section] ?? 0, 50) * 4 + Math.min(item.total, 50);
     if (item.hint === section) score += 25;
     scored.push({ item, score });
