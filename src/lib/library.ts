@@ -2,7 +2,7 @@
 
 import { SEED_EXERCISES } from "../../shared/exercises";
 import { nameKey, type DayDoc, type ExerciseHistoryEntry, type ExerciseLibrary, type Section, type WorkSet } from "../../shared/types";
-import { api } from "./api";
+import { request, trpc } from "./api";
 import { cachedDays, onSynced } from "./store";
 import { lsGet, lsSet } from "./util";
 
@@ -37,14 +37,11 @@ export function refreshLibrary(force = false): Promise<void> {
   if (!force && Date.now() - lastFetch < 5000) return Promise.resolve();
   pending = (async () => {
     try {
-      const res = await api("/api/exercises");
-      if (res.ok) {
-        lib = (await res.json()) as ExerciseLibrary;
-        lsSet(LS_KEY, lib);
-        lastFetch = Date.now();
-        version++;
-        listeners.forEach((fn) => fn());
-      }
+      lib = await request(trpc.exercises.library.query());
+      lsSet(LS_KEY, lib);
+      lastFetch = Date.now();
+      version++;
+      listeners.forEach((fn) => fn());
     } catch {
       /* offline – keep cached copy */
     } finally {

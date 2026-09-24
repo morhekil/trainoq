@@ -7,30 +7,6 @@ export interface StoredDay {
   updatedAt: string;
 }
 
-/** Light structural check so a bad client can't store junk. Returns an error message or null. */
-export function validateDay(doc: unknown, date: string): string | null {
-  if (!doc || typeof doc !== "object") return "doc must be an object";
-  const d = doc as Record<string, unknown>;
-  if (d.date !== date) return "doc.date does not match URL";
-  if (typeof d.morning !== "string" || typeof d.notes !== "string") return "morning/notes must be strings";
-  if (!Array.isArray(d.sessions) || !Array.isArray(d.activities)) return "sessions/activities must be arrays";
-  for (const s of d.sessions as Record<string, unknown>[]) {
-    if (!s || typeof s !== "object") return "bad session";
-    if (typeof s.startedAt !== "string") return "session.startedAt must be a string";
-    if (!Array.isArray(s.warmup) || !Array.isArray(s.main) || !Array.isArray(s.cooldown)) return "bad session sections";
-    for (const b of s.main as Record<string, unknown>[]) {
-      if (!b || !Array.isArray(b.exercises)) return "bad block";
-      for (const e of b.exercises as Record<string, unknown>[]) {
-        if (!e || typeof e.name !== "string" || !Array.isArray(e.sets)) return "bad exercise";
-      }
-    }
-    for (const it of [...(s.warmup as unknown[]), ...(s.cooldown as unknown[])] as Record<string, unknown>[]) {
-      if (!it || typeof it.name !== "string") return "bad warm-up/cool-down item";
-    }
-  }
-  return null;
-}
-
 interface LogRow {
   section: Section;
   name: string;

@@ -2,7 +2,7 @@
 
 Mobile-first training log: morning check-in, sessions with warm-up / main / cool-down, supersets, set-by-set weights, calories, and a one-tap text summary to send to your PT or physio.
 
-Runs on Cloudflare: a Worker serves the app and a small JSON API, data lives in D1.
+Runs on Cloudflare: a Worker serves the app and a tRPC API, data lives in D1.
 
 ## What it does (v1)
 
@@ -54,9 +54,9 @@ Custom domain: Workers & Pages → trainoq → Settings → Domains & Routes, or
 
 ```
 shared/     data model, share-text formatter, starter exercise list (seed-exercises.ts)
-worker/     API: auth.ts (password → signed cookie), db.ts (D1 queries), index.ts (routes)
+worker/     API: auth.ts (password → signed cookie), db.ts (D1 queries), router.ts (tRPC), index.ts (adapter)
 src/        React app
-  lib/      store.ts (local-first sync), library.ts (exercise search/history), ops.ts (edits)
+  lib/      api.ts (typed tRPC client), store.ts (local-first sync), library.ts (exercise search/history), ops.ts (edits)
   components/
 migrations/ D1 schema
 tests/      unit tests (npm test)
@@ -66,19 +66,21 @@ tests/      unit tests (npm test)
 
 One JSON document per day (`days` table) is the source of truth. On every save the worker rebuilds `exercise_log` – one row per exercise per day – which powers search, "last time" hints and, later, progress charts. Types are in `shared/types.ts`.
 
-### API
+### API seam
 
-All routes except login require the session cookie.
+All app data traffic goes through `/api/trpc`. The browser imports only the `AppRouter` type from `worker/router.ts`; the Worker owns auth, validation, D1 access, and write conflicts. A TypeScript agent client can use the same router type and tRPC HTTP client. Call `auth.login` with the password, retain the returned cookie, then use the other procedures.
 
-| Method | Path | |
+| Feature | Procedure | Contract |
 | --- | --- | --- |
-| POST | `/api/login` | `{password}` → sets cookie |
-| POST | `/api/logout` | |
-| GET | `/api/days/:date` | `{date, doc, updatedAt}` (`doc: null` if nothing logged) |
-| PUT | `/api/days/:date` | `{doc, base}` – `base` is the `updatedAt` you last saw; 409 + current copy if it changed since |
-| GET | `/api/days?before=&limit=&sessions=1` | recent days, newest first |
-| GET | `/api/exercises` | usage stats + last 4 main-training entries per exercise |
-| GET | `/api/export` | everything as JSON |
+| Sign in, session check, sign out | `auth.login`, `auth.me`, `auth.logout` | Signed cookie; all data procedures require it |
+| Day view and history | `days.get`, `days.list` | Day documents and server `updatedAt` |
+| Morning, sessions, sets, activities, calories, notes, repeat | `days.save` | Complete validated `DayDoc` plus `base`; returns the current copy on conflict |
+| Exercise search and last-time hints | `exercises.library` | Usage stats and recent main sets; client adds the shared starter catalog and unsynced local entries |
+| Download backup | `backup.export` | All days and export timestamp; browser turns the result into a JSON file |
+
+The browser keeps its local draft for offline use and syncs it with `days.save`. The shared document schema is the transport boundary. UI edit helpers, formatting, and search ranking remain client-side; another client can read and write the same document without reproducing the UI. The next seam, when agent workflows need intent-level operations, is to move selected edits into shared pure functions and expose narrow mutations through this router. Keep the day document and revision check as the common persistence contract until then.
+
+Before simultaneous clients are active, make the D1 revision check and write atomic: `putDay` currently reads the revision before its write batch, so two concurrent saves can both pass the check. Then add agent credentials and intent-level procedures for the concrete agent workflows, using the same router rather than another transport.
 
 ## Next
 

@@ -16,8 +16,11 @@
     "setup:local": "node -e \"require('fs').existsSync('.dev.vars')||require('fs').copyFileSync('.dev.vars.example','.dev.vars')\" && npm run db:migrate:local"
   },
   "dependencies": {
+    "@trpc/client": "^11.19.0",
+    "@trpc/server": "^11.19.0",
     "react": "^19.3.0",
-    "react-dom": "^19.3.0"
+    "react-dom": "^19.3.0",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.57.3",

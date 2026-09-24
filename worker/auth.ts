@@ -10,9 +10,9 @@ function b64url(buf: ArrayBuffer): string {
   return btoa(s).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
 }
 
-function fromB64url(s: string): Uint8Array {
+function fromB64url(s: string): Uint8Array<ArrayBuffer> {
   const bin = atob(s.replace(/-/g, "+").replace(/_/g, "/"));
-  const out = new Uint8Array(bin.length);
+  const out = new Uint8Array(new ArrayBuffer(bin.length));
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
   return out;
 }
@@ -52,34 +52,30 @@ async function passwordMatches(given: string, expected: string): Promise<boolean
     crypto.subtle.digest("SHA-256", enc.encode(given)),
     crypto.subtle.digest("SHA-256", enc.encode(expected)),
   ]);
-  return crypto.subtle.timingSafeEqual(a, b);
+  const left = new Uint8Array(a);
+  const right = new Uint8Array(b);
+  let difference = 0;
+  for (let i = 0; i < left.length; i++) difference |= left[i] ^ right[i];
+  return difference === 0;
 }
 
 function cookieHeader(value: string, maxAge: number, secure: boolean): string {
   return `${COOKIE}=${value}; Path=/; HttpOnly; SameSite=Lax; Max-Age=${maxAge}${secure ? "; Secure" : ""}`;
 }
 
-export async function login(req: Request, env: Env): Promise<Response> {
-  if (!env.APP_PASSWORD) {
-    return Response.json({ error: "APP_PASSWORD is not configured on the server" }, { status: 500 });
-  }
-  let password = "";
-  try {
-    password = String(((await req.json()) as { password?: unknown }).password ?? "");
-  } catch {
-    /* empty */
-  }
+export async function sessionCookie(password: string, req: Request, env: Env): Promise<string | null> {
+  if (!env.APP_PASSWORD) throw new Error("APP_PASSWORD is not configured on the server");
   if (!(await passwordMatches(password, env.APP_PASSWORD))) {
     await new Promise((r) => setTimeout(r, 400)); // slow down guessing a little
-    return Response.json({ error: "Wrong password" }, { status: 401 });
+    return null;
   }
   const exp = Math.floor(Date.now() / 1000) + MAX_AGE_S;
   const sig = await crypto.subtle.sign("HMAC", await key(env.APP_PASSWORD), enc.encode(`v1.${exp}`));
   const secure = new URL(req.url).protocol === "https:";
-  return new Response(null, { status: 204, headers: { "Set-Cookie": cookieHeader(`${exp}.${b64url(sig)}`, MAX_AGE_S, secure) } });
+  return cookieHeader(`${exp}.${b64url(sig)}`, MAX_AGE_S, secure);
 }
 
-export function logout(req: Request): Response {
+export function clearSessionCookie(req: Request): string {
   const secure = new URL(req.url).protocol === "https:";
-  return new Response(null, { status: 204, headers: { "Set-Cookie": cookieHeader("", 0, secure) } });
+  return cookieHeader("", 0, secure);
 }

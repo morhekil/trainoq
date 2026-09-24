@@ -1,8 +1,8 @@
 // Finds the most recent earlier session with a given section filled in, for "Repeat" buttons.
 
 import type { Block, DayDoc, SimpleItem } from "../../shared/types";
-import { api } from "./api";
-import { cachedDays, ingestServerDays, type StoredDay } from "./store";
+import { request, trpc } from "./api";
+import { cachedDays, ingestServerDays } from "./store";
 
 const fetched = new Set<string>();
 
@@ -11,9 +11,7 @@ export async function loadRecentSessions(beforeDate: string): Promise<boolean> {
   if (fetched.has(beforeDate)) return false;
   fetched.add(beforeDate);
   try {
-    const res = await api(`/api/days?before=${beforeDate}&sessions=1&limit=14`);
-    if (!res.ok) return false;
-    const { days } = (await res.json()) as { days: StoredDay[] };
+    const days = await request(trpc.days.list.query({ before: beforeDate, withSessions: true, limit: 14 }));
     ingestServerDays(days);
     return true;
   } catch {

@@ -4,10 +4,10 @@ import { isDayEmpty } from "../shared/types";
 import { DayView } from "./components/day";
 import { Icon, type IconName } from "./components/icons";
 import { OverlayProvider, useOverlays } from "./components/overlays";
-import { api, AuthError, onAuthRequired } from "./lib/api";
+import { request, trpc, AuthError, onAuthRequired } from "./lib/api";
 import { useOnline, useSyncStatus } from "./lib/hooks";
 import { refreshLibrary } from "./lib/library";
-import { cachedDays, clearLocalData, getEntry, hasUnsynced, ingestServerDays, syncAll, type StoredDay, type SyncStatus } from "./lib/store";
+import { cachedDays, clearLocalData, getEntry, hasUnsynced, ingestServerDays, syncAll, type SyncStatus } from "./lib/store";
 import { addDays, lsGet, lsSet, todayLocal } from "./lib/util";
 
 // ---------------------------------------------------------------- routing (hash based)
@@ -64,12 +64,10 @@ export default function App() {
       lsSet("tq:authed", false);
       setAuth("out");
     });
-    api("/api/me")
-      .then((r) => {
-        if (r.ok) {
-          lsSet("tq:authed", true);
-          setAuth("in");
-        }
+    request(trpc.auth.me.query())
+      .then(() => {
+        lsSet("tq:authed", true);
+        setAuth("in");
       })
       .catch((e) => {
         if (e instanceof AuthError) setAuth("out");
@@ -106,12 +104,26 @@ function Main({ onSignedOut }: { onSignedOut: () => void }) {
 
   const date = route.view === "day" ? (route.date ?? today) : today;
 
+  const downloadBackup = async () => {
+    try {
+      const backup = await request(trpc.backup.export.query());
+      const url = URL.createObjectURL(new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" }));
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `trainoq-export-${backup.exportedAt.slice(0, 10)}.json`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1000);
+    } catch {
+      toast("Couldn't download backup – check your connection");
+    }
+  };
+
   const appMenu = () =>
     openSheet({
       actions: [
         { label: "History", icon: "history", onClick: () => (location.hash = "#/history") },
         { label: "Share this day", icon: "share", onClick: () => setSharing(date) },
-        { label: "Download backup (JSON)", icon: "download", onClick: () => window.open("/api/export", "_blank") },
+        { label: "Download backup (JSON)", icon: "download", onClick: () => void downloadBackup() },
         {
           label: "Sign out",
           icon: "logout",
@@ -121,7 +133,7 @@ function Main({ onSignedOut }: { onSignedOut: () => void }) {
               return;
             }
             try {
-              await api("/api/logout", { method: "POST" });
+              await request(trpc.auth.logout.mutate());
             } catch {
               /* ignore */
             }
@@ -246,12 +258,9 @@ function HistoryView() {
   const load = async (before?: string) => {
     setLoading(true);
     try {
-      const res = await api(`/api/days?limit=30${before ? `&before=${before}` : ""}`);
-      if (res.ok) {
-        const { days } = (await res.json()) as { days: StoredDay[] };
-        ingestServerDays(days);
-        if (days.length < 30) setDone(true);
-      }
+      const days = await request(trpc.days.list.query({ limit: 30, before }));
+      ingestServerDays(days);
+      if (days.length < 30) setDone(true);
     } catch {
       /* offline – show what's cached */
     } finally {
@@ -359,11 +368,10 @@ function Login({ onDone }: { onDone: () => void }) {
     setBusy(true);
     setError(null);
     try {
-      const res = await api("/api/login", { method: "POST", body: JSON.stringify({ password }) });
-      if (res.ok) onDone();
-      else setError(((await res.json().catch(() => ({}))) as { error?: string }).error ?? "Sign-in failed");
-    } catch {
-      setError("Can't reach the server – check your connection");
+      await request(trpc.auth.login.mutate({ password }), true);
+      onDone();
+    } catch (err) {
+      setError(err instanceof AuthError ? err.message : "Can't reach the server – check your connection");
     } finally {
       setBusy(false);
     }

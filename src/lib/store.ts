@@ -2,7 +2,7 @@
 // synced to the server in the background, so a flaky gym connection never loses data.
 
 import { emptyDay, type DayDoc } from "../../shared/types";
-import { api, AuthError, NetworkError } from "./api";
+import { trpc, request, AuthError, NetworkError } from "./api";
 import { lsGet, lsKeys, lsRemove, lsSet } from "./util";
 
 export interface StoredDay {
@@ -143,16 +143,13 @@ export async function loadFromServer(date: string): Promise<void> {
     return;
   }
   try {
-    const res = await api(`/api/days/${date}`);
+    const s = await request(trpc.days.get.query(date));
     offline = false;
-    if (res.ok) {
-      const s = (await res.json()) as { date: string; doc: DayDoc | null; updatedAt: string | null };
-      if (s.doc && s.updatedAt) ingest({ date, doc: s.doc, updatedAt: s.updatedAt });
-      else {
-        // server has nothing for this day (never saved, or cleared on another device)
-        const e = getEntry(date);
-        if (e && !e.dirty && e.base !== null) persist(date, { doc: emptyDay(date), base: null, dirty: false, rev: e.rev + 1 });
-      }
+    if (s.doc && s.updatedAt) ingest({ date, doc: s.doc, updatedAt: s.updatedAt });
+    else {
+      // server has nothing for this day (never saved, or cleared on another device)
+      const e = getEntry(date);
+      if (e && !e.dirty && e.base !== null) persist(date, { doc: emptyDay(date), base: null, dirty: false, rev: e.rev + 1 });
     }
   } catch (e) {
     if (e instanceof NetworkError) offline = true;
@@ -160,7 +157,7 @@ export async function loadFromServer(date: string): Promise<void> {
   notifyStatus();
 }
 
-export async function sync(date: string, opts: { keepalive?: boolean } = {}): Promise<void> {
+export async function sync(date: string): Promise<void> {
   const e = getEntry(date);
   if (!e || !e.dirty || e.conflict) return;
   if (inflight.has(date)) {
@@ -171,42 +168,36 @@ export async function sync(date: string, opts: { keepalive?: boolean } = {}): Pr
   notifyStatus();
   const rev = e.rev;
   try {
-    const res = await api(`/api/days/${date}`, {
-      method: "PUT",
-      body: JSON.stringify({ doc: e.doc, base: e.base }),
-      keepalive: opts.keepalive,
-    });
+    const result = await request(trpc.days.save.mutate({ date, doc: e.doc, base: e.base }));
     offline = false;
-    if (res.ok) {
+    if (result.ok) {
       failing = false;
-      const { updatedAt } = (await res.json()) as { updatedAt: string | null };
       const cur = getEntry(date)!;
       const stillDirty = cur.rev !== rev;
-      persist(date, { ...cur, base: updatedAt, dirty: stillDirty });
+      persist(date, { ...cur, base: result.updatedAt, dirty: stillDirty });
       if (stillDirty) schedule(date, 300);
       syncedListeners.forEach((fn) => fn());
-    } else if (res.status === 409) {
-      const body = (await res.json()) as { current: StoredDay | null };
+    } else {
       const cur = getEntry(date)!;
       persist(date, {
         ...cur,
-        conflict: body.current ? { doc: body.current.doc, updatedAt: body.current.updatedAt } : { doc: null, updatedAt: null },
+        conflict: result.current ? { doc: result.current.doc, updatedAt: result.current.updatedAt } : { doc: null, updatedAt: null },
       });
-    } else {
-      failing = true;
-      console.warn("Save failed", res.status, await res.text());
     }
   } catch (err) {
     if (err instanceof NetworkError) offline = true;
-    else if (!(err instanceof AuthError)) failing = true;
+    else if (!(err instanceof AuthError)) {
+      failing = true;
+      console.warn("Save failed", err);
+    }
   } finally {
     inflight.delete(date);
     notifyStatus();
   }
 }
 
-export function syncAll(opts: { keepalive?: boolean } = {}): void {
-  for (const date of dirty) if (!conflicts.has(date)) void sync(date, opts);
+export function syncAll(): void {
+  for (const date of dirty) if (!conflicts.has(date)) void sync(date);
 }
 
 export function resolveConflict(date: string, keep: "mine" | "theirs"): void {
@@ -275,8 +266,7 @@ if (typeof window !== "undefined") {
     syncAll();
   });
   document.addEventListener("visibilitychange", () => {
-    if (document.visibilityState === "hidden") syncAll({ keepalive: true });
-    else syncAll();
+    syncAll();
   });
   setInterval(() => {
     if (dirty.size) syncAll();
