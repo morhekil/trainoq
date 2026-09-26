@@ -139,6 +139,9 @@ test("later messages do not replace an earlier Undo", async ({ page }) => {
     await page.getByRole("button", { name: "Delete", exact: true }).click();
   }
   await expect(page.getByRole("button", { name: "Undo" })).toHaveCount(2, { timeout: 1_000 });
+  await page.getByRole("button", { name: "Undo" }).first().click();
+  await expect(page.getByRole("button", { name: "Activity options" })).toHaveCount(2);
+  await expect(page.getByRole("button", { name: "Undo" })).toHaveCount(0);
 });
 
 test("backup error stays until dismissed", async ({ page }) => {

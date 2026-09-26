@@ -67,7 +67,7 @@ export function OverlayProvider({ children }: { children: ReactNode }) {
               {item.undo && (
                 <button type="button" className="toast-action" onClick={() => {
                   item.undo?.();
-                  setToasts((current) => current.filter((toast) => toast.id !== item.id));
+                  setToasts((current) => current.filter((toast) => !toast.undo || toast.id < item.id));
                 }}>Undo</button>
               )}
               <button type="button" className="toast-action" aria-label="Dismiss message" onClick={() => {
