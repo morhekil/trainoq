@@ -72,6 +72,13 @@ test("login screen", async ({ page }) => {
   await expect(page).toHaveScreenshot("login.png");
 });
 
+test("password keeps a visible label after entry", async ({ page }) => {
+  await mockApi(page, false);
+  await page.goto("/");
+  await page.getByLabel("Password").fill("example-password");
+  await expect(page.getByText("Password", { exact: true })).toBeVisible();
+});
+
 test("password placeholder remains readable", async ({ page }) => {
   await mockApi(page, false);
   await page.goto("/");
@@ -208,6 +215,31 @@ test("exercise search shows keyboard focus", async ({ page }) => {
   }));
   expect(indicator.outline).not.toBe("none");
   expect(indicator.width).toBeGreaterThanOrEqual(2);
+});
+
+test("exercise search keeps its context after typing", async ({ page }) => {
+  await mockApi(page);
+  await page.addInitScript(({ date, doc }) => {
+    localStorage.setItem("tq:authed", JSON.stringify(true));
+    localStorage.setItem(`tq:day:${date}`, JSON.stringify({ doc, base: null, dirty: false, rev: 1 }));
+  }, { date: day, doc });
+  await page.goto(`/#/d/${day}`);
+  await page.getByRole("button", { name: "Add exercise" }).first().click();
+  await page.getByRole("searchbox", { name: "Warm-up exercise" }).fill("squat");
+  await expect(page.getByRole("dialog", { name: "Warm-up exercise" }).getByText("Warm-up exercise", { exact: true })).toBeVisible();
+});
+
+test("day and session notes keep visible labels after entry", async ({ page }) => {
+  await mockApi(page);
+  await page.addInitScript(({ date, doc }) => {
+    localStorage.setItem("tq:authed", JSON.stringify(true));
+    localStorage.setItem(`tq:day:${date}`, JSON.stringify({ doc, base: null, dirty: false, rev: 1 }));
+  }, { date: day, doc });
+  await page.goto(`/#/d/${day}`);
+  await page.getByRole("textbox", { name: "Day notes" }).fill("Evening update");
+  await page.getByRole("textbox", { name: "Session notes" }).fill("Form improved");
+  await expect(page.getByText("Day notes", { exact: true })).toBeVisible();
+  await expect(page.getByText("Session notes", { exact: true })).toBeVisible();
 });
 
 test("dark day and conflict states", async ({ page }) => {

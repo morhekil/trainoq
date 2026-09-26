@@ -219,7 +219,8 @@ function TotalsCard() {
         />
       </label>
       {logged > 0 && <div className="hint">Logged above: {logged} cal</div>}
-      <AutoTextarea minRows={1} placeholder="Day notes" aria-label="Day notes" value={doc.notes} onChange={(e) => update((d) => (d.notes = e.target.value))} />
+      <label className="card-title" htmlFor="day-notes">Day notes</label>
+      <AutoTextarea id="day-notes" minRows={1} value={doc.notes} onChange={(e) => update((d) => (d.notes = e.target.value))} />
     </section>
   );
 }

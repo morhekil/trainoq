@@ -45,26 +45,29 @@ export function ExercisePicker({ state, onClose }: { state: PickerState; onClose
         <button type="button" className="icon-btn" aria-label="Close" onClick={onClose}>
           <Icon name="back" />
         </button>
-        <div className="picker-search">
-          <Icon name="search" size={18} />
-          <input
-            ref={inputRef}
-            type="search"
-            value={q}
-            placeholder={state.title}
-            autoComplete="off"
-            autoCorrect="off"
-            enterKeyHint="done"
-            onChange={(e) => setQ(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === "Enter" && typed) pick(canonicalName(typed));
-            }}
-          />
-          {q && (
-            <button type="button" className="icon-btn small" aria-label="Clear" onClick={() => setQ("")}>
-              <Icon name="x" size={16} />
-            </button>
-          )}
+        <div className="picker-search-field">
+          <label className="picker-label" htmlFor="exercise-search">{state.title}</label>
+          <div className="picker-search">
+            <Icon name="search" size={18} />
+            <input
+              id="exercise-search"
+              ref={inputRef}
+              type="search"
+              value={q}
+              autoComplete="off"
+              autoCorrect="off"
+              enterKeyHint="done"
+              onChange={(e) => setQ(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === "Enter" && typed) pick(canonicalName(typed));
+              }}
+            />
+            {q && (
+              <button type="button" className="icon-btn small" aria-label="Clear" onClick={() => setQ("")}>
+                <Icon name="x" size={16} />
+              </button>
+            )}
+          </div>
         </div>
       </div>
       <div className="picker-list">

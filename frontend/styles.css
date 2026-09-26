@@ -877,8 +877,20 @@ textarea {
   padding: calc(8px + env(safe-area-inset-top)) 10px 8px 4px;
   border-bottom: 1px solid var(--line);
 }
-.picker-search {
+.picker-search-field {
   flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.picker-label {
+  padding-inline-start: 12px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+.picker-search {
   display: flex;
   align-items: center;
   gap: 6px;

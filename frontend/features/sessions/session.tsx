@@ -127,10 +127,10 @@ export function SessionCard({ s, index, total }: { s: Session; index: number; to
             onChange={(v) => up((x) => (x.calories = v))}
           />
         </label>
+        <label className="card-title" htmlFor={`session-notes-${s.id}`}>Session notes</label>
         <AutoTextarea
+          id={`session-notes-${s.id}`}
           minRows={1}
-          placeholder="Session notes"
-          aria-label="Session notes"
           value={s.notes}
           onChange={(e) => up((x) => (x.notes = e.target.value))}
         />

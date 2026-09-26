@@ -27,12 +27,12 @@ export function Login({ onDone }: { onDone: () => void }) {
         <img src="/icon-192.png" alt="" width={64} height={64} />
       </div>
       <h1>Trainoq</h1>
+      <label className="card-title" htmlFor="password">Password</label>
       <input
+        id="password"
         className="text"
         type="password"
         autoComplete="current-password"
-        placeholder="Password"
-        aria-label="Password"
         value={password}
         autoFocus
         onChange={(e) => setPassword(e.target.value)}
