@@ -229,6 +229,48 @@ test("conflict banner leaves the last action reachable", async ({ page }) => {
   }
 });
 
+test("conflict choice previews both versions before replacing local edits", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 844 });
+  await mockApi(page);
+  const other = { ...doc, morning: "Morning note from the other device." };
+  await page.addInitScript(({ date, doc, other }) => {
+    localStorage.setItem("tq:authed", JSON.stringify(true));
+    localStorage.setItem(`tq:day:${date}`, JSON.stringify({
+      doc, base: "old-revision", dirty: true, rev: 1,
+      conflict: { doc: other, updatedAt: "new-revision" },
+    }));
+  }, { date: day, doc, other });
+  await page.goto(`/#/d/${day}`);
+  await page.getByRole("button", { name: "Use other device's" }).click();
+  const dialog = page.getByRole("dialog", { name: "Review day versions" });
+  await expect(dialog).toContainText(doc.morning);
+  await expect(dialog).toContainText(other.morning);
+  await expect(dialog.getByRole("heading", { name: "Other device" })).toBeInViewport();
+  await expect(page).toHaveScreenshot("conflict-review-320.png");
+  expect(await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!).doc.morning, day)).toBe(doc.morning);
+  await dialog.getByRole("button", { name: "Replace this device's edits" }).click();
+  expect(await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!).doc.morning, day)).toBe(other.morning);
+});
+
+test("conflict review can be cancelled before replacing the server version", async ({ page }) => {
+  await mockApi(page);
+  await page.addInitScript(({ date, doc }) => {
+    localStorage.setItem("tq:authed", JSON.stringify(true));
+    localStorage.setItem(`tq:day:${date}`, JSON.stringify({
+      doc, base: "old-revision", dirty: true, rev: 1,
+      conflict: { doc: { ...doc, morning: "Other note" }, updatedAt: "new-revision" },
+    }));
+  }, { date: day, doc });
+  await page.goto(`/#/d/${day}`);
+  await page.getByRole("button", { name: "Keep this one" }).click();
+  const dialog = page.getByRole("dialog", { name: "Review day versions" });
+  await dialog.getByRole("button", { name: "Cancel" }).click();
+  expect(await page.evaluate((date) => Boolean(JSON.parse(localStorage.getItem(`tq:day:${date}`)!).conflict), day)).toBe(true);
+  await page.getByRole("button", { name: "Keep this one" }).click();
+  await dialog.getByRole("button", { name: "Replace other device's edits" }).click();
+  expect(await page.evaluate((date) => Boolean(JSON.parse(localStorage.getItem(`tq:day:${date}`)!).conflict), day)).toBe(false);
+});
+
 test("activity name stays readable at 320px", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 844 });
   await mockApi(page);

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { emptyDay, type Activity, type DayDoc } from "../../../shared/days/model";
+import { dayToText } from "../../../shared/days/format";
 import { useDay } from "./hooks";
 import { refreshLibrary } from "../exercises/library";
 import { newSession, move } from "../sessions/ops";
@@ -12,6 +13,7 @@ import { DayContext, useDayCtx, type DayCtx } from "./context";
 import { Icon } from "../../icons";
 import { AutoTextarea, NumberField } from "../../inputs";
 import { useOverlays } from "../../overlays";
+import { Modal } from "../../modal";
 import { SessionCard } from "../sessions/session";
 
 const ACTIVITY_SUGGESTIONS = ["Walk", "Run", "Ride", "Bouldering", "Swim", "Hike", "Yoga", "Mobility"];
@@ -51,7 +53,7 @@ export function DayView({ date }: { date: string }) {
 
   return (
     <DayContext.Provider value={ctx}>
-      {entry?.conflict && <ConflictBanner date={date} />}
+      {entry?.conflict && <ConflictBanner date={date} local={doc} other={entry.conflict.doc} />}
       <MorningCard />
       {doc.sessions.map((s, i) => (
         <SessionCard key={s.id} s={s} index={i} total={doc.sessions.length} />
@@ -68,23 +70,44 @@ export function DayView({ date }: { date: string }) {
   );
 }
 
-function ConflictBanner({ date }: { date: string }) {
+function ConflictBanner({ date, local, other }: { date: string; local: DayDoc; other: DayDoc | null }) {
+  const [choice, setChoice] = useState<"mine" | "theirs" | null>(null);
   return (
-    <div className="banner warn" role="alert">
-      <Icon name="alert" />
-      <div>
-        <strong>This day was also changed on another device.</strong>
-        <div className="muted">Pick which version to keep.</div>
-        <div className="banner-actions">
-          <button type="button" className="btn small secondary" onClick={() => resolveConflict(date, "theirs")}>
-            Use other device's
-          </button>
-          <button type="button" className="btn small primary" onClick={() => resolveConflict(date, "mine")}>
-            Keep this one
-          </button>
+    <>
+      <div className="banner warn" role="alert">
+        <Icon name="alert" />
+        <div>
+          <strong>This day was also changed on another device.</strong>
+          <div className="muted">Pick which version to keep.</div>
+          <div className="banner-actions">
+            <button type="button" className="btn small secondary" onClick={() => setChoice("theirs")}>Use other device's</button>
+            <button type="button" className="btn small primary" onClick={() => setChoice("mine")}>Keep this one</button>
+          </div>
         </div>
       </div>
-    </div>
+      {choice && (
+        <Modal variant="sheet" label="Review day versions" onClose={() => setChoice(null)}>
+          <div className="sheet conflict-review">
+            <h2>Review day versions</h2>
+            <p>{choice === "theirs" ? "Replacing this device's edits cannot be undone." : "Replacing the other device's edits cannot be undone."}</p>
+            <div className="conflict-versions">
+              <section>
+                <h3>This device</h3>
+                <pre className="share-text" role="region" aria-label="This device's full day" tabIndex={0}>{dayToText(local)}</pre>
+              </section>
+              <section>
+                <h3>Other device</h3>
+                <pre className="share-text" role="region" aria-label="Other device's full day" tabIndex={0}>{other ? dayToText(other) : "No day saved on the other device."}</pre>
+              </section>
+            </div>
+            <button type="button" className="sheet-btn cancel" autoFocus onClick={() => setChoice(null)}>Cancel</button>
+            <button type="button" className="sheet-btn danger" onClick={() => resolveConflict(date, choice)}>
+              {choice === "theirs" ? "Replace this device's edits" : "Replace other device's edits"}
+            </button>
+          </div>
+        </Modal>
+      )}
+    </>
   );
 }
 

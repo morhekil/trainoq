@@ -815,6 +815,40 @@ textarea {
 .share-actions .btn {
   flex: 1;
 }
+.conflict-review {
+  gap: 8px;
+}
+.conflict-review h2,
+.conflict-review p,
+.conflict-versions h3 {
+  margin: 0;
+}
+.conflict-review h2 {
+  font-size: 18px;
+  padding: 4px 8px 0;
+}
+.conflict-review p {
+  font-size: 14px;
+  padding: 0 8px;
+}
+.conflict-versions {
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  gap: 8px;
+}
+.conflict-versions h3 {
+  font-size: 14px;
+  margin-bottom: 4px;
+}
+.conflict-versions .share-text {
+  min-height: 0;
+  max-height: 21dvh;
+  overflow: auto;
+}
+.conflict-review > .sheet-btn {
+  flex: none;
+}
 .copy-feedback {
   color: var(--muted);
   font-size: 14px;

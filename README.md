@@ -26,7 +26,7 @@ Runs on Cloudflare: a Worker serves the app and a tRPC API, data lives in D1.
 - **Undo and errors** – each Undo action and error message stays visible until used or dismissed.
 - **Keyboard overlays** – action sheets, exercise search, and sharing keep focus inside while open. Escape closes them and returns focus to the button that opened them.
 - **Reduced motion** – session indicators and overlays stay readable without animation when the device requests reduced motion.
-- **Works with no signal** – every change is saved on the phone first and synced in the background. If the same day was edited on two devices you choose which version to keep.
+- **Works with no signal** – every change is saved on the phone first and synced in the background. If the same day was edited on two devices, compare both versions and confirm which one replaces the other.
 - **Sync retry** – when saving fails or the device is offline, the status badge has a keyboard-accessible retry action.
 - **Installable** – "Add to Home Screen" gives a full-screen app that opens offline.
 - **Backup** – menu → Download backup (JSON of every day).
