@@ -11,7 +11,7 @@ export default {
       req,
       router: appRouter,
       createContext: ({ req, resHeaders }) => ({ req, resHeaders, env }),
-      onError: ({ error }) => console.error(error),
+      onError: ({ error }) => { if (error.code !== "UNAUTHORIZED") console.error(error); },
       responseMeta: () => ({ headers: { "Cache-Control": "no-store" } }),
     });
   },

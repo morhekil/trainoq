@@ -1,5 +1,5 @@
 import { createTRPCClient, httpLink } from "@trpc/client";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { emptyDay } from "../shared/days/model";
 import worker from "../backend/index";
 import type { AppRouter } from "../backend/router";
@@ -43,7 +43,13 @@ describe("tRPC API", () => {
       },
     })] });
 
-    await expect(client.auth.me.query()).rejects.toMatchObject({ data: { code: "UNAUTHORIZED" } });
+    const log = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      await expect(client.auth.me.query()).rejects.toMatchObject({ data: { code: "UNAUTHORIZED" } });
+      expect(log).not.toHaveBeenCalled();
+    } finally {
+      log.mockRestore();
+    }
     await client.auth.login.mutate({ password: "test-password" });
     expect(await client.auth.me.query()).toEqual({ ok: true });
 
