@@ -9,6 +9,8 @@
     "preview": "npm run build && vite preview",
     "typecheck": "tsc -b",
     "test": "vitest run",
+    "screenshots:baseline": "playwright test --update-snapshots",
+    "screenshots:check": "playwright test",
     "db:migrate:local": "wrangler d1 migrations apply trainoq --local",
     "db:migrate:remote": "wrangler d1 migrations apply trainoq --remote",
     "deploy": "npm run build && wrangler deploy && npm run db:migrate:remote",
@@ -24,6 +26,7 @@
   },
   "devDependencies": {
     "@cloudflare/vite-plugin": "^1.57.3",
+    "@playwright/test": "^1.63.0",
     "@types/node": "^26.6.2",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
