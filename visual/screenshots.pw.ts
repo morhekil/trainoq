@@ -84,6 +84,24 @@ test("password placeholder remains readable", async ({ page }) => {
   expect(contrastRatio(foreground, background)).toBeGreaterThanOrEqual(4.5);
 });
 
+test("Undo remains readable in dark mode", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  await mockApi(page);
+  await page.addInitScript(() => localStorage.setItem("tq:authed", JSON.stringify(true)));
+  await page.goto(`/#/d/${day}`);
+  await page.getByRole("button", { name: "Add activity" }).click();
+  await page.getByRole("button", { name: "Activity options" }).click();
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  const colors = await page.getByRole("button", { name: "Undo" }).evaluate((button) => ({
+    foreground: getComputedStyle(button).color,
+    filter: getComputedStyle(button).filter,
+    background: getComputedStyle(button.parentElement!).backgroundColor,
+  }));
+  const brightness = Number(colors.filter.match(/brightness\(([^)]+)\)/)?.[1] ?? 1);
+  const foreground = rgb(colors.foreground).map((channel) => Math.min(255, channel * brightness));
+  expect(contrastRatio(foreground, rgb(colors.background))).toBeGreaterThanOrEqual(4.5);
+});
+
 test("overlays keep keyboard focus inside and return it on Escape", async ({ page }) => {
   await mockApi(page);
   await page.addInitScript(({ date, doc }) => {
