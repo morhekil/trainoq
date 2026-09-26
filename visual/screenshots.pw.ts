@@ -51,11 +51,37 @@ async function checkWidth(page: Page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize()!.width);
 }
 
+function contrastRatio(foreground: number[], background: number[]) {
+  const luminance = (color: number[]) => color
+    .map((channel) => channel / 255)
+    .map((channel) => channel <= 0.04045 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4)
+    .reduce((sum, channel, index) => sum + channel * [0.2126, 0.7152, 0.0722][index], 0);
+  const a = luminance(foreground);
+  const b = luminance(background);
+  return (Math.max(a, b) + 0.05) / (Math.min(a, b) + 0.05);
+}
+
+function rgb(color: string) {
+  return color.match(/\d+/g)!.slice(0, 3).map(Number);
+}
+
 test("login screen", async ({ page }) => {
   await mockApi(page, false);
   await page.goto("/");
   await expect(page.getByRole("button", { name: "Sign in" })).toBeVisible();
   await expect(page).toHaveScreenshot("login.png");
+});
+
+test("password placeholder remains readable", async ({ page }) => {
+  await mockApi(page, false);
+  await page.goto("/");
+  const colors = await page.locator(".login input").evaluate((input) => {
+    const placeholder = getComputedStyle(input, "::placeholder");
+    return { foreground: placeholder.color, opacity: Number(placeholder.opacity), background: getComputedStyle(input).backgroundColor };
+  });
+  const background = rgb(colors.background);
+  const foreground = rgb(colors.foreground).map((channel, index) => channel * colors.opacity + background[index] * (1 - colors.opacity));
+  expect(contrastRatio(foreground, background)).toBeGreaterThanOrEqual(4.5);
 });
 
 test("overlays keep keyboard focus inside and return it on Escape", async ({ page }) => {

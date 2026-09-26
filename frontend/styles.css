@@ -346,7 +346,6 @@ textarea {
 .text::placeholder,
 .num::placeholder {
   color: var(--muted);
-  opacity: 0.8;
 }
 
 .inline-field {
