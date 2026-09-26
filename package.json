@@ -12,7 +12,7 @@
     "db:migrate:local": "wrangler d1 migrations apply trainoq --local",
     "db:migrate:remote": "wrangler d1 migrations apply trainoq --remote",
     "deploy": "npm run build && wrangler deploy && npm run db:migrate:remote",
-    "cf-typegen": "wrangler types worker/worker-configuration.d.ts",
+    "cf-typegen": "wrangler types backend/worker-configuration.d.ts",
     "setup:local": "node -e \"require('fs').existsSync('.dev.vars')||require('fs').copyFileSync('.dev.vars.example','.dev.vars')\" && npm run db:migrate:local"
   },
   "dependencies": {

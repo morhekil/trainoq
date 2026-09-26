@@ -53,30 +53,24 @@ Custom domain: Workers & Pages → trainoq → Settings → Domains & Routes, or
 ## Layout
 
 ```
-shared/     data model, share-text formatter, starter exercise list (seed-exercises.ts)
-worker/     API: auth.ts (password → signed cookie), db.ts (D1 queries), router.ts (tRPC), index.ts (adapter)
-src/        React app
-  lib/      api.ts (typed tRPC client), store.ts (local-first sync), library.ts (exercise search/history), ops.ts (edits)
-  components/
-migrations/ D1 schema
-tests/      unit tests (npm test)
+frontend/              React app and its typed API client
+  features/             auth, days, exercises, sessions
+backend/               Worker entry point and composed tRPC router
+  features/             auth, days, exercises, backup (routers and data access)
+shared/                browser/server models, schemas, and formatters by feature
+  days/ sessions/ exercises/
+migrations/             D1 schema
+tests/                  unit and API tests (npm test)
+API.md                  procedure and wire contract
 ```
 
 ### Data model
 
-One JSON document per day (`days` table) is the source of truth. On every save the worker rebuilds `exercise_log` – one row per exercise per day – which powers search, "last time" hints and, later, progress charts. Types are in `shared/types.ts`.
+One JSON document per day (`days` table) is the source of truth. On every save the worker rebuilds `exercise_log` – one row per exercise per day – which powers search, "last time" hints and, later, progress charts. Types are in `shared/days/model.ts`, `shared/sessions/model.ts`, and `shared/exercises/model.ts`.
 
 ### API seam
 
-All app data traffic goes through `/api/trpc`. The browser imports only the `AppRouter` type from `worker/router.ts`; the Worker owns auth, validation, D1 access, and write conflicts. A TypeScript agent client can use the same router type and tRPC HTTP client. Call `auth.login` with the password, retain the returned cookie, then use the other procedures.
-
-| Feature | Procedure | Contract |
-| --- | --- | --- |
-| Sign in, session check, sign out | `auth.login`, `auth.me`, `auth.logout` | Signed cookie; all data procedures require it |
-| Day view and history | `days.get`, `days.list` | Day documents and server `updatedAt` |
-| Morning, sessions, sets, activities, calories, notes, repeat | `days.save` | Complete validated `DayDoc` plus `base`; returns the current copy on conflict |
-| Exercise search and last-time hints | `exercises.library` | Usage stats and recent main sets; client adds the shared starter catalog and unsynced local entries |
-| Download backup | `backup.export` | All days and export timestamp; browser turns the result into a JSON file |
+All app data traffic goes through `/api/trpc`. The browser imports only the `AppRouter` type from `backend/router.ts`; the Worker owns auth, validation, D1 access, and write conflicts. [API.md](API.md) lists every procedure, input, result, error, and save conflict rule.
 
 The browser keeps its local draft for offline use and syncs it with `days.save`. The shared document schema is the transport boundary. UI edit helpers, formatting, and search ranking remain client-side; another client can read and write the same document without reproducing the UI. The next seam, when agent workflows need intent-level operations, is to move selected edits into shared pure functions and expose narrow mutations through this router. Keep the day document and revision check as the common persistence contract until then.
 

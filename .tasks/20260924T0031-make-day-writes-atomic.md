@@ -4,9 +4,9 @@ priority: high
 created_at: 2026-09-24T00:31:00+10:00
 ---
 
-`days.save` promises a conflict when its `base` revision is stale. In the current worktree, `worker/db.ts` `putDay` reads `updated_at` before the D1 write batch. Two clients saving the same base can both pass that check, and the last write can silently replace the first. This must be fixed before browser and agent clients write simultaneously.
+`days.save` promises a conflict when its `base` revision is stale. In the current worktree, `backend/features/days/db.ts` `putDay` reads `updated_at` before the D1 write batch. Two clients saving the same base can both pass that check, and the last write can silently replace the first. This must be fixed before browser and agent clients write simultaneously.
 
-Relevant code: `worker/db.ts` `putDay`, `worker/router.ts` `days.save`, `src/lib/store.ts` conflict resolution, `migrations/0001_init.sql`, and `tests/api.test.ts`. The tRPC seam is currently uncommitted on top of `61bd8ff`; check the live worktree before implementation.
+Relevant code: `backend/features/days/db.ts` `putDay`, `backend/features/days/router.ts` `days.save`, `frontend/features/days/store.ts` conflict resolution, `migrations/0001_init.sql`, and `tests/api.test.ts`.
 
 Acceptance criteria:
 

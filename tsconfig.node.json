@@ -8,7 +8,7 @@
     "strict": true,
     "noEmit": true,
     "skipLibCheck": true,
-    "types": ["node", "./worker/worker-configuration.d.ts"]
+    "types": ["node", "./backend/worker-configuration.d.ts"]
   },
   "include": ["vite.config.ts", "tests"]
 }

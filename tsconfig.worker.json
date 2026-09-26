@@ -10,7 +10,7 @@
     "skipLibCheck": true,
     "isolatedModules": true,
     "noUnusedLocals": true,
-    "types": ["./worker/worker-configuration.d.ts"]
+    "types": ["./backend/worker-configuration.d.ts"]
   },
-  "include": ["worker", "shared"]
+  "include": ["backend", "shared"]
 }

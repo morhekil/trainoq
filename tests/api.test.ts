@@ -1,8 +1,8 @@
 import { createTRPCClient, httpLink } from "@trpc/client";
 import { describe, expect, it } from "vitest";
-import { emptyDay } from "../shared/types";
-import worker from "../worker/index";
-import type { AppRouter } from "../worker/router";
+import { emptyDay } from "../shared/days/model";
+import worker from "../backend/index";
+import type { AppRouter } from "../backend/router";
 
 describe("tRPC API", () => {
   it("authenticates and saves days with typed conflicts and validated input", async () => {

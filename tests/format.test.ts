@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { dayToText, formatSets } from "../shared/format";
-import type { DayDoc, WorkSet } from "../shared/types";
+import { dayToText } from "../shared/days/format";
+import { formatSets } from "../shared/exercises/format";
+import type { DayDoc } from "../shared/days/model";
+import type { WorkSet } from "../shared/exercises/model";
 
 const set = (type: WorkSet["type"], weight: number | null, reps: number | null) => ({ type, weight, reps });
 

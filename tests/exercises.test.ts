@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { SEED_EXERCISES } from "../shared/exercises";
-import { nameKey, type Section } from "../shared/types";
-import { searchExercises } from "../src/lib/library";
+import { SEED_EXERCISES } from "../shared/exercises/catalog";
+import { nameKey, type Section } from "../shared/exercises/model";
+import { searchExercises } from "../frontend/features/exercises/library";
 
 const names = (query: string, section: Section) => searchExercises(query, section).flatMap((g) => g.items.map((i) => i.name));
 

@@ -5,7 +5,7 @@ created_at: 2026-09-24T00:31:00+10:00
 
 `createTRPCClient<AppRouter>` gives TypeScript callers inferred input and output types, but an LLM agent making HTTP calls does not see those types. Give non-TypeScript callers one small, reliable way to discover and invoke the same tRPC procedures. This may be a typed agent tool wrapper or a machine-readable schema generated from the router; choose based on the first agent runtime, without creating another write API.
 
-Relevant code: `worker/router.ts` `AppRouter`, `shared/schema.ts`, `src/lib/api.ts`, and the API seam section of `README.md`. The tRPC seam is currently uncommitted on top of `61bd8ff`; check the live worktree before implementation. Coordinate credential handling with the separate agent-credentials task.
+Relevant code: `backend/router.ts` `AppRouter`, `shared/days/schema.ts`, `frontend/api.ts`, and `API.md`. Coordinate credential handling with the separate agent-credentials task.
 
 Acceptance criteria:
 

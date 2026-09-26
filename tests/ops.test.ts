@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import type { Block, SetType, WorkSet } from "../shared/types";
-import { addToBlock, removeRound, setRoundType } from "../src/lib/ops";
+import type { Block, SetType, WorkSet } from "../shared/exercises/model";
+import { addToBlock, removeRound, setRoundType } from "../frontend/features/sessions/ops";
 
 const DATE = "2026-09-23";
 const set = (type: SetType, weight: number | null, reps: number | null): WorkSet => ({ id: crypto.randomUUID(), type, weight, reps });

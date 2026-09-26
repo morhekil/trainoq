@@ -3,9 +3,9 @@ title: Add intent-level mutations for agent workflows
 created_at: 2026-09-24T00:31:00+10:00
 ---
 
-Today every persistent edit is possible through `days.get` plus a complete `days.save` document, while the browser's edit rules live in `src/lib/ops.ts` and components. Agents should be able to request concrete changes without rebuilding a whole `DayDoc` or duplicating superset and set behavior. Keep the single tRPC router as the control surface and preserve the browser's local-first edits.
+Today every persistent edit is possible through `days.get` plus a complete `days.save` document, while the browser's edit rules live in `frontend/features/sessions/ops.ts` and components. Agents should be able to request concrete changes without rebuilding a whole `DayDoc` or duplicating superset and set behavior. Keep the single tRPC router as the control surface and preserve the browser's local-first edits.
 
-Relevant code: `worker/router.ts` `days.save`, `shared/types.ts`, `shared/schema.ts`, `src/lib/ops.ts`, `src/lib/recent.ts`, `src/lib/library.ts`, and the day/session components. The tRPC seam is currently uncommitted on top of `61bd8ff`; check the live worktree before implementation. Start from actual agent workflows rather than inventing a general patch language.
+Relevant code: `backend/features/days/router.ts` `days.save`, `shared/days/model.ts`, `shared/days/schema.ts`, `shared/sessions/model.ts`, `shared/exercises/model.ts`, `frontend/features/sessions/ops.ts`, `frontend/features/sessions/recent.ts`, `frontend/features/exercises/library.ts`, and the day/session components. Start from actual agent workflows rather than inventing a general patch language.
 
 Acceptance criteria:
 
