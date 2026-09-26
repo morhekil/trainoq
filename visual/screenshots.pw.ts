@@ -86,6 +86,12 @@ for (const width of [320, 390, 1280]) {
     await expect(page.getByRole("dialog", { name: "Actions" })).toBeVisible();
     await checkWidth(page);
     await expect(page).toHaveScreenshot(`menu-${width}.png`);
+    await page.getByRole("button", { name: "Share this day" }).click();
+    await expect(page.getByRole("dialog", { name: "Share day" })).toBeVisible();
+    await checkWidth(page);
+    await expect(page).toHaveScreenshot(`share-${width}.png`);
+    await page.getByRole("button", { name: "Close" }).click();
+    await page.getByRole("button", { name: "Menu" }).click();
     await page.getByRole("button", { name: "History" }).click();
     await expect(page.getByText("Good pace today.")).not.toBeVisible();
     await expect(page.getByText("Slept well. Left shoulder feels a little stiff.")).toBeVisible();
