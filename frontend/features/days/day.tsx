@@ -70,7 +70,7 @@ export function DayView({ date }: { date: string }) {
 
 function ConflictBanner({ date }: { date: string }) {
   return (
-    <div className="banner warn floating" role="alert">
+    <div className="banner warn" role="alert">
       <Icon name="alert" />
       <div>
         <strong>This day was also changed on another device.</strong>

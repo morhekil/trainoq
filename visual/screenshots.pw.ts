@@ -208,6 +208,27 @@ test("dark day and conflict states", async ({ page }) => {
   await expect(page).toHaveScreenshot("dark-conflict-day-390.png", { fullPage: true });
 });
 
+test("conflict banner leaves the last action reachable", async ({ page }) => {
+  await mockApi(page);
+  await page.addInitScript(({ date, doc }) => {
+    localStorage.setItem("tq:authed", JSON.stringify(true));
+    localStorage.setItem(`tq:day:${date}`, JSON.stringify({
+      doc, base: null, dirty: false, rev: 1,
+      conflict: { doc: null, updatedAt: null },
+    }));
+  }, { date: day, doc });
+  await page.goto(`/#/d/${day}`);
+  for (const width of [320, 390]) {
+    await page.setViewportSize({ width, height: 844 });
+    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
+    const reachable = await page.getByRole("button", { name: "Share day with PT / physio" }).evaluate((button) => {
+      const rect = button.getBoundingClientRect();
+      return button.contains(document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2));
+    });
+    expect(reachable, `Share must be reachable at ${width}px`).toBe(true);
+  }
+});
+
 test("activity name stays readable at 320px", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 844 });
   await mockApi(page);

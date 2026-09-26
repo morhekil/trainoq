@@ -1008,20 +1008,6 @@ textarea {
   text-align: center;
 }
 
-/* ---------------------------------------------------------------- fixes after phone testing */
-
-.banner.floating {
-  position: fixed;
-  left: 12px;
-  right: 12px;
-  bottom: calc(12px + env(safe-area-inset-bottom));
-  z-index: 40;
-  max-width: 616px;
-  margin: 0 auto;
-  border: 1px solid var(--warn);
-  box-shadow: 0 6px 24px rgb(0 0 0 / 0.2);
-}
-
 @media (max-width: 440px) {
   .topbar {
     gap: 2px;
