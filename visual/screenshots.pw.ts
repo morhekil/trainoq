@@ -166,6 +166,25 @@ test("failed sync can be retried with the keyboard", async ({ page }) => {
   await expect.poll(() => attempts).toBeGreaterThan(before);
 });
 
+test("copy feedback stays above the share dialog", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 844 });
+  await mockApi(page);
+  await page.addInitScript(({ date, doc }) => {
+    localStorage.setItem("tq:authed", JSON.stringify(true));
+    localStorage.setItem(`tq:day:${date}`, JSON.stringify({ doc, base: null, dirty: false, rev: 1 }));
+  }, { date: day, doc });
+  await page.goto(`/#/d/${day}`);
+  await page.getByRole("button", { name: "Share day with PT / physio" }).click();
+  await page.getByRole("button", { name: "Copy text" }).click();
+  const feedback = page.getByRole("dialog", { name: "Share day" }).getByRole("status");
+  await expect(feedback).toContainText(/Copied|Couldn't copy/);
+  expect(await feedback.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    return element.contains(document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2));
+  })).toBe(true);
+  await expect(page).toHaveScreenshot("share-copy-320.png");
+});
+
 async function checkModalKeyboard(page: Page, name: string, trigger: ReturnType<Page["getByRole"]>) {
   const dialog = page.getByRole("dialog", { name });
   await expect(dialog).toBeVisible();

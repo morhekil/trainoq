@@ -1,11 +1,11 @@
+import { useState } from "react";
 import { dayToText, formatDateLong, formatDateShort } from "../../../shared/days/format";
 import { Icon } from "../../icons";
 import { Modal } from "../../modal";
-import { useOverlays } from "../../overlays";
 import { getEntry } from "./store";
 
 export function ShareSheet({ date, onClose }: { date: string; onClose: () => void }) {
-  const { toast } = useOverlays();
+  const [feedback, setFeedback] = useState<string | null>(null);
   const doc = getEntry(date)?.doc;
   const text = doc ? dayToText(doc) : formatDateLong(date);
   const canShare = typeof navigator.share === "function";
@@ -13,9 +13,9 @@ export function ShareSheet({ date, onClose }: { date: string; onClose: () => voi
   const copy = async () => {
     try {
       await navigator.clipboard.writeText(text);
-      toast("Copied");
+      setFeedback("Copied");
     } catch {
-      toast("Couldn't copy – select the text and copy it");
+      setFeedback("Couldn't copy – select the text and copy it");
     }
   };
 
@@ -42,6 +42,7 @@ export function ShareSheet({ date, onClose }: { date: string; onClose: () => voi
             Copy text
           </button>
         </div>
+        {feedback && <div className="copy-feedback" role="status">{feedback}</div>}
         <button type="button" className="sheet-btn cancel" onClick={onClose}>
           Close
         </button>
