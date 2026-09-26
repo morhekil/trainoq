@@ -192,6 +192,24 @@ test("the transparent date input shows a visible focus indicator", async ({ page
   expect(await page.locator(".date-picker").evaluate((element) => getComputedStyle(element).outlineStyle)).not.toBe("none");
 });
 
+test("exercise search shows keyboard focus", async ({ page }) => {
+  await mockApi(page);
+  await page.addInitScript(({ date, doc }) => {
+    localStorage.setItem("tq:authed", JSON.stringify(true));
+    localStorage.setItem(`tq:day:${date}`, JSON.stringify({ doc, base: null, dirty: false, rev: 1 }));
+  }, { date: day, doc });
+  await page.goto(`/#/d/${day}`);
+  await page.getByRole("button", { name: "Add exercise" }).first().click();
+  const search = page.getByRole("searchbox", { name: "Warm-up exercise" });
+  await search.focus();
+  const indicator = await search.evaluate((input) => ({
+    outline: getComputedStyle(input).outlineStyle,
+    width: parseFloat(getComputedStyle(input).outlineWidth),
+  }));
+  expect(indicator.outline).not.toBe("none");
+  expect(indicator.width).toBeGreaterThanOrEqual(2);
+});
+
 test("dark day and conflict states", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "dark" });
   await mockApi(page);
