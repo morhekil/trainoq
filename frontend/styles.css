@@ -189,6 +189,11 @@ textarea {
   color: var(--on-accent);
   background: var(--danger);
 }
+.sync-retry {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
 
 .spinner {
   width: 11px;

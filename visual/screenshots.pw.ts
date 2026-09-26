@@ -143,6 +143,29 @@ test("activity name stays readable at 320px", async ({ page }) => {
   expect(fit.text + fit.padding + 24).toBeLessThanOrEqual(fit.width);
 });
 
+test("failed sync can be retried with the keyboard", async ({ page }) => {
+  await mockApi(page);
+  let attempts = 0;
+  await page.route("**/api/trpc/days.save", async (route) => {
+    attempts++;
+    await route.fulfill({ status: 500, contentType: "application/json", body: JSON.stringify({
+      error: { message: "Save failed", code: -32603, data: { code: "INTERNAL_SERVER_ERROR", httpStatus: 500 } },
+    }) });
+  });
+  await page.addInitScript(({ date, doc }) => {
+    localStorage.setItem("tq:authed", JSON.stringify(true));
+    localStorage.setItem(`tq:day:${date}`, JSON.stringify({ doc, base: null, dirty: true, rev: 1 }));
+  }, { date: day, doc });
+  await page.goto(`/#/d/${day}`);
+  await expect(page.getByText("Retrying")).toBeVisible();
+  const retry = page.getByRole("button", { name: /retry sync/i });
+  await expect(retry).toBeVisible();
+  const before = attempts;
+  await retry.focus();
+  await retry.press("Enter");
+  await expect.poll(() => attempts).toBeGreaterThan(before);
+});
+
 async function checkModalKeyboard(page: Page, name: string, trigger: ReturnType<Page["getByRole"]>) {
   const dialog = page.getByRole("dialog", { name });
   await expect(dialog).toBeVisible();

@@ -66,10 +66,12 @@ const STATUS: Record<SyncStatus, [IconName | null, string, string]> = {
 export function SyncBadge() {
   const status = useSyncStatus();
   const [icon, label, title] = STATUS[status];
+  const indicator = <>{icon ? <Icon name={icon} size={14} /> : <span className="spinner" aria-hidden="true" />}<span>{label}</span></>;
   return (
-    <div className={`sync ${status}`} role="status" aria-live="polite" title={title} onClick={() => syncAll()}>
-      {icon ? <Icon name={icon} size={14} /> : <span className="spinner" aria-hidden="true" />}
-      <span>{label}</span>
+    <div className={`sync ${status}`} role="status" aria-live="polite" title={title}>
+      {status === "error" || status === "offline" ? (
+        <button type="button" className="sync-retry" aria-label={`${label}. Retry sync`} onClick={syncAll}>{indicator}</button>
+      ) : indicator}
     </div>
   );
 }
