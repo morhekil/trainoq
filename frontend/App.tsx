@@ -150,7 +150,7 @@ function Main({ onSignedOut }: { onSignedOut: () => void }) {
           <button type="button" className="icon-btn" aria-label="Back" onClick={() => (location.hash = "#/")}>
             <Icon name="back" />
           </button>
-          <div className="topbar-title">History</div>
+          <h1 className="topbar-title">History</h1>
           <SyncBadge />
         </header>
       ) : (

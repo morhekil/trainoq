@@ -21,7 +21,7 @@ export function DayHeader({ date, today, onMenu }: { date: string; today: string
         <Icon name="left" />
       </button>
       <div className="date-picker">
-        <div className="date-main">{rel ?? formatDateShort(date)}</div>
+        <h1 className="date-main">{rel ?? formatDateShort(date)}</h1>
         <div className="date-sub">{rel ? formatDateShort(date) : date.slice(0, 4)}</div>
         <input
           ref={inputRef}

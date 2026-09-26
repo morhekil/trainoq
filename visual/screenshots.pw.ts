@@ -242,6 +242,21 @@ test("day and session notes keep visible labels after entry", async ({ page }) =
   await expect(page.getByText("Session notes", { exact: true })).toBeVisible();
 });
 
+test("signed-in views expose a heading hierarchy", async ({ page }) => {
+  await mockApi(page);
+  await page.addInitScript(({ date, doc }) => {
+    localStorage.setItem("tq:authed", JSON.stringify(true));
+    localStorage.setItem(`tq:day:${date}`, JSON.stringify({ doc, base: null, dirty: false, rev: 1 }));
+  }, { date: day, doc });
+  await page.goto(`/#/d/${day}`);
+  await expect(page.getByRole("heading", { level: 1 })).toHaveCount(1);
+  await expect(page.getByRole("heading", { level: 2, name: "Session" })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 3, name: "Warm-up" })).toBeVisible();
+  await page.getByRole("button", { name: "Menu" }).click();
+  await page.getByRole("button", { name: "History" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "History" })).toBeVisible();
+});
+
 test("dark day and conflict states", async ({ page }) => {
   await page.emulateMedia({ colorScheme: "dark" });
   await mockApi(page);

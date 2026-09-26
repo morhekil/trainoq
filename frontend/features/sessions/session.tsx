@@ -74,11 +74,11 @@ export function SessionCard({ s, index, total }: { s: Session; index: number; to
     <section className={`card session ${active ? "active" : ""}`} aria-label="Training session">
       <div className="session-head">
         <div className="session-title">
-          <div className="eyebrow">
+          <h2 className="session-heading">
             {active && <span className="live-dot" aria-hidden="true" />}
             {total > 1 ? `Session ${index + 1}` : "Session"}
             {active ? " · in progress" : ""}
-          </div>
+          </h2>
           <div className="session-times">
             <input
               type="time"

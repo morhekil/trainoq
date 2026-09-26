@@ -105,6 +105,7 @@ textarea {
 }
 
 .topbar-title {
+  margin: 0;
   font-weight: 650;
   font-size: 17px;
   flex: 1;
@@ -138,6 +139,7 @@ textarea {
 }
 
 .date-main {
+  margin: 0;
   font-weight: 650;
   font-size: 17px;
   line-height: 1.15;
@@ -416,12 +418,10 @@ textarea {
   flex: 1;
   min-width: 0;
 }
-.eyebrow {
-  font-size: 13px;
+.session-heading {
+  margin: 0;
+  font-size: 17px;
   font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-  color: var(--muted);
   display: flex;
   align-items: center;
   gap: 6px;
@@ -476,7 +476,7 @@ textarea {
 }
 .section-head h3 {
   margin: 0;
-  font-size: 17px;
+  font-size: 16px;
   font-weight: 700;
 }
 .section-head .count {
