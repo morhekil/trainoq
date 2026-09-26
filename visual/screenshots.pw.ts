@@ -79,16 +79,22 @@ test("password keeps a visible label after entry", async ({ page }) => {
   await expect(page.getByText("Password", { exact: true })).toBeVisible();
 });
 
-test("password placeholder remains readable", async ({ page }) => {
-  await mockApi(page, false);
-  await page.goto("/");
-  const colors = await page.locator(".login input").evaluate((input) => {
-    const placeholder = getComputedStyle(input, "::placeholder");
-    return { foreground: placeholder.color, opacity: Number(placeholder.opacity), background: getComputedStyle(input).backgroundColor };
-  });
-  const background = rgb(colors.background);
-  const foreground = rgb(colors.foreground).map((channel, index) => channel * colors.opacity + background[index] * (1 - colors.opacity));
-  expect(contrastRatio(foreground, background)).toBeGreaterThanOrEqual(4.5);
+test("visible placeholder remains readable in both themes", async ({ page }) => {
+  await mockApi(page);
+  await page.addInitScript(() => localStorage.setItem("tq:authed", JSON.stringify(true)));
+  await page.goto(`/#/d/${emptyDay}`);
+  const field = page.getByLabel("Morning check-in");
+  expect(await field.getAttribute("placeholder")).toBeTruthy();
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    const colors = await field.evaluate((input) => {
+      const placeholder = getComputedStyle(input, "::placeholder");
+      return { foreground: placeholder.color, opacity: Number(placeholder.opacity), background: getComputedStyle(input).backgroundColor };
+    });
+    const background = rgb(colors.background);
+    const foreground = rgb(colors.foreground).map((channel, index) => channel * colors.opacity + background[index] * (1 - colors.opacity));
+    expect(contrastRatio(foreground, background)).toBeGreaterThanOrEqual(4.5);
+  }
 });
 
 test("Undo remains readable in dark mode", async ({ page }) => {
