@@ -912,12 +912,19 @@ textarea {
   font-size: 14px;
 }
 
-.toast {
+.toast-stack {
   position: fixed;
   left: 50%;
   bottom: calc(20px + env(safe-area-inset-bottom));
   transform: translateX(-50%);
   z-index: 70;
+  width: max-content;
+  max-width: calc(100vw - 32px);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.toast {
   display: flex;
   align-items: center;
   gap: 14px;
@@ -927,10 +934,9 @@ textarea {
   padding: 12px 16px;
   font-size: 15px;
   box-shadow: 0 6px 24px rgb(0 0 0 / 0.25);
-  max-width: calc(100vw - 32px);
   animation: up 0.18s ease-out;
 }
-.toast-undo {
+.toast-action {
   font-weight: 700;
   color: inherit;
   text-decoration: underline;

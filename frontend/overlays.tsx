@@ -45,13 +45,11 @@ export function useOverlays(): Overlays {
 export function OverlayProvider({ children }: { children: ReactNode }) {
   const [sheet, setSheet] = useState<SheetState | null>(null);
   const [picker, setPicker] = useState<PickerState | null>(null);
-  const [toastState, setToast] = useState<ToastState | null>(null);
-  const toastTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const [toasts, setToasts] = useState<ToastState[]>([]);
+  const nextToastId = useRef(0);
 
   const toast = useCallback((message: string, undo?: () => void) => {
-    clearTimeout(toastTimer.current);
-    setToast({ id: Date.now(), message, undo });
-    toastTimer.current = setTimeout(() => setToast(null), undo ? 6000 : 2500);
+    setToasts((current) => [...current, { id: ++nextToastId.current, message, undo }]);
   }, []);
 
   const value = useMemo<Overlays>(() => ({ openSheet: setSheet, openPicker: setPicker, toast }), [toast]);
@@ -61,21 +59,22 @@ export function OverlayProvider({ children }: { children: ReactNode }) {
       {children}
       {sheet && <Sheet state={sheet} onClose={() => setSheet(null)} />}
       {picker && <ExercisePicker state={picker} onClose={() => setPicker(null)} />}
-      {toastState && (
-        <div className="toast" role="status" key={toastState.id}>
-          <span>{toastState.message}</span>
-          {toastState.undo && (
-            <button
-              type="button"
-              className="toast-undo"
-              onClick={() => {
-                toastState.undo?.();
-                setToast(null);
-              }}
-            >
-              Undo
-            </button>
-          )}
+      {toasts.length > 0 && (
+        <div className="toast-stack">
+          {toasts.map((item) => (
+            <div className="toast" role={item.undo ? "status" : "alert"} key={item.id}>
+              <span>{item.message}</span>
+              {item.undo && (
+                <button type="button" className="toast-action" onClick={() => {
+                  item.undo?.();
+                  setToasts((current) => current.filter((toast) => toast.id !== item.id));
+                }}>Undo</button>
+              )}
+              <button type="button" className="toast-action" aria-label="Dismiss message" onClick={() => {
+                setToasts((current) => current.filter((toast) => toast.id !== item.id));
+              }}>Dismiss</button>
+            </div>
+          ))}
         </div>
       )}
     </Ctx.Provider>

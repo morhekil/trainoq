@@ -102,6 +102,47 @@ test("Undo remains readable in dark mode", async ({ page }) => {
   expect(contrastRatio(foreground, rgb(colors.background))).toBeGreaterThanOrEqual(4.5);
 });
 
+test("Undo stays available until used", async ({ page }) => {
+  await page.clock.install();
+  await mockApi(page);
+  await page.addInitScript(() => localStorage.setItem("tq:authed", JSON.stringify(true)));
+  await page.goto(`/#/d/${day}`);
+  await page.getByRole("button", { name: "Add activity" }).click();
+  await page.getByRole("button", { name: "Activity options" }).click();
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await page.clock.fastForward(7_000);
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(page.getByRole("button", { name: "Activity options" })).toBeVisible();
+});
+
+test("later messages do not replace an earlier Undo", async ({ page }) => {
+  await mockApi(page);
+  await page.addInitScript(() => localStorage.setItem("tq:authed", JSON.stringify(true)));
+  await page.goto(`/#/d/${day}`);
+  await page.getByRole("button", { name: "Add activity" }).click();
+  await page.getByRole("button", { name: "Add activity" }).click();
+  for (let i = 0; i < 2; i++) {
+    await page.getByRole("button", { name: "Activity options" }).first().click();
+    await page.getByRole("button", { name: "Delete", exact: true }).click();
+  }
+  await expect(page.getByRole("button", { name: "Undo" })).toHaveCount(2, { timeout: 1_000 });
+});
+
+test("backup error stays until dismissed", async ({ page }) => {
+  await page.clock.install();
+  await mockApi(page);
+  await page.addInitScript(() => localStorage.setItem("tq:authed", JSON.stringify(true)));
+  await page.goto(`/#/d/${day}`);
+  await page.getByRole("button", { name: "Menu" }).click();
+  await page.getByRole("button", { name: "Download backup (JSON)" }).click();
+  const error = page.locator(".toast");
+  await expect(error).toContainText("Couldn't download backup");
+  await page.clock.fastForward(3_000);
+  await expect(error).toBeVisible();
+  await page.getByRole("button", { name: "Dismiss message" }).click();
+  await expect(error).not.toBeVisible();
+});
+
 test("overlays keep keyboard focus inside and return it on Escape", async ({ page }) => {
   await mockApi(page);
   await page.addInitScript(({ date, doc }) => {
