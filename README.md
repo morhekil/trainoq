@@ -7,6 +7,7 @@ Runs on Cloudflare: a Worker serves the app and a tRPC API, data lives in D1.
 ## What it does (v1)
 
 - **Day view**, defaults to today. Arrows or tap the date to move around; "Today" jumps back.
+- **Keyboard date navigation** – the date picker shows its focus position, even though the native date input sits over the displayed date.
 - **Morning check-in** – free text.
 - **Start training session** – records the start time; "Finish" records the end. Both editable.
 - **Warm-up / cool-down** – exercise + reps (free text, so `30s` or `2x10` work) + comment.

@@ -97,6 +97,16 @@ test("reduced motion keeps live state visible without animation", async ({ page 
   expect(await sheet.evaluate((element) => getComputedStyle(element).animationName)).toBe("none");
 });
 
+test("the transparent date input shows a visible focus indicator", async ({ page }) => {
+  await mockApi(page);
+  await page.addInitScript(() => localStorage.setItem("tq:authed", JSON.stringify(true)));
+  await page.goto(`/#/d/${day}`);
+  const dateInput = page.getByLabel("Pick a date");
+  await dateInput.focus();
+  await expect(dateInput).toBeFocused();
+  expect(await page.locator(".date-picker").evaluate((element) => getComputedStyle(element).outlineStyle)).not.toBe("none");
+});
+
 async function checkModalKeyboard(page: Page, name: string, trigger: ReturnType<Page["getByRole"]>) {
   const dialog = page.getByRole("dialog", { name });
   await expect(dialog).toBeVisible();
