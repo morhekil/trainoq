@@ -10,6 +10,8 @@ export default defineConfig({
     browserName: "chromium",
     channel: "chrome",
     colorScheme: "light",
+    locale: "en-AU",
+    timezoneId: "Australia/Sydney",
     viewport: { width: 390, height: 844 },
   },
   expect: { toHaveScreenshot: { animations: "disabled", caret: "hide", scale: "css" } },
