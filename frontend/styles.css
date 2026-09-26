@@ -1017,3 +1017,20 @@ textarea {
     padding: 0 10px;
   }
 }
+
+@media (prefers-reduced-motion: reduce) {
+  .spinner,
+  .live-dot,
+  .sheet,
+  .backdrop::backdrop,
+  .toast {
+    animation: none;
+  }
+
+  .btn:active:not(:disabled),
+  .icon-btn:active,
+  .step-btn:active,
+  .set-badge:active {
+    transform: none;
+  }
+}

@@ -21,6 +21,7 @@ Runs on Cloudflare: a Worker serves the app and a tRPC API, data lives in D1.
 - **Calories** – per session, per extra activity (walk etc.), and a daily total.
 - **Share day with PT / physio** – plain-text summary via the phone share sheet (WhatsApp, SMS, email) or copy.
 - **Keyboard overlays** – action sheets, exercise search, and sharing keep focus inside while open. Escape closes them and returns focus to the button that opened them.
+- **Reduced motion** – session indicators and overlays stay readable without animation when the device requests reduced motion.
 - **Works with no signal** – every change is saved on the phone first and synced in the background. If the same day was edited on two devices you choose which version to keep.
 - **Installable** – "Add to Home Screen" gives a full-screen app that opens offline.
 - **Backup** – menu → Download backup (JSON of every day).

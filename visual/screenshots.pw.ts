@@ -80,6 +80,23 @@ test("overlays keep keyboard focus inside and return it on Escape", async ({ pag
   await checkModalKeyboard(page, "Share day", share);
 });
 
+test("reduced motion keeps live state visible without animation", async ({ page }) => {
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await mockApi(page);
+  await page.addInitScript(({ date, doc }) => {
+    localStorage.setItem("tq:authed", JSON.stringify(true));
+    localStorage.setItem(`tq:day:${date}`, JSON.stringify({ doc, base: null, dirty: false, rev: 1 }));
+  }, { date: day, doc: { ...doc, sessions: [{ ...doc.sessions[0], endedAt: null }] } });
+  await page.goto(`/#/d/${day}`);
+  const dot = page.locator(".live-dot");
+  await expect(dot).toBeVisible();
+  expect(await dot.evaluate((element) => getComputedStyle(element).animationName)).toBe("none");
+  await page.getByRole("button", { name: "Menu" }).click();
+  const sheet = page.locator(".sheet");
+  await expect(sheet).toBeVisible();
+  expect(await sheet.evaluate((element) => getComputedStyle(element).animationName)).toBe("none");
+});
+
 async function checkModalKeyboard(page: Page, name: string, trigger: ReturnType<Page["getByRole"]>) {
   const dialog = page.getByRole("dialog", { name });
   await expect(dialog).toBeVisible();
