@@ -6,3 +6,11 @@
 - `backend/features/days/db.ts` currently checks the revision before its write batch. That check is not atomic, so simultaneous writers can overwrite each other. Resolve `.tasks/20260924T0031-make-day-writes-atomic.md` before enabling concurrent agent writes.
 - Agent credentials, intent-level mutations, and a discoverable contract for non-TypeScript agents are tracked in `.tasks/`. Extend the existing router for those workflows.
 - For code changes, use red/green/refactor, update documentation with behavior, then run focused tests, `npm run typecheck`, `npm test`, and `npm run build`. Verify API changes through the Worker boundary.
+
+## Frontend skill workflow
+
+- Before reviewing or changing React code, read `react-best-practices` for performance, `react-composition-patterns` for component APIs, and `react-styling` for layout ownership. Apply the rules relevant to the change in the project's existing structure.
+- For UI decisions or reviews, load `better-interface` and verify that all six owning skills are available: `better-accessibility`, `better-layout`, `better-writing`, `better-typography`, `better-colors`, and `better-ui`. The coordinator does not replace them. If an owner is missing, name its domain as unreviewed instead of claiming a complete interface review.
+- Keep `tdd`, `howtocode`, `tasks`, and `writing-well` in the frontend workflow. Reproduce a reported issue with a failing test before fixing it; document behavior in the same change. File newly discovered work outside the current scope in `.tasks/`.
+- For rendered UI changes, capture the pre-change state with the automated screenshot suite, then run `npm run screenshots:check` and inspect affected images after the change. Check narrow and desktop widths, both themes, and relevant empty, error, conflict, menu, and dialog states. An intentional layout change is acceptable when its effect is inspected and the baseline is updated deliberately.
+- Pair screenshots with interaction checks for keyboard access, visible focus, persistent labels, readable contrast, scroll reachability, recovery actions, and reduced motion where relevant. A matching image alone does not prove those behaviors.
