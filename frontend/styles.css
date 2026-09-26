@@ -54,10 +54,6 @@ body {
   overscroll-behavior-y: none;
 }
 
-body.no-scroll {
-  overflow: hidden;
-}
-
 button {
   font: inherit;
   color: inherit;
@@ -714,11 +710,24 @@ textarea {
 .backdrop {
   position: fixed;
   inset: 0;
-  z-index: 50;
-  background: rgb(0 0 0 / 0.4);
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
   display: flex;
   align-items: flex-end;
   justify-content: center;
+}
+.backdrop:not([open]),
+.picker:not([open]) {
+  display: none;
+}
+.backdrop::backdrop {
+  background: rgb(0 0 0 / 0.4);
   animation: fade 0.15s ease-out;
 }
 @keyframes fade {
@@ -801,7 +810,13 @@ textarea {
 .picker {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  width: 100%;
+  max-width: none;
+  height: 100%;
+  max-height: none;
+  margin: 0;
+  padding: 0;
+  border: 0;
   background: var(--bg);
   display: flex;
   flex-direction: column;

@@ -1,5 +1,6 @@
 import { dayToText, formatDateLong, formatDateShort } from "../../../shared/days/format";
 import { Icon } from "../../icons";
+import { Modal } from "../../modal";
 import { useOverlays } from "../../overlays";
 import { getEntry } from "./store";
 
@@ -19,8 +20,8 @@ export function ShareSheet({ date, onClose }: { date: string; onClose: () => voi
   };
 
   return (
-    <div className="backdrop" onClick={onClose}>
-      <div className="sheet share" role="dialog" aria-label="Share day" onClick={(e) => e.stopPropagation()}>
+    <Modal variant="sheet" label="Share day" onClose={onClose}>
+      <div className="sheet share">
         <div className="sheet-title">Share {formatDateShort(date)}</div>
         <pre className="share-text" data-testid="share-text">
           {text}
@@ -45,6 +46,6 @@ export function ShareSheet({ date, onClose }: { date: string; onClose: () => voi
           Close
         </button>
       </div>
-    </div>
+    </Modal>
   );
 }

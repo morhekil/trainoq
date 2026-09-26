@@ -1,6 +1,7 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Section } from "../shared/exercises/model";
 import { Icon } from "./icons";
+import { Modal } from "./modal";
 import { ExercisePicker } from "./features/exercises/picker";
 
 // ---------- types
@@ -84,14 +85,9 @@ export function OverlayProvider({ children }: { children: ReactNode }) {
 // ---------- action sheet
 
 function Sheet({ state, onClose }: { state: SheetState; onClose: () => void }) {
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
   return (
-    <div className="backdrop" onClick={onClose}>
-      <div className="sheet" role="dialog" aria-label={state.title ?? "Actions"} onClick={(e) => e.stopPropagation()}>
+    <Modal variant="sheet" label={state.title ?? "Actions"} onClose={onClose}>
+      <div className="sheet">
         {state.title && <div className="sheet-title">{state.title}</div>}
         {state.actions.map((a) => (
           <button
@@ -111,6 +107,6 @@ function Sheet({ state, onClose }: { state: SheetState; onClose: () => void }) {
           Cancel
         </button>
       </div>
-    </div>
+    </Modal>
   );
 }

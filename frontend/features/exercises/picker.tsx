@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from "reac
 import { formatDateShort } from "../../../shared/days/format";
 import { nameKey } from "../../../shared/exercises/model";
 import { Icon } from "../../icons";
+import { Modal } from "../../modal";
 import type { PickerState } from "../../overlays";
 import { canonicalName, libraryVersion, refreshLibrary, searchExercises, subscribeLibrary } from "./library";
 
@@ -23,15 +24,10 @@ export function ExercisePicker({ state, onClose }: { state: PickerState; onClose
       inputRef.current?.focus();
       inputRef.current?.select();
     }, 30);
-    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", onKey);
-    document.body.classList.add("no-scroll");
     return () => {
       clearTimeout(t);
-      window.removeEventListener("keydown", onKey);
-      document.body.classList.remove("no-scroll");
     };
-  }, [onClose]);
+  }, []);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const groups = useMemo(() => searchExercises(q, state.section), [q, state.section, libVersion]);
@@ -44,7 +40,7 @@ export function ExercisePicker({ state, onClose }: { state: PickerState; onClose
   };
 
   return (
-    <div className="picker" role="dialog" aria-label={state.title}>
+    <Modal variant="picker" label={state.title} onClose={onClose}>
       <div className="picker-head">
         <button type="button" className="icon-btn" aria-label="Close" onClick={onClose}>
           <Icon name="back" />
@@ -97,6 +93,6 @@ export function ExercisePicker({ state, onClose }: { state: PickerState; onClose
         ))}
         {typed && !groups[0]?.items.length && <div className="picker-empty">No matches – use what you typed and it'll be saved for next time.</div>}
       </div>
-    </div>
+    </Modal>
   );
 }

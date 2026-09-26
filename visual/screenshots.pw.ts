@@ -58,6 +58,46 @@ test("login screen", async ({ page }) => {
   await expect(page).toHaveScreenshot("login.png");
 });
 
+test("overlays keep keyboard focus inside and return it on Escape", async ({ page }) => {
+  await mockApi(page);
+  await page.addInitScript(({ date, doc }) => {
+    localStorage.setItem("tq:authed", JSON.stringify(true));
+    localStorage.setItem(`tq:day:${date}`, JSON.stringify({ doc, base: null, dirty: false, rev: 1 }));
+  }, { date: day, doc });
+  await page.goto(`/#/d/${day}`);
+  await expect(page.getByText("Squat", { exact: true })).toBeVisible();
+
+  const menu = page.getByRole("button", { name: "Menu" });
+  await menu.click();
+  await checkModalKeyboard(page, "Actions", menu);
+
+  const addExercise = page.getByRole("button", { name: "Add exercise" }).first();
+  await addExercise.click();
+  await checkModalKeyboard(page, "Warm-up exercise", addExercise);
+
+  const share = page.getByRole("button", { name: "Share day with PT / physio" });
+  await share.click();
+  await checkModalKeyboard(page, "Share day", share);
+});
+
+async function checkModalKeyboard(page: Page, name: string, trigger: ReturnType<Page["getByRole"]>) {
+  const dialog = page.getByRole("dialog", { name });
+  await expect(dialog).toBeVisible();
+  for (let i = 0; i < 12; i++) {
+    await page.keyboard.press("Tab");
+    const focus = await page.evaluate(() => ({ tag: document.activeElement?.tagName, inside: Boolean(document.activeElement?.closest('dialog,[role="dialog"]')) }));
+    if (focus.tag === "BODY") {
+      await page.keyboard.press("Tab");
+      expect(await page.evaluate(() => Boolean(document.activeElement?.closest('dialog,[role="dialog"]')))).toBe(true);
+    } else {
+      expect(focus.inside).toBe(true);
+    }
+  }
+  await page.keyboard.press("Escape");
+  await expect(dialog).not.toBeVisible();
+  await expect(trigger).toBeFocused();
+}
+
 for (const width of [320, 390, 1280]) {
   test(`day, picker, menu and history at ${width}px`, async ({ page }) => {
     await page.setViewportSize({ width, height: 844 });
