@@ -20,6 +20,7 @@ Runs on Cloudflare: a Worker serves the app and a tRPC API, data lives in D1.
 - **Exercise search** – full-screen picker: recent first, starter list, search by name or alias (`rdl`, `ohp`). If it's not there, "Use "…"" saves what you typed and it shows up in search from then on.
 - **Repeat** – an empty section offers "Repeat <last date>" to copy the last session's warm-up, main structure (no sets) or cool-down.
 - **Calories** – per session, per extra activity (walk etc.), and a daily total.
+- **Narrow screens** – activity name and numeric fields use two compact rows when a single row would hide the name.
 - **Share day with PT / physio** – plain-text summary via the phone share sheet (WhatsApp, SMS, email) or copy.
 - **Keyboard overlays** – action sheets, exercise search, and sharing keep focus inside while open. Escape closes them and returns focus to the button that opened them.
 - **Reduced motion** – session indicators and overlays stay readable without animation when the device requests reduced motion.

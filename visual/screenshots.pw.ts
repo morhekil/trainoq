@@ -123,6 +123,26 @@ test("dark day and conflict states", async ({ page }) => {
   await expect(page).toHaveScreenshot("dark-conflict-day-390.png", { fullPage: true });
 });
 
+test("activity name stays readable at 320px", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 844 });
+  await mockApi(page);
+  await page.addInitScript(({ date, doc }) => {
+    localStorage.setItem("tq:authed", JSON.stringify(true));
+    localStorage.setItem(`tq:day:${date}`, JSON.stringify({ doc, base: null, dirty: false, rev: 1 }));
+  }, { date: day, doc });
+  await page.goto(`/#/d/${day}`);
+  const activity = page.getByLabel("Activity", { exact: true });
+  await expect(activity).toHaveValue("Walk");
+  const fit = await activity.evaluate((input: HTMLInputElement) => {
+    const style = getComputedStyle(input);
+    const canvas = document.createElement("canvas");
+    const context = canvas.getContext("2d")!;
+    context.font = style.font;
+    return { width: input.clientWidth, text: context.measureText(input.value).width, padding: parseFloat(style.paddingLeft) + parseFloat(style.paddingRight), font: style.font };
+  });
+  expect(fit.text + fit.padding + 24).toBeLessThanOrEqual(fit.width);
+});
+
 async function checkModalKeyboard(page: Page, name: string, trigger: ReturnType<Page["getByRole"]>) {
   const dialog = page.getByRole("dialog", { name });
   await expect(dialog).toBeVisible();

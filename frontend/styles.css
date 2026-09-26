@@ -1023,6 +1023,25 @@ textarea {
   }
 }
 
+@media (max-width: 360px) {
+  .activity-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+  }
+  .activity-row .grow {
+    grid-area: 1 / 1;
+  }
+  .activity-row > .icon-btn {
+    grid-area: 1 / 2;
+  }
+  .activity-row > .unit-field:first-of-type {
+    grid-area: 2 / 1;
+  }
+  .activity-row > .unit-field:last-of-type {
+    grid-area: 2 / 2;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .spinner,
   .live-dot,
