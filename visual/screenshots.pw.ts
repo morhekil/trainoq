@@ -107,6 +107,22 @@ test("the transparent date input shows a visible focus indicator", async ({ page
   expect(await page.locator(".date-picker").evaluate((element) => getComputedStyle(element).outlineStyle)).not.toBe("none");
 });
 
+test("dark day and conflict states", async ({ page }) => {
+  await page.emulateMedia({ colorScheme: "dark" });
+  await mockApi(page);
+  await page.addInitScript(({ date, doc }) => {
+    localStorage.setItem("tq:authed", JSON.stringify(true));
+    localStorage.setItem(`tq:day:${date}`, JSON.stringify({
+      doc, base: null, dirty: false, rev: 1,
+      conflict: { doc: null, updatedAt: null },
+    }));
+  }, { date: day, doc });
+  await page.goto(`/#/d/${day}`);
+  await expect(page.getByRole("alert")).toBeVisible();
+  await checkWidth(page);
+  await expect(page).toHaveScreenshot("dark-conflict-day-390.png", { fullPage: true });
+});
+
 async function checkModalKeyboard(page: Page, name: string, trigger: ReturnType<Page["getByRole"]>) {
   const dialog = page.getByRole("dialog", { name });
   await expect(dialog).toBeVisible();
@@ -136,12 +152,12 @@ for (const width of [320, 390, 1280]) {
     await page.goto(`/#/d/${emptyDay}`);
     await expect(page.getByText("Morning check-in")).toBeVisible();
     await checkWidth(page);
-    await expect(page).toHaveScreenshot(`empty-day-${width}.png`);
+    await expect(page).toHaveScreenshot(`empty-day-${width}.png`, { fullPage: true });
 
     await page.goto(`/#/d/${day}`);
     await expect(page.getByText("Squat", { exact: true })).toBeVisible();
     await checkWidth(page);
-    await expect(page).toHaveScreenshot(`logged-day-${width}.png`);
+    await expect(page).toHaveScreenshot(`logged-day-${width}.png`, { fullPage: true });
 
     await page.getByRole("button", { name: "Add exercise" }).first().click();
     await expect(page.getByRole("dialog", { name: "Warm-up exercise" })).toBeVisible();

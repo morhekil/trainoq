@@ -39,7 +39,7 @@ Local password is whatever `APP_PASSWORD` is in `.dev.vars`.
 
 ## Frontend screenshots
 
-`npm run screenshots:check` compares the login, day, exercise picker, menu, and history screens at 320px, 390px, and 1280px against the checked-in images in `visual/screenshots.pw.ts-snapshots/`. The test uses Chrome and a mocked tRPC response with fixed local day data, so it does not change your D1 database. Install Google Chrome before running it.
+`npm run screenshots:check` compares login, full-page day, exercise picker, menu, share, and history screens at 320px, 390px, and 1280px, plus a dark conflict state, against the checked-in images in `visual/screenshots.pw.ts-snapshots/`. The test uses Chrome and a mocked tRPC response with fixed local day data, so it does not change your D1 database. Install Google Chrome before running it.
 
 Run `npm run screenshots:baseline` only after reviewing an intentional visual change. It updates the reference images; inspect the changed PNGs before committing them.
 
