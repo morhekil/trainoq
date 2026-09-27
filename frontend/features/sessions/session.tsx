@@ -95,7 +95,12 @@ function SectionEditor({ s, section, title }: { s: Session; section: Section; ti
 
   useEffect(() => {
     if (!drag) return;
-    const keyAt = (point: { clientX: number; clientY: number }) => (document.elementFromPoint(point.clientX, point.clientY)?.closest("[data-drop-key]") as HTMLElement | null)?.dataset.dropKey ?? null;
+    const keyAt = (point: { clientX: number; clientY: number }) => {
+      const key = (document.elementFromPoint(point.clientX, point.clientY)?.closest("[data-drop-key]") as HTMLElement | null)?.dataset.dropKey;
+      if (!key) return null;
+      if (drag.kind === "exercise") return key === "superset:new" || key.startsWith("superset:add:") ? key : null;
+      return key.startsWith(`round:${drag.supersetId}:`) ? key : null;
+    };
     let point: { clientX: number; clientY: number } | null = null;
     const onMove = (event: globalThis.PointerEvent) => { point = event; setOver(keyAt(event)); };
     const scroll = setInterval(() => {

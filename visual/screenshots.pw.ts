@@ -508,6 +508,10 @@ test("dragging an exercise creates a durable one-member superset and reorders it
   const roundFrom = await round.boundingBox();
   await page.mouse.move(roundFrom!.x + roundFrom!.width / 2, roundFrom!.y + roundFrom!.height / 2);
   await page.mouse.down();
+  const invalid = main.locator('[data-drop-key="superset:new"]');
+  const invalidBox = await invalid.boundingBox();
+  await page.mouse.move(invalidBox!.x + invalidBox!.width / 2, invalidBox!.y + invalidBox!.height / 2, { steps: 5 });
+  await expect(invalid).not.toHaveClass(/drop-over/);
   const roundTarget = block.locator(".round-drop").last();
   const roundTo = await roundTarget.boundingBox();
   await page.mouse.move(roundTo!.x + roundTo!.width / 2, roundTo!.y + roundTo!.height / 2, { steps: 8 });
