@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { emptyDay, type Activity, type DayDoc } from "../../../shared/days/model";
 import { dayToText } from "../../../shared/days/format";
 import { useDay } from "./hooks";
-import { refreshLibrary } from "../exercises/library";
+import { libraryVersion, refreshLibrary, subscribeLibrary } from "../exercises/library";
 import { exerciseName } from "../exercises/catalog";
 import { newSession, move } from "../sessions/ops";
 import { loadRecentSessions } from "../sessions/recent";
@@ -20,6 +20,7 @@ import { SessionCard } from "../sessions/session";
 const ACTIVITY_SUGGESTIONS = ["Walk", "Run", "Ride", "Bouldering", "Swim", "Hike", "Yoga", "Mobility"];
 
 export function DayView({ date }: { date: string }) {
+  useSyncExternalStore(subscribeLibrary, libraryVersion);
   const { doc, entry, update, replace } = useDay(date);
   const { toast } = useOverlays();
   const [recentVersion, setRecentVersion] = useState(0);

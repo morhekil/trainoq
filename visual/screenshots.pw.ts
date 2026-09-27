@@ -481,6 +481,32 @@ test("set rows have no immediate delete control", async ({ page }) => {
   await expect(page.locator(".set-row button[aria-label^='Delete']")).toHaveCount(0);
 });
 
+test("a custom exercise name appears when its catalog record arrives", async ({ page }) => {
+  await mockApi(page);
+  const customId = "e164c8eb-a785-4c78-a854-f7a9f0787215";
+  await page.route("**/api/trpc/exercises.library", async (route) => {
+    await new Promise((resolve) => setTimeout(resolve, 1000));
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify({ result: { data: {
+      catalog: [{ id: customId, name: "Custom raise", section: null, aliases: "" }], stats: [], history: {},
+    } } }) });
+  });
+  const custom = { ...doc, v: 3, sessions: [{ ...doc.sessions[0], warmup: [], cooldown: [], main: [
+    { kind: "exercise", id: "custom", exerciseId: customId, comment: "", sets: [] },
+  ] }] };
+  await page.addInitScript(({ date, custom }) => {
+    localStorage.setItem("tq:authed", JSON.stringify(true));
+    localStorage.setItem(`tq:day:${date}`, JSON.stringify({ doc: custom, base: null, dirty: false, rev: 1 }));
+  }, { date: day, custom });
+  await page.goto(`/#/d/${day}`);
+  const name = page.locator(".exercise .name-btn");
+  await expect(name).toHaveText(customId);
+  await page.getByRole("button", { name: "Share day with PT / physio" }).click();
+  const share = page.getByTestId("share-text");
+  await expect(share).toContainText(customId);
+  await expect(name).toHaveText("Custom raise");
+  await expect(share).toContainText("Custom raise");
+});
+
 test("dragging an exercise creates a durable one-member superset and reorders its round", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 2400 });
   await mockApi(page);

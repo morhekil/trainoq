@@ -1,11 +1,13 @@
-import { useState } from "react";
+import { useState, useSyncExternalStore } from "react";
 import { dayToText, formatDateLong, formatDateShort } from "../../../shared/days/format";
 import { exerciseName } from "../exercises/catalog";
+import { libraryVersion, subscribeLibrary } from "../exercises/library";
 import { Icon } from "../../icons";
 import { Modal } from "../../modal";
 import { getEntry } from "./store";
 
 export function ShareSheet({ date, onClose }: { date: string; onClose: () => void }) {
+  useSyncExternalStore(subscribeLibrary, libraryVersion);
   const [feedback, setFeedback] = useState<string | null>(null);
   const doc = getEntry(date)?.doc;
   const text = doc ? dayToText(doc, undefined, exerciseName) : formatDateLong(date);
