@@ -43,7 +43,8 @@ async function mockApi(page: Page, signedIn = true) {
     const data = procedure === "auth.me" ? { ok: true }
       : procedure === "days.get" ? { date: day, doc: null, updatedAt: null }
       : procedure === "days.list" ? []
-      : procedure === "exercises.library" ? { stats: [], history: {} }
+      : procedure === "exercises.library" ? { catalog: [], stats: [], history: {} }
+      : procedure === "exercises.create" ? JSON.parse(route.request().postData() ?? "{}").json ?? null
       : procedure === "days.save" ? { ok: true, updatedAt: "2026-09-15T09:00:00.000Z" }
       : null;
     await route.fulfill({ contentType: "application/json", body: JSON.stringify({ result: { data } }) });
@@ -422,17 +423,22 @@ test("warm-up and cool-down can edit supersets with numeric sets", async ({ page
   for (const title of ["Warm-up", "Cool-down"]) {
     const section = page.locator(".section").filter({ has: page.getByRole("heading", { name: title, exact: true }) });
     await section.getByRole("button", { name: "Superset", exact: true }).click();
-    await page.getByRole("searchbox", { name: "Superset – first exercise" }).fill(`${title} press`);
-    await page.getByRole("searchbox", { name: "Superset – first exercise" }).press("Enter");
-    await page.getByRole("searchbox", { name: "Superset – second exercise" }).fill(`${title} row`);
-    await page.getByRole("searchbox", { name: "Superset – second exercise" }).press("Enter");
     const block = section.locator(".block.superset");
+    await expect(block).toHaveCount(1);
+    await expect(block.locator(".exercise")).toHaveCount(0);
+    for (const exercise of [`${title} press`, `${title} row`]) {
+      await block.getByRole("button", { name: "Add exercise to superset" }).click();
+      await page.getByRole("searchbox", { name: "Add to superset" }).fill(exercise);
+      await page.getByRole("searchbox", { name: "Add to superset" }).press("Enter");
+    }
     await expect(block.locator(".exercise")).toHaveCount(2);
+    await block.getByRole("button", { name: "Round", exact: true }).click();
     await block.getByRole("textbox", { name: `${title} press W1 weight` }).fill("12");
-    await block.getByRole("group", { name: "Add Round" }).getByRole("button", { name: "Working" }).click();
+    await block.getByRole("button", { name: "Round", exact: true }).click();
     await expect(block.locator(".exercise").first().locator(".set-row")).toHaveCount(2);
     await expect(block.locator(".exercise").last().locator(".set-row")).toHaveCount(2);
-    await block.getByRole("button", { name: "Delete round 1" }).first().click();
+    await block.getByRole("button", { name: /Superset .* options/ }).click();
+    await page.getByRole("button", { name: "Delete round W1" }).click();
     await page.getByRole("button", { name: "Undo" }).last().click();
     await expect(block.locator(".exercise").first().locator(".set-row")).toHaveCount(2);
     await checkWidth(page);
@@ -454,7 +460,7 @@ test("warm-up and cool-down can edit supersets with numeric sets", async ({ page
   const warmup = page.locator(".section").filter({ has: page.getByRole("heading", { name: "Warm-up", exact: true }) });
   await warmup.getByRole("button", { name: "Warm-up row options" }).click();
   await page.getByRole("button", { name: "Take out of superset" }).click();
-  await expect(warmup.locator(".block.superset")).toHaveCount(0);
+  await expect(warmup.locator(".block.superset")).toHaveCount(1);
   await warmup.getByRole("button", { name: "Warm-up row options" }).click();
   await page.getByRole("button", { name: "Move up" }).click();
   await expect(warmup.locator(".block").nth(1).getByRole("button", { name: "Warm-up row", exact: true })).toBeVisible();
@@ -464,8 +470,125 @@ test("warm-up and cool-down can edit supersets with numeric sets", async ({ page
   await expect(warmup.getByRole("button", { name: "Warm-up row", exact: true })).toBeVisible();
 });
 
-test("an offline v1 draft syncs as v2 and preserves its revision base", async ({ page }) => {
+test("set rows have no immediate delete control", async ({ page }) => {
   await mockApi(page);
+  await page.addInitScript(({ date, doc }) => {
+    localStorage.setItem("tq:authed", JSON.stringify(true));
+    localStorage.setItem(`tq:day:${date}`, JSON.stringify({ doc, base: null, dirty: false, rev: 1 }));
+  }, { date: day, doc });
+  await page.goto(`/#/d/${day}`);
+  await expect(page.locator(".set-row")).not.toHaveCount(0);
+  await expect(page.locator(".set-row button[aria-label^='Delete']")).toHaveCount(0);
+});
+
+test("dragging an exercise creates a durable one-member superset and reorders its round", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 2400 });
+  await mockApi(page);
+  await page.addInitScript(({ date, doc }) => {
+    localStorage.setItem("tq:authed", JSON.stringify(true));
+    localStorage.setItem(`tq:day:${date}`, JSON.stringify({ doc, base: null, dirty: false, rev: 1 }));
+  }, { date: day, doc });
+  await page.goto(`/#/d/${day}`);
+  const main = page.locator(".section").filter({ has: page.getByRole("heading", { name: "Main", exact: true }) });
+  const handle = main.getByRole("button", { name: "Drag Squat" });
+  const target = main.locator('[data-drop-key="superset:new"]');
+  const from = await handle.boundingBox();
+  await page.mouse.move(from!.x + from!.width / 2, from!.y + from!.height / 2);
+  await page.mouse.down();
+  await expect(main.getByRole("status")).toContainText("Drag to a labelled drop target");
+  const to = await target.boundingBox();
+  await page.mouse.move(to!.x + to!.width / 2, to!.y + to!.height / 2, { steps: 8 });
+  await expect(target).toHaveClass(/drop-over/);
+  await page.mouse.up();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  const block = main.locator(".block.superset");
+  await expect(block).toHaveCount(1);
+  await expect(block.locator(".exercise")).toHaveCount(1);
+  const round = block.getByRole("button", { name: "Drag round W1" });
+  const roundFrom = await round.boundingBox();
+  await page.mouse.move(roundFrom!.x + roundFrom!.width / 2, roundFrom!.y + roundFrom!.height / 2);
+  await page.mouse.down();
+  const roundTarget = block.locator(".round-drop").last();
+  const roundTo = await roundTarget.boundingBox();
+  await page.mouse.move(roundTo!.x + roundTo!.width / 2, roundTo!.y + roundTo!.height / 2, { steps: 8 });
+  await expect(roundTarget).toHaveClass(/drop-over/);
+  await page.mouse.up();
+  const entry = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!), day);
+  const item = entry.doc.sessions[0].main[0];
+  expect(item.kind).toBe("superset");
+  expect(item.members).toHaveLength(1);
+  expect(item.rounds.map((r: { type: string }) => r.type)).toEqual(["working", "backoff", "warmup"]);
+  expect(item.results.find((r: { roundId: string }) => r.roundId === "set-1")).toMatchObject({ weight: 40, reps: 8 });
+});
+
+test("mismatched sets show an alignment preview before joining", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 2400 });
+  await mockApi(page);
+  await page.addInitScript(({ date, doc }) => {
+    localStorage.setItem("tq:authed", JSON.stringify(true));
+    localStorage.setItem(`tq:day:${date}`, JSON.stringify({ doc, base: null, dirty: false, rev: 1 }));
+  }, { date: day, doc });
+  await page.goto(`/#/d/${day}`);
+  const main = page.locator(".section").filter({ has: page.getByRole("heading", { name: "Main", exact: true }) });
+  await main.getByRole("button", { name: "Superset", exact: true }).click();
+  const empty = main.locator(".block.superset");
+  await empty.getByRole("button", { name: "Add exercise to superset" }).click();
+  await page.getByRole("searchbox", { name: "Add to superset" }).fill("Row");
+  await page.getByRole("searchbox", { name: "Add to superset" }).press("Enter");
+  await empty.getByRole("button", { name: "Round", exact: true }).click();
+  await empty.getByRole("button", { name: "Round", exact: true }).click();
+  const handle = main.getByRole("button", { name: "Drag Squat" });
+  const from = await handle.boundingBox();
+  await page.mouse.move(from!.x + from!.width / 2, from!.y + from!.height / 2);
+  await page.mouse.down();
+  const target = empty.locator(".member-drop");
+  const to = await target.boundingBox();
+  await page.mouse.move(to!.x + to!.width / 2, to!.y + to!.height / 2, { steps: 8 });
+  await page.mouse.up();
+  const preview = page.getByRole("dialog", { name: "Align Squat with superset" });
+  await expect(preview).toContainText("Superset rounds: warmup, warmup");
+  await expect(preview).toContainText("40kg ×8");
+  const before = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!), day);
+  expect(before.doc.sessions[0].main).toHaveLength(2);
+  await preview.getByRole("button", { name: "Append sets as new rounds" }).click();
+  const after = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!), day);
+  const superset = after.doc.sessions[0].main[0];
+  expect(superset.members).toHaveLength(2);
+  expect(superset.rounds).toHaveLength(5);
+  expect(superset.results.find((result: { memberId: string; roundId: string }) => result.memberId === "exercise-1" && result.roundId === "set-1")).toMatchObject({ weight: 40, reps: 8 });
+});
+
+test("touch drag scrolls to the superset target", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockApi(page);
+  await page.addInitScript(({ date, doc }) => {
+    localStorage.setItem("tq:authed", JSON.stringify(true));
+    localStorage.setItem(`tq:day:${date}`, JSON.stringify({ doc, base: null, dirty: false, rev: 1 }));
+  }, { date: day, doc });
+  await page.goto(`/#/d/${day}`);
+  const main = page.locator(".section").filter({ has: page.getByRole("heading", { name: "Main", exact: true }) });
+  const handle = main.getByRole("button", { name: "Drag Squat" });
+  await handle.scrollIntoViewIfNeeded();
+  const from = await handle.boundingBox();
+  const x = from!.x + from!.width / 2;
+  const y = from!.y + from!.height / 2;
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 1 });
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y }] });
+  await expect(main.getByRole("status")).toContainText("Drag to a labelled drop target");
+  const target = main.locator('[data-drop-key="superset:new"]');
+  const to = await target.boundingBox();
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: to!.x + to!.width / 2, y: 825 }] });
+  await expect(target).toBeInViewport();
+  await expect(target).toHaveClass(/drop-over/);
+  await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+  await expect(main.locator(".block.superset")).toHaveCount(1);
+});
+
+test("an offline v1 draft syncs as v3 and preserves its revision base", async ({ page }) => {
+  await mockApi(page);
+  const requests: string[] = [];
+  page.on("request", (request) => { if (request.url().includes("/api/trpc/")) requests.push(request.url().split("/").at(-1)!); });
   const legacy = { ...doc, v: 1, sessions: [{ ...doc.sessions[0],
     warmup: [{ id: "legacy-warm", name: "Band pull-apart", reps: "2x15", comment: "" }],
     cooldown: [{ id: "legacy-cool", name: "Stretch", reps: "30s", comment: "" }],
@@ -480,12 +603,14 @@ test("an offline v1 draft syncs as v2 and preserves its revision base", async ({
   const payload = request.postDataJSON();
   const input = payload.json ?? payload;
   expect(input.base).toBe("previous-revision");
-  expect(input.doc.v).toBe(2);
-  expect(input.doc.sessions[0].warmup[0].exercises[0].sets.map((set: { reps: number }) => set.reps)).toEqual([15, 15]);
+  expect(input.doc.v).toBe(3);
+  expect(requests.indexOf("exercises.create")).toBeGreaterThanOrEqual(0);
+  expect(requests.indexOf("exercises.create")).toBeLessThan(requests.indexOf("days.save"));
+  expect(input.doc.sessions[0].warmup[0].sets.map((set: { reps: number }) => set.reps)).toEqual([15, 15]);
   await expect(page.getByText("Band pull-apart", { exact: true })).toBeVisible();
   const entry = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!), day);
   expect(entry.rev).toBe(7);
-  expect(entry.doc.v).toBe(2);
+  expect(entry.doc.v).toBe(3);
 });
 
 test("v1 conflict copies normalize before either version is chosen", async ({ page }) => {
@@ -503,13 +628,13 @@ test("v1 conflict copies normalize before either version is chosen", async ({ pa
   }, { date: day, legacy });
   await page.goto(`/#/d/${day}`);
   const before = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!), day);
-  expect([before.doc.v, before.conflict.doc.v, before.base, before.dirty, before.rev, before.conflict.updatedAt]).toEqual([2, 2, "old-revision", true, 9, "new-revision"]);
+  expect([before.doc.v, before.conflict.doc.v, before.base, before.dirty, before.rev, before.conflict.updatedAt]).toEqual([3, 3, "old-revision", true, 9, "new-revision"]);
   await page.getByRole("button", { name: "Use other device's" }).click();
   const dialog = page.getByRole("dialog", { name: "Review day versions" });
   await expect(dialog).toContainText("Other device");
   await dialog.getByRole("button", { name: "Replace this device's edits" }).click();
   const after = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!), day);
-  expect([after.doc.v, after.doc.morning, after.base, after.dirty, after.rev]).toEqual([2, "Other device", "new-revision", false, 10]);
+  expect([after.doc.v, after.doc.morning, after.base, after.dirty, after.rev]).toEqual([3, "Other device", "new-revision", false, 10]);
 });
 
 test("repeat keeps grouping and set types across every section without recorded values", async ({ page }) => {
@@ -537,9 +662,9 @@ test("repeat keeps grouping and set types across every section without recorded 
   }
   const entry = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!), day);
   const repeated = entry.doc.sessions[1];
-  expect(repeated.warmup[0].exercises[0].sets.map((set: { type: string }) => set.type)).toEqual(["working", "working"]);
-  expect(repeated.main[0].exercises[0].sets.map((set: { type: string }) => set.type)).toEqual(["warmup", "working", "backoff"]);
-  expect(repeated.cooldown[0].exercises[0].sets[0].type).toBe("backoff");
+  expect(repeated.warmup[0].sets.map((set: { type: string }) => set.type)).toEqual(["working", "working"]);
+  expect(repeated.main[0].sets.map((set: { type: string }) => set.type)).toEqual(["warmup", "working", "backoff"]);
+  expect(repeated.cooldown[0].sets[0].type).toBe("backoff");
 });
 
 async function checkModalKeyboard(page: Page, name: string, trigger: ReturnType<Page["getByRole"]>) {

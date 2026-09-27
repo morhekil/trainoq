@@ -25,10 +25,10 @@ export function formatDateShort(date: string): string {
 
 /** "5:02pm" in the given (or the device's) time zone */
 /** Plain-text summary of a day, for sending to a PT or physio. */
-export function dayToText(d: DayDoc, timeZone?: string): string {
+export function dayToText(d: DayDoc, timeZone?: string, resolveName?: (id: string) => string): string {
   const out: string[] = [formatDateLong(d.date)];
   if (d.morning.trim()) out.push("", "Morning", d.morning.trim());
-  for (const s of d.sessions) out.push("", "----", ...sessionLines(s, timeZone));
+  for (const s of d.sessions) out.push("", "----", ...sessionLines(s, timeZone, resolveName));
   const acts = d.activities.filter((a) => a.name.trim() || a.minutes != null || a.calories != null);
   if (acts.length) {
     out.push("", "----", "Activities");

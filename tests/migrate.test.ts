@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { emptyDay } from "../shared/days/model";
 import { migrateDay, normalizeDay, type LegacyDayDoc } from "../shared/days/migrate";
 import { daySchema } from "../shared/days/schema";
+import type { StandaloneExercise } from "../shared/exercises/model";
 
 const doc: LegacyDayDoc = {
   ...emptyDay("2026-09-25"),
@@ -29,12 +30,12 @@ describe("v1 day migration", () => {
   it("converts the observed simple values to numeric sets without changing main", () => {
     const migrated = migrateDay(doc);
     const s = migrated.sessions[0];
-    const [rows, hold, halo, squat, deadlift, catCow] = s.warmup.map((b) => b.exercises[0]);
-    const curl = s.cooldown[0].exercises[0];
+    const [rows, hold, halo, squat, deadlift, catCow] = s.warmup as StandaloneExercise[];
+    const curl = s.cooldown[0] as StandaloneExercise;
     const values = (sets: typeof rows.sets) => sets.map(({ type, weight, reps }) => ({ type, weight, reps }));
 
-    expect(migrated.v).toBe(2);
-    expect(s.warmup.map((b) => b.exercises[0].id)).toEqual(["a", "b", "c", "d", "e", "f"]);
+    expect(migrated.v).toBe(3);
+    expect(s.warmup.map((item) => item.id)).toEqual(["a", "b", "c", "d", "e", "f"]);
     expect(values(rows.sets)).toEqual([{ type: "working", weight: null, reps: 10 }, { type: "working", weight: null, reps: 10 }]);
     expect(values(hold.sets)).toEqual([{ type: "working", weight: null, reps: null }]);
     expect(hold.comment).toBe("steady; 30s");
@@ -46,10 +47,10 @@ describe("v1 day migration", () => {
     expect(values(catCow.sets)).toEqual([{ type: "working", weight: null, reps: null }]);
     expect(values(curl.sets)).toEqual([{ type: "working", weight: 4, reps: 4 }]);
     expect(curl.comment).toBe("4kg kettlebell");
-    expect(s.main).toEqual(doc.sessions[0].main);
+    expect(s.main[0]).toMatchObject({ kind: "exercise", id: "main-exercise", comment: "", sets: [{ id: "main-set", type: "working", weight: 40, reps: 6 }] });
     expect(migrateDay(doc)).toEqual(migrated);
     expect(doc.sessions[0].warmup[0].reps).toBe("2x10");
-    expect(new Set([...s.warmup, ...s.main, ...s.cooldown].map((b) => b.id)).size).toBe(8);
+    expect(new Set([...s.warmup, ...s.main, ...s.cooldown].map((item) => item.id)).size).toBe(8);
   });
 
   it("rejects an unknown legacy value instead of losing it", () => {
@@ -58,7 +59,7 @@ describe("v1 day migration", () => {
     expect(() => migrateDay(unknown)).toThrow(/tenish/);
   });
 
-  it("normalizes v1 once and validates the canonical v2 day", () => {
+  it("normalizes v1 once and validates the canonical v3 day", () => {
     const migrated = normalizeDay(doc);
     expect(migrated).toEqual(migrateDay(doc));
     expect(normalizeDay(migrated)).toBe(migrated);

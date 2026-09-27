@@ -12,12 +12,12 @@ Runs on Cloudflare: a Worker serves the app and a tRPC API, data lives in D1.
 - **Start training session** – records the start time; "Finish" records the end. Both editable.
 - **Warm-up / main / cool-down** – each section supports single exercises and supersets (A, B1/B2/B3…). Every exercise has a comment and numeric weight and reps for each set. Set type is independent of section:
   - `W1 W2` warm-up (dashed), `1 2 3` working (solid), `B1` back-off (tinted). Tap the label to change type.
-  - **+ Set / + Round → Warm-up | Working | Back-off.** A new set copies the last set of that type; the first working or back-off set starts from what you did last session. Correct with the ± buttons (2.5 kg / 1 rep) or type.
-  - Every exercise in a superset has the same sets. A round adds one set to each exercise, changing a set's type changes it for the whole round, and ✕ removes the whole round (with Undo). An exercise added to a superset gets the same set types as the others. Weights and reps stay per exercise.
-  - ✕ on a single exercise removes one set (with Undo).
+  - **+ Set** on a standalone exercise and **+ Round** on a superset add the last type, or warm-up when empty. Correct values with the ± buttons (2.5 kg / 1 rep) or type. Tap the set label to cycle its type.
+  - Supersets keep their identity even with zero or one member. Create an empty superset with **+ Superset**, or drag an existing exercise onto it to create a one-member superset. Add members through the picker or drag another standalone exercise onto the labelled superset target. If set types differ, review the alignment preview before appending rounds. Drag a round handle to reorder it without changing its recorded values.
+  - Use the exercise or superset options sheet to delete sets, rounds, exercises or a whole superset with Undo. **Dissolve superset** converts members into standalone exercises with their comments and values intact. Taking out or deleting a member leaves the superset in place.
   - "Last Tue 22 Sep: …" under each exercise shows its previous entry in the same section.
 - **Exercise search** – full-screen picker: recent first, starter list, search by name or alias (`rdl`, `ohp`). If it's not there, "Use "…"" saves what you typed and it shows up in search from then on.
-- **Repeat** – an empty section offers "Repeat <last date>" to copy exercise names, block grouping, and set types. Recorded weight and reps are cleared.
+- **Repeat** – an empty section offers "Repeat <last date>" to copy exercise references, superset grouping, and set types. Recorded weight and reps are cleared.
 - **Calories** – per session, per extra activity (walk etc.), and a daily total.
 - **Narrow screens** – activity name and numeric fields use two compact rows when a single row would hide the name.
 - **Share day with PT / physio** – plain-text summary via the phone share sheet (WhatsApp, SMS, email) or copy.
@@ -28,7 +28,7 @@ Runs on Cloudflare: a Worker serves the app and a tRPC API, data lives in D1.
 - **Works with no signal** – every change is saved on the phone first and synced in the background. If the same day was edited on two devices, compare both versions and confirm which one replaces the other.
 - **Sync retry** – when saving fails or the device is offline, the status badge has a keyboard-accessible retry action.
 - **Installable** – "Add to Home Screen" gives a full-screen app that opens offline.
-- **Backup** – menu → Download backup (JSON of every day).
+- **Backup** – menu → Download backup (JSON of every day and the exercise catalog).
 
 ## Run locally
 
@@ -80,13 +80,13 @@ API.md                  procedure and wire contract
 
 One JSON document per day (`days` table) is the source of truth. On every save the worker rebuilds `exercise_log` – one row per exercise occurrence – which powers search, "last time" hints and, later, progress charts. Types are in `shared/days/model.ts`, `shared/sessions/model.ts`, and `shared/exercises/model.ts`.
 
-The current document is v2. All three session sections hold the same block and numeric-set shape. Older v1 days and offline drafts convert on read; the Worker accepts v1 during the transition and saves v2. A backup exports v2 without rewriting untouched D1 rows.
+The current document is v3. Each session section holds ordered standalone performances and explicit supersets; both reference names in the exercise catalog by stable ID. Supersets store members, shared rounds and a result for every member-round pair. Older v1/v2 days and offline drafts convert on read; the Worker accepts them during the transition and saves v3. A backup exports v3 and the catalog without rewriting untouched D1 rows.
 
 ### API seam
 
 All app data traffic goes through `/api/trpc`. The browser imports only the `AppRouter` type from `backend/router.ts`; the Worker owns auth, validation, D1 access, and write conflicts. [API.md](API.md) lists every procedure, input, result, error, and save conflict rule.
 
-The browser keeps its local draft for offline use and syncs it with `days.save`. The shared document schema is the transport boundary. UI edit helpers, formatting, and search ranking remain client-side; another client can read and write the same document without reproducing the UI. The next seam, when agent workflows need intent-level operations, is to move selected edits into shared pure functions and expose narrow mutations through this router. Keep the day document and revision check as the common persistence contract until then.
+The browser keeps its local draft for offline use, creates any custom exercise definitions through `exercises.create`, then syncs the day with `days.save`. The shared document schema is the transport boundary. Session edit rules live in shared pure functions; another client can reuse them without reproducing the UI. Agent intent-level mutations can extend the same router when those workflows are built. Keep the day document and revision check as the common persistence contract until then.
 
 Before simultaneous clients are active, make the D1 revision check and write atomic: `putDay` currently reads the revision before its write batch, so two concurrent saves can both pass the check. Then add agent credentials and intent-level procedures for the concrete agent workflows, using the same router rather than another transport.
 

@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { dayToText, formatDateLong, formatDateShort } from "../../../shared/days/format";
+import { exerciseName } from "../exercises/catalog";
 import { Icon } from "../../icons";
 import { Modal } from "../../modal";
 import { getEntry } from "./store";
@@ -7,7 +8,7 @@ import { getEntry } from "./store";
 export function ShareSheet({ date, onClose }: { date: string; onClose: () => void }) {
   const [feedback, setFeedback] = useState<string | null>(null);
   const doc = getEntry(date)?.doc;
-  const text = doc ? dayToText(doc) : formatDateLong(date);
+  const text = doc ? dayToText(doc, undefined, exerciseName) : formatDateLong(date);
   const canShare = typeof navigator.share === "function";
 
   const copy = async () => {

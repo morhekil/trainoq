@@ -596,6 +596,7 @@ textarea {
   margin-bottom: -2px;
 }
 .set-badge {
+  width: 100%;
   height: 40px;
   border-radius: 10px;
   font-weight: 800;
@@ -637,32 +638,50 @@ textarea {
   color: var(--muted);
 }
 
-.add-set {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-top: 2px;
-  flex-wrap: wrap;
-}
-.add-label {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--muted);
+.badge-cell { position: relative; }
+.type-hint {
+  position: absolute;
+  inset-inline-start: 0;
+  inset-block-end: 100%;
+  padding: 2px 5px;
+  border-radius: 4px;
+  background: var(--surface-2);
+  color: var(--text);
+  font-size: 12px;
   white-space: nowrap;
 }
-.add-set-btns {
-  display: flex;
-  gap: 6px;
-  flex: 1;
+.type-hint:empty { display: none; }
+.drag-handle {
+  min-width: 28px;
+  min-height: 40px;
+  color: var(--muted);
+  cursor: grab;
+  touch-action: none;
+  user-select: none;
 }
-.add-set-btns .btn {
-  flex: 1;
-  padding: 0 6px;
-  min-width: 0;
+.drag-handle:active { cursor: grabbing; }
+.drop-target.drop-over,
+.round-drop.drop-over { background: var(--accent-soft); outline: 2px solid var(--accent); }
+.drop-caption { font-size: 11px; }
+.member-drop,
+.round-drop {
+  min-height: 36px;
+  padding: 6px;
+  border: 1px dashed var(--accent);
+  border-radius: 8px;
+  color: var(--accent);
+  text-align: center;
 }
-.block.superset > .add-set {
-  padding-top: 8px;
-  border-top: 1px solid var(--line);
+.add-set-button,
+.add-round { align-self: flex-start; }
+.sheet-description { padding: 10px 16px; line-height: 1.5; }
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
 }
 
 /* activities */

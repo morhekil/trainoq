@@ -1,48 +1,36 @@
 export type SetType = "warmup" | "working" | "backoff";
+export type SetValues = { weight: number | null; reps: number | null };
+export type WorkSet = SetValues & { id: string; type: SetType };
 
-export interface WorkSet {
+export interface Exercise { id: string; name: string }
+export interface PerformedExercise { id: string; exerciseId: string; comment: string }
+export type StandaloneExercise = PerformedExercise & { kind: "exercise"; sets: WorkSet[] };
+export interface Superset {
+  kind: "superset";
   id: string;
-  type: SetType;
-  /** kg. null = not entered, 0 = bodyweight */
-  weight: number | null;
-  reps: number | null;
+  members: PerformedExercise[];
+  rounds: { id: string; type: SetType }[];
+  results: (SetValues & { memberId: string; roundId: string })[];
 }
-
-/** Exercise tracked set by set in any session section. */
-export interface Exercise {
-  id: string;
-  name: string;
-  sets: WorkSet[];
-  comment: string;
-}
-
-/** One exercise = straight sets, two or more = superset. */
-export interface Block {
-  id: string;
-  exercises: Exercise[];
-}
-
+export type SessionItem = StandaloneExercise | Superset;
 export type Section = "warmup" | "main" | "cooldown";
 
 export interface ExerciseStat {
-  name: string;
+  exerciseId: string;
   count: number;
-  last: string; // date
+  last: string;
   sections: Partial<Record<Section, number>>;
 }
-
 export interface ExerciseHistoryEntry {
   date: string;
   section: Section;
   sets: Pick<WorkSet, "type" | "weight" | "reps">[];
 }
-
 export interface ExerciseLibrary {
+  catalog: (Exercise & { section: Section | "any" | null; aliases: string })[];
   stats: ExerciseStat[];
-  /** recent entries per name_key and section, newest first */
   history: Record<string, ExerciseHistoryEntry[]>;
 }
-
 export function nameKey(name: string): string {
   return name.trim().toLowerCase().replace(/\s+/g, " ");
 }

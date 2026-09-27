@@ -3,6 +3,7 @@ import { dayToText, daySummary } from "../shared/days/format";
 import { formatSets } from "../shared/exercises/format";
 import type { DayDoc } from "../shared/days/model";
 import type { WorkSet } from "../shared/exercises/model";
+import { exerciseIdForName } from "../shared/exercises/catalog";
 
 const set = (type: WorkSet["type"], weight: number | null, reps: number | null) => ({ type, weight, reps });
 
@@ -23,7 +24,7 @@ describe("formatSets", () => {
 describe("dayToText", () => {
   it("renders a day the way it gets shared", () => {
     const doc: DayDoc = {
-      v: 2,
+      v: 3,
       date: "2026-09-22",
       morning: "Morning stiffness: 4/10",
       sessions: [
@@ -31,17 +32,17 @@ describe("dayToText", () => {
           id: "s",
           startedAt: "2026-09-22T07:00:00.000Z",
           endedAt: "2026-09-22T08:10:00.000Z",
-          warmup: [{ id: "a", exercises: [{ id: "wa", name: "Side plank", sets: [{ id: "w1", ...set("working", null, null) }], comment: "30s" }] }],
+          warmup: [{ kind: "exercise", id: "wa", exerciseId: exerciseIdForName("Side plank"), sets: [{ id: "w1", ...set("working", null, null) }], comment: "30s" }],
           main: [
-            {
-              id: "b",
-              exercises: [
-                { id: "e1", name: "Pull-up", sets: [{ id: "1", ...set("working", 10, 5) }], comment: "" },
-                { id: "e2", name: "Bench press", sets: [{ id: "2", ...set("working", 40, 6) }], comment: "easy" },
-              ],
-            },
+            { kind: "superset", id: "b", members: [
+              { id: "e1", exerciseId: exerciseIdForName("Pull-up"), comment: "" },
+              { id: "e2", exerciseId: exerciseIdForName("Bench press"), comment: "easy" },
+            ], rounds: [{ id: "r", type: "working" }], results: [
+              { memberId: "e1", roundId: "r", weight: 10, reps: 5 },
+              { memberId: "e2", roundId: "r", weight: 40, reps: 6 },
+            ] },
           ],
-          cooldown: [{ id: "c", exercises: [{ id: "ce", name: "Jefferson curl", sets: [{ id: "c1", ...set("working", 4, 4) }], comment: "4kg" }] }],
+          cooldown: [{ kind: "exercise", id: "ce", exerciseId: exerciseIdForName("Jefferson curl"), sets: [{ id: "c1", ...set("working", 4, 4) }], comment: "4kg" }],
           calories: 317,
           notes: "",
         },

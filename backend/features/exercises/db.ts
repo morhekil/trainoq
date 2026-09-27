@@ -1,33 +1,48 @@
-import type { ExerciseLibrary, ExerciseStat, Section } from "../../../shared/exercises/model";
+import { SEED_EXERCISES, exerciseIdForName } from "../../../shared/exercises/catalog";
+import { nameKey, type ExerciseLibrary, type ExerciseStat, type Section } from "../../../shared/exercises/model";
 import { migrateLegacyItem } from "../../../shared/days/migrate";
+
+export async function catalog(db: D1Database): Promise<ExerciseLibrary["catalog"]> {
+  const { results } = await db.prepare("SELECT id, name FROM exercise_catalog ORDER BY name").all<{ id: string; name: string }>();
+  return [
+    ...SEED_EXERCISES.map(({ id, name, section, aliases }) => ({ id, name, section, aliases })),
+    ...results.filter((r) => !SEED_EXERCISES.some((seed) => seed.id === exerciseIdForName(r.name))).map(({ id, name }) => ({ id, name, section: null, aliases: "" })),
+  ];
+}
+
+export async function createExercise(db: D1Database, input: { id: string; name: string }): Promise<{ id: string; name: string }> {
+  const name = input.name.trim().replace(/\s+/g, " ");
+  if (!name) throw new Error("Exercise name is required");
+  await db.prepare("INSERT OR IGNORE INTO exercise_catalog (id, name, name_key) VALUES (?, ?, ?)").bind(input.id, name, nameKey(name)).run();
+  const stored = await db.prepare("SELECT id, name FROM exercise_catalog WHERE id = ?").bind(input.id).first<{ id: string; name: string }>();
+  if (!stored || nameKey(stored.name) !== nameKey(name)) throw new Error("Exercise ID belongs to a different name");
+  return stored;
+}
 
 export async function exerciseLibrary(db: D1Database): Promise<ExerciseLibrary> {
   const [statsRes, histRes] = await db.batch([
-    // bare `name` takes the value from the row holding MAX(date), i.e. the latest spelling
-    db.prepare("SELECT name_key, name, section, COUNT(*) AS c, MAX(date) AS last FROM exercise_log GROUP BY name_key, section"),
-    db.prepare(
-      `SELECT name_key, date, section, detail FROM (
-         SELECT name_key, date, section, detail, ROW_NUMBER() OVER (PARTITION BY name_key, section ORDER BY date DESC, ord ASC) AS rn
-         FROM exercise_log
-       ) WHERE rn <= 4 ORDER BY name_key, section, date DESC`,
-    ),
+    db.prepare("SELECT exercise_id, name_key, name, section, COUNT(*) AS c, MAX(date) AS last FROM exercise_log GROUP BY exercise_id, name_key, section"),
+    db.prepare(`SELECT exercise_id, name_key, name, date, section, detail FROM (
+      SELECT exercise_id, name_key, name, date, section, detail,
+        ROW_NUMBER() OVER (PARTITION BY exercise_id, name_key, section ORDER BY date DESC, ord ASC) AS rn
+      FROM exercise_log
+    ) WHERE rn <= 4 ORDER BY exercise_id, section, date DESC`),
   ]);
   const stats = new Map<string, ExerciseStat>();
-  for (const r of statsRes.results as { name_key: string; name: string; section: Section; c: number; last: string }[]) {
-    let s = stats.get(r.name_key);
-    if (!s) stats.set(r.name_key, (s = { name: r.name, count: 0, last: r.last, sections: {} }));
-    s.count += r.c;
-    s.sections[r.section] = r.c;
-    if (r.last > s.last) {
-      s.last = r.last;
-      s.name = r.name;
-    }
+  for (const r of statsRes.results as { exercise_id: string | null; name: string; section: Section; c: number; last: string }[]) {
+    const id = r.exercise_id?.startsWith("legacy:") ? exerciseIdForName(r.name) : r.exercise_id ?? exerciseIdForName(r.name);
+    let stat = stats.get(id);
+    if (!stat) stats.set(id, (stat = { exerciseId: id, count: 0, last: r.last, sections: {} }));
+    stat.count += r.c;
+    stat.sections[r.section] = (stat.sections[r.section] ?? 0) + r.c;
+    if (r.last > stat.last) stat.last = r.last;
   }
   const history: ExerciseLibrary["history"] = {};
-  for (const r of histRes.results as { name_key: string; date: string; section: Section; detail: string }[]) {
+  for (const r of histRes.results as { exercise_id: string | null; name: string; date: string; section: Section; detail: string }[]) {
+    const id = r.exercise_id?.startsWith("legacy:") ? exerciseIdForName(r.name) : r.exercise_id ?? exerciseIdForName(r.name);
     const detail = JSON.parse(r.detail) as { sets?: ExerciseLibrary["history"][string][number]["sets"]; reps?: string };
-    const sets = detail.sets ?? migrateLegacyItem({ id: "legacy-log", name: r.name_key, reps: detail.reps ?? "", comment: "" }).exercises[0].sets;
-    (history[r.name_key] ??= []).push({ date: r.date, section: r.section, sets: sets.map(({ type, weight, reps }) => ({ type, weight, reps })) });
+    const sets = detail.sets ?? migrateLegacyItem({ id: "legacy-log", name: r.name, reps: detail.reps ?? "", comment: "" }).exercises[0].sets;
+    (history[id] ??= []).push({ date: r.date, section: r.section, sets: sets.map(({ type, weight, reps }) => ({ type, weight, reps })) });
   }
-  return { stats: [...stats.values()], history };
+  return { catalog: await catalog(db), stats: [...stats.values()], history };
 }

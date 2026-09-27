@@ -1,6 +1,7 @@
 ---
 title: Rework exercise identity and superset editing
 priority: high
+status: in-progress
 created_at: 2026-09-28T00:36:22+10:00
 ---
 

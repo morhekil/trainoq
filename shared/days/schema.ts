@@ -1,50 +1,48 @@
 import { z } from "zod";
 import type { DayDoc } from "./model";
-import type { LegacyDayDoc } from "./migrate";
-import { normalizeDay } from "./migrate";
+import { normalizeDay, type LegacyDayDoc, type V2DayDoc } from "./migrate";
 import { DATE_RE } from "./model";
 
 export const dateSchema = z.string().regex(DATE_RE);
-
-const workSet = z.object({
-  id: z.string(),
-  type: z.enum(["warmup", "working", "backoff"]),
-  weight: z.number().finite().nullable(),
-  reps: z.number().finite().nullable(),
+const setValues = { weight: z.number().finite().nullable(), reps: z.number().finite().nullable() };
+const workSet = z.object({ id: z.string().min(1), type: z.enum(["warmup", "working", "backoff"]), ...setValues });
+const performed = { id: z.string().min(1), exerciseId: z.string().min(1), comment: z.string() };
+const exercise = z.object({ kind: z.literal("exercise"), ...performed, sets: z.array(workSet) });
+const superset = z.object({
+  kind: z.literal("superset"), id: z.string().min(1),
+  members: z.array(z.object(performed)),
+  rounds: z.array(z.object({ id: z.string().min(1), type: workSet.shape.type })),
+  results: z.array(z.object({ memberId: z.string(), roundId: z.string(), ...setValues })),
+}).superRefine((item, ctx) => {
+  const members = new Set(item.members.map((m) => m.id));
+  const rounds = new Set(item.rounds.map((r) => r.id));
+  if (members.size !== item.members.length || rounds.size !== item.rounds.length)
+    ctx.addIssue({ code: "custom", message: "Duplicate member or round ID" });
+  const pairs = new Set<string>();
+  for (const result of item.results) {
+    const key = JSON.stringify([result.memberId, result.roundId]);
+    if (!members.has(result.memberId) || !rounds.has(result.roundId) || pairs.has(key)) ctx.addIssue({ code: "custom", message: "Invalid result pair" });
+    pairs.add(key);
+  }
+  if (pairs.size !== members.size * rounds.size) ctx.addIssue({ code: "custom", message: "Missing result pair" });
 });
+const sessionFields = {
+  id: z.string(), startedAt: z.string(), endedAt: z.string().nullable(),
+  calories: z.number().finite().nullable(), notes: z.string(),
+};
+const session = z.object({ ...sessionFields, warmup: z.array(z.union([exercise, superset])), main: z.array(z.union([exercise, superset])), cooldown: z.array(z.union([exercise, superset])) });
+const dayFields = {
+  date: dateSchema, morning: z.string(),
+  activities: z.array(z.object({ id: z.string(), name: z.string(), minutes: z.number().finite().nullable(), calories: z.number().finite().nullable(), notes: z.string() })),
+  totalCalories: z.number().finite().nullable(), notes: z.string(),
+};
+export const daySchema = z.object({ v: z.literal(3), ...dayFields, sessions: z.array(session) }) satisfies z.ZodType<DayDoc>;
 
+const legacyExercise = z.object({ id: z.string(), name: z.string(), sets: z.array(workSet), comment: z.string() });
+const block = z.object({ id: z.string(), exercises: z.array(legacyExercise) });
 const legacyItem = z.object({ id: z.string(), name: z.string(), reps: z.string(), comment: z.string() });
-const block = z.object({
-  id: z.string(),
-  exercises: z.array(z.object({ id: z.string(), name: z.string(), sets: z.array(workSet), comment: z.string() })),
-});
-
-const session = z.object({
-  id: z.string(),
-  startedAt: z.string(),
-  endedAt: z.string().nullable(),
-  warmup: z.array(block),
-  main: z.array(block),
-  cooldown: z.array(block),
-  calories: z.number().finite().nullable(),
-  notes: z.string(),
-});
-
-export const daySchema = z.object({
-  v: z.literal(2),
-  date: dateSchema,
-  morning: z.string(),
-  sessions: z.array(session),
-  activities: z.array(z.object({
-    id: z.string(), name: z.string(), minutes: z.number().finite().nullable(), calories: z.number().finite().nullable(), notes: z.string(),
-  })),
-  totalCalories: z.number().finite().nullable(),
-  notes: z.string(),
-}) satisfies z.ZodType<DayDoc>;
-
-export const legacyDaySchema = daySchema.extend({
-  v: z.literal(1),
-  sessions: z.array(session.extend({ warmup: z.array(legacyItem), cooldown: z.array(legacyItem) })),
-}) satisfies z.ZodType<LegacyDayDoc>;
-
-export const inputDaySchema = z.union([daySchema, legacyDaySchema]).transform(normalizeDay);
+const v2Session = z.object({ ...sessionFields, warmup: z.array(block), main: z.array(block), cooldown: z.array(block) });
+export const v2DaySchema = z.object({ v: z.literal(2), ...dayFields, sessions: z.array(v2Session) }) satisfies z.ZodType<V2DayDoc>;
+export const legacyDaySchema = z.object({ v: z.literal(1), ...dayFields, sessions: z.array(v2Session.extend({ warmup: z.array(legacyItem), cooldown: z.array(legacyItem) })) }) satisfies z.ZodType<LegacyDayDoc>;
+export const rawDaySchema = z.union([daySchema, v2DaySchema, legacyDaySchema]);
+export const inputDaySchema = rawDaySchema.transform(normalizeDay);

@@ -1,15 +1,17 @@
 // Exercise search: starter list + everything logged before (server) + names in local unsynced days.
 
-import { SEED_EXERCISES } from "../../../shared/exercises/catalog";
 import { nameKey, type ExerciseHistoryEntry, type ExerciseLibrary, type Section, type WorkSet } from "../../../shared/exercises/model";
+import { itemSets } from "../../../shared/sessions/format";
+import { allCatalog, exerciseName, setRemoteCatalog } from "./catalog";
 import { type DayDoc } from "../../../shared/days/model";
 import { request, trpc } from "../../api";
 import { cachedDays, onSynced } from "../days/store";
-import { lsGet, lsSet } from "../../storage";
+import { lsGet, lsRemove, lsSet } from "../../storage";
 
 const LS_KEY = "tq:library";
 
 export interface LibItem {
+  id: string;
   key: string;
   name: string;
   aliases: string;
@@ -19,7 +21,15 @@ export interface LibItem {
   last: string | null;
 }
 
-let lib: ExerciseLibrary = lsGet<ExerciseLibrary>(LS_KEY) ?? { stats: [], history: {} };
+let lib: ExerciseLibrary = lsGet<ExerciseLibrary>(LS_KEY) ?? { catalog: [], stats: [], history: {} };
+setRemoteCatalog(lib.catalog ?? []);
+export function clearLibrary(): void {
+  lib = { catalog: [], stats: [], history: {} };
+  lastFetch = 0;
+  lsRemove(LS_KEY);
+  version++;
+  listeners.forEach((fn) => fn());
+}
 let version = 0;
 const listeners = new Set<() => void>();
 
@@ -39,6 +49,7 @@ export function refreshLibrary(force = false): Promise<void> {
   pending = (async () => {
     try {
       lib = await request(trpc.exercises.library.query());
+      setRemoteCatalog(lib.catalog);
       lsSet(LS_KEY, lib);
       lastFetch = Date.now();
       version++;
@@ -62,20 +73,19 @@ function namesInDoc(d: DayDoc): [string, Section][] {
   const out: [string, Section][] = [];
   for (const s of d.sessions) {
     for (const section of ["warmup", "main", "cooldown"] as const)
-      s[section].forEach((b) => b.exercises.forEach((e) => out.push([e.name, section])));
+      s[section].forEach((item) => (item.kind === "exercise" ? [item] : item.members).forEach((e) => out.push([e.exerciseId, section])));
   }
   return out;
 }
 
 function buildIndex(extraDocs: DayDoc[]): Map<string, LibItem> {
   const map = new Map<string, LibItem>();
-  for (const s of SEED_EXERCISES) {
-    map.set(nameKey(s.name), { key: nameKey(s.name), name: s.name, aliases: s.aliases, hint: s.section, uses: {}, total: 0, last: null });
+  for (const s of allCatalog()) {
+    map.set(s.id, { id: s.id, key: nameKey(s.name), name: s.name, aliases: s.aliases, hint: s.section, uses: {}, total: 0, last: null });
   }
   for (const st of lib.stats) {
-    const key = nameKey(st.name);
-    const item = map.get(key) ?? { key, name: st.name, aliases: "", hint: null, uses: {}, total: 0, last: null };
-    if (!map.has(key)) item.name = st.name;
+    const key = st.exerciseId;
+    const item = map.get(key) ?? { id: key, key: nameKey(exerciseName(key)), name: exerciseName(key), aliases: "", hint: null, uses: {}, total: 0, last: null };
     item.uses = { ...st.sections };
     item.total = st.count;
     item.last = st.last;
@@ -83,10 +93,11 @@ function buildIndex(extraDocs: DayDoc[]): Map<string, LibItem> {
   }
   // names typed on this device that the server hasn't indexed yet
   for (const d of extraDocs) {
-    for (const [name, section] of namesInDoc(d)) {
-      const key = nameKey(name);
+    for (const [id, section] of namesInDoc(d)) {
+      const name = exerciseName(id);
+      const key = id;
       if (!key) continue;
-      const item = map.get(key) ?? { key, name: name.trim(), aliases: "", hint: null, uses: {}, total: 0, last: null };
+      const item = map.get(key) ?? { id, key: nameKey(name), name: name.trim(), aliases: "", hint: null, uses: {}, total: 0, last: null };
       if (!item.last || d.date > item.last) {
         item.uses[section] = Math.max(item.uses[section] ?? 0, 1);
         item.total = Math.max(item.total, 1);
@@ -152,28 +163,19 @@ export function searchExercises(query: string, section: Section): SearchGroup[] 
   return [{ title: "Matches", items: scored.map((s) => s.item) }];
 }
 
-/** Library spelling for a typed name if it matches one exactly (case-insensitive). */
-export function canonicalName(typed: string): string {
-  const key = nameKey(typed);
-  const hit = buildIndex([]).get(key);
-  return hit ? hit.name : typed.trim().replace(/\s+/g, " ");
-}
-
 /** Most recent entry for an exercise in this section before `beforeDate`. */
-export function lastTime(name: string, beforeDate: string, section: Section): ExerciseHistoryEntry | null {
-  const key = nameKey(name);
-  if (!key) return null;
-  const serverHits = (lib.history[key] ?? []).filter((h) => h.date < beforeDate && (h.section ?? "main") === section);
+export function lastTime(exerciseId: string, beforeDate: string, section: Section): ExerciseHistoryEntry | null {
+  const serverHits = (lib.history[exerciseId] ?? []).filter((h) => h.date < beforeDate && h.section === section);
   // include unsynced local days too
   let best: ExerciseHistoryEntry | null = serverHits[0] ?? null;
   for (const e of cachedDays()) {
     const d = e.doc;
     if (d.date >= beforeDate || (best && d.date <= best.date)) continue;
     for (const s of d.sessions)
-      for (const b of s[section])
-        for (const ex of b.exercises)
-          if (nameKey(ex.name) === key && ex.sets.length && (!best || d.date > best.date)) {
-            best = { date: d.date, section, sets: ex.sets.map(({ type, weight, reps }) => ({ type, weight, reps })) };
+      for (const item of s[section])
+        for (const ex of item.kind === "exercise" ? [item] : item.members)
+          if (ex.exerciseId === exerciseId && itemSets(item, ex.id).length && (!best || d.date > best.date)) {
+            best = { date: d.date, section, sets: itemSets(item, ex.id).map(({ type, weight, reps }) => ({ type, weight, reps })) };
           }
   }
   return best;
@@ -181,13 +183,13 @@ export function lastTime(name: string, beforeDate: string, section: Section): Ex
 
 /** Suggested values for a fresh set of the given type, based on last time. */
 export function suggestedSet(
-  name: string,
+  exerciseId: string,
   beforeDate: string,
   section: Section,
   type?: WorkSet["type"],
   strict = false,
 ): Pick<WorkSet, "type" | "weight" | "reps"> | null {
-  const h = lastTime(name, beforeDate, section);
+  const h = lastTime(exerciseId, beforeDate, section);
   if (!h || !h.sets.length) return null;
   const s = (type && h.sets.find((x) => x.type === type)) || (strict ? null : h.sets[0]);
   if (!s) return null;

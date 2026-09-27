@@ -3,6 +3,7 @@ import { emptyDay, type Activity, type DayDoc } from "../../../shared/days/model
 import { dayToText } from "../../../shared/days/format";
 import { useDay } from "./hooks";
 import { refreshLibrary } from "../exercises/library";
+import { exerciseName } from "../exercises/catalog";
 import { newSession, move } from "../sessions/ops";
 import { loadRecentSessions } from "../sessions/recent";
 import { getEntry, resolveConflict } from "./store";
@@ -93,11 +94,11 @@ function ConflictBanner({ date, local, other }: { date: string; local: DayDoc; o
             <div className="conflict-versions">
               <section>
                 <h3>This device</h3>
-                <pre className="share-text" role="region" aria-label="This device's full day" tabIndex={0}>{dayToText(local)}</pre>
+                <pre className="share-text" role="region" aria-label="This device's full day" tabIndex={0}>{dayToText(local, undefined, exerciseName)}</pre>
               </section>
               <section>
                 <h3>Other device</h3>
-                <pre className="share-text" role="region" aria-label="Other device's full day" tabIndex={0}>{other ? dayToText(other) : "No day saved on the other device."}</pre>
+                <pre className="share-text" role="region" aria-label="Other device's full day" tabIndex={0}>{other ? dayToText(other, undefined, exerciseName) : "No day saved on the other device."}</pre>
               </section>
             </div>
             <button type="button" className="sheet-btn cancel" autoFocus onClick={() => setChoice(null)}>Cancel</button>

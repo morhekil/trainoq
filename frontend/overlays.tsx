@@ -14,13 +14,14 @@ export interface SheetAction {
 }
 interface SheetState {
   title?: string;
+  description?: string;
   actions: SheetAction[];
 }
 export interface PickerState {
   section: Section;
   title: string;
   initial?: string;
-  onPick: (name: string) => void;
+  onPick: (exerciseId: string) => void;
 }
 interface ToastState {
   id: number;
@@ -88,6 +89,7 @@ function Sheet({ state, onClose }: { state: SheetState; onClose: () => void }) {
     <Modal variant="sheet" label={state.title ?? "Actions"} onClose={onClose}>
       <div className="sheet">
         {state.title && <div className="sheet-title">{state.title}</div>}
+        {state.description && <p className="sheet-description">{state.description}</p>}
         {state.actions.map((a) => (
           <button
             key={a.label}

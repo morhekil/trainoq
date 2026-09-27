@@ -11,6 +11,7 @@ import { request, trpc } from "./api";
 import { AuthError, onAuthRequired } from "./features/auth/session";
 import { refreshLibrary } from "./features/exercises/library";
 import { clearLocalData, hasUnsynced, syncAll } from "./features/days/store";
+import { clearLibrary } from "./features/exercises/library";
 import { lsGet, lsSet } from "./storage";
 
 // ---------------------------------------------------------------- routing (hash based)
@@ -136,6 +137,7 @@ function Main({ onSignedOut }: { onSignedOut: () => void }) {
               /* ignore */
             }
             clearLocalData();
+            clearLibrary();
             lsSet("tq:authed", false);
             onSignedOut();
           },

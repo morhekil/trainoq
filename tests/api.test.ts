@@ -2,40 +2,51 @@ import { createTRPCClient, httpLink } from "@trpc/client";
 import { describe, expect, it, vi } from "vitest";
 import { emptyDay } from "../shared/days/model";
 import type { LegacyDayDoc } from "../shared/days/migrate";
+import { exerciseIdForName } from "../shared/exercises/catalog";
 import worker from "../backend/index";
 import type { AppRouter } from "../backend/router";
 
-describe("tRPC API", () => {
-  it("authenticates and saves days with typed conflicts and validated input", async () => {
-    let saved: { date: string; doc: string; updated_at: string } | null = null;
-    let statements: { sql: string; args: unknown[] }[] = [];
+describe("Worker tRPC boundary", () => {
+  it("migrates old days, protects v3 writes, resolves catalog IDs and exports definitions", async () => {
+    const days = new Map<string, { date: string; doc: string; updated_at: string }>();
+    const catalog = new Map<string, string>();
+    let logRows: { sql: string; args: unknown[] }[] = [];
     const db = {
       prepare(sql: string) {
-        return {
-          sql,
-          async all() { return { results: saved ? [saved] : [] }; },
-          bind(...args: unknown[]) {
-            return {
-              sql,
-              args,
-              async all() { return { results: saved ? [saved] : [] }; },
-              async first() {
-                if (!saved || saved.date !== args[0]) return null;
-                return sql.includes("SELECT updated_at") ? { updated_at: saved.updated_at } : saved;
-              },
-            };
+        const statement = (args: unknown[]) => ({
+          sql, args,
+          bind(...next: unknown[]) { return statement(next); },
+          async first() {
+            if (sql.includes("FROM days")) {
+              const row = days.get(args[0] as string);
+              return sql.startsWith("SELECT updated_at") ? row && { updated_at: row.updated_at, doc: row.doc } : row ?? null;
+            }
+            if (sql.includes("FROM exercise_catalog")) return catalog.has(args[0] as string) ? { id: args[0], name: catalog.get(args[0] as string) } : null;
+            return null;
           },
-        };
+          async all() {
+            if (sql.includes("FROM exercise_catalog")) {
+              const rows = [...catalog].map(([id, name]) => ({ id, name }));
+              return { results: sql.includes("WHERE id IN") ? rows.filter((row) => args.includes(row.id)) : rows };
+            }
+            return { results: [...days.values()] };
+          },
+          async run() {
+            if (sql.startsWith("INSERT OR IGNORE INTO exercise_catalog")) catalog.set(args[0] as string, args[1] as string);
+            return { success: true };
+          },
+        });
+        return statement([]);
       },
-      async batch(stmts: { sql: string; args: unknown[] }[]) {
-        if (stmts[0].sql.startsWith("SELECT")) return [
-          { results: [{ name_key: "row", name: "Row", section: "warmup", c: 1, last: doc.date }] },
-          { results: [{ name_key: "row", date: doc.date, section: "warmup", detail: JSON.stringify({ reps: "2x10" }) }] },
+      async batch(statements: { sql: string; args: unknown[] }[]) {
+        if (statements[0].sql.startsWith("SELECT")) return [
+          { results: [{ exercise_id: exerciseIdForName("Row"), name: "Row", section: "warmup", c: 1, last: "2026-09-23" }] },
+          { results: [{ exercise_id: exerciseIdForName("Row"), name: "Row", date: "2026-09-23", section: "warmup", detail: JSON.stringify({ sets: [{ type: "working", weight: null, reps: 10 }] }) }] },
         ];
-        statements = stmts;
-        for (const { sql, args } of stmts) {
-          if (sql.startsWith("INSERT INTO days")) saved = { date: args[0] as string, doc: args[1] as string, updated_at: args[2] as string };
-          if (sql.startsWith("DELETE FROM days")) saved = null;
+        logRows = statements.filter((statement) => statement.sql.startsWith("INSERT INTO exercise_log"));
+        for (const { sql, args } of statements) {
+          if (sql.startsWith("INSERT INTO days")) days.set(args[0] as string, { date: args[0] as string, doc: args[1] as string, updated_at: args[2] as string });
+          if (sql.startsWith("DELETE FROM days")) days.delete(args[0] as string);
         }
         return [];
       },
@@ -54,56 +65,46 @@ describe("tRPC API", () => {
     })] });
 
     const log = vi.spyOn(console, "error").mockImplementation(() => {});
-    try {
-      await expect(client.auth.me.query()).rejects.toMatchObject({ data: { code: "UNAUTHORIZED" } });
-      expect(log).not.toHaveBeenCalled();
-    } finally {
-      log.mockRestore();
-    }
+    try { await expect(client.auth.me.query()).rejects.toMatchObject({ data: { code: "UNAUTHORIZED" } }); expect(log).not.toHaveBeenCalled(); }
+    finally { log.mockRestore(); }
     await client.auth.login.mutate({ password: "test-password" });
-    expect(await client.auth.me.query()).toEqual({ ok: true });
 
-    const doc = { ...emptyDay("2026-09-23"), morning: "Ready" };
-    const first = await client.days.save.mutate({ date: doc.date, doc, base: null });
+    const old: LegacyDayDoc = { ...emptyDay("2026-09-23"), v: 1, sessions: [{
+      id: "s", startedAt: "2026-09-23T07:00:00Z", endedAt: null,
+      warmup: [{ id: "w", name: "Row", reps: "2x10", comment: "Light band" }],
+      main: [], cooldown: [], calories: null, notes: "",
+    }] };
+    const first = await client.days.save.mutate({ date: old.date, doc: old, base: null });
     expect(first.ok).toBe(true);
-    expect((await client.days.get.query(doc.date)).doc).toEqual(doc);
-    const conflict = await client.days.save.mutate({ date: doc.date, doc, base: null });
-    expect(conflict).toMatchObject({ ok: false, current: { doc } });
+    const migrated = (await client.days.get.query(old.date)).doc!;
+    expect(migrated.v).toBe(3);
+    expect(migrated.sessions[0].warmup[0]).toMatchObject({ kind: "exercise", exerciseId: exerciseIdForName("Row"), comment: "Light band", sets: [{ reps: 10 }, { reps: 10 }] });
+    expect((await client.days.list.query({ withSessions: true, limit: 10 }))[0].doc).toEqual(migrated);
+    expect((await client.backup.export.query()).days[0].doc).toEqual(migrated);
+    expect(logRows[0].args[6]).toBe(exerciseIdForName("Row"));
+    expect((await client.exercises.library.query()).history[exerciseIdForName("Row")][0].sets[0].reps).toBe(10);
+    await expect(client.days.save.mutate({ date: old.date, doc: old, base: first.ok ? first.updatedAt : null })).rejects.toMatchObject({ data: { code: "PRECONDITION_FAILED" } });
 
-    const legacy: LegacyDayDoc = {
-      ...doc, v: 1,
-      sessions: [{
-        id: "s", startedAt: "2026-09-23T07:00:00Z", endedAt: null,
-        warmup: [{ id: "w", name: "Row", reps: "2x10", comment: "Light band" }],
-        main: [], cooldown: [{ id: "c", name: "Stretch", reps: "30s", comment: "" }],
-        calories: null, notes: "",
-      }],
-    };
-    const migrated = await client.days.save.mutate({ date: doc.date, doc: legacy, base: first.ok ? first.updatedAt : null });
-    expect(migrated.ok).toBe(true);
-    const stored = (await client.days.get.query(doc.date)).doc!;
-    expect(stored.v).toBe(2);
-    expect(stored.sessions[0].warmup[0].exercises[0].sets.map((s) => s.reps)).toEqual([10, 10]);
-    expect((await client.days.list.query({ withSessions: true, limit: 10 }))[0].doc).toEqual(stored);
-    expect((await client.backup.export.query()).days[0].doc).toEqual(stored);
-    expect(statements.filter((s) => s.sql.startsWith("INSERT INTO exercise_log")).map((s) => JSON.parse(s.args[4] as string).sets.length)).toEqual([2, 1]);
-    expect((await client.exercises.library.query()).history.row[0]).toEqual({
-      date: doc.date, section: "warmup", sets: [
-        { type: "working", weight: null, reps: 10 },
-        { type: "working", weight: null, reps: 10 },
-      ],
-    });
-
-    saved!.doc = JSON.stringify(legacy);
-    expect((await client.days.get.query(doc.date)).doc).toEqual(stored);
-    expect((await client.days.list.query({ limit: 10 }))[0].doc).toEqual(stored);
-    expect((await client.backup.export.query()).days[0].doc).toEqual(stored);
-    expect(await client.days.save.mutate({ date: doc.date, doc, base: null })).toMatchObject({ ok: false, current: { doc: stored } });
-    const unknown = structuredClone(legacy);
-    unknown.sessions[0].warmup[0].reps = "about ten";
-    await expect(client.days.save.mutate({ date: doc.date, doc: unknown, base: saved!.updated_at })).rejects.toMatchObject({ data: { code: "BAD_REQUEST" } });
-
-    const invalid = { ...doc, sessions: [{ id: "bad" }] };
-    await expect(client.days.save.mutate({ date: doc.date, doc: invalid as typeof doc, base: null })).rejects.toMatchObject({ data: { code: "BAD_REQUEST" } });
+    const customId = "e164c8eb-a785-4c78-a854-f7a9f0787215";
+    const custom = emptyDay("2026-09-24");
+    custom.sessions = [{ id: "custom", startedAt: "2026-09-24T07:00:00Z", endedAt: null, warmup: [], main: [
+      { kind: "superset", id: "ss", members: [{ id: "member", exerciseId: customId, comment: "" }], rounds: [{ id: "round", type: "working" }], results: [{ memberId: "member", roundId: "round", weight: 0, reps: 8 }] },
+    ], cooldown: [], calories: null, notes: "" }];
+    await expect(client.days.save.mutate({ date: custom.date, doc: custom, base: null })).rejects.toMatchObject({ data: { code: "BAD_REQUEST" } });
+    await client.exercises.create.mutate({ id: customId, name: "Custom raise" });
+    expect((await client.exercises.catalog.query()).some((entry) => entry.id === customId)).toBe(true);
+    const saved = await client.days.save.mutate({ date: custom.date, doc: custom, base: null });
+    expect(saved.ok).toBe(true);
+    expect((await client.days.get.query(custom.date)).doc).toEqual(custom);
+    expect(await client.days.save.mutate({ date: custom.date, doc: custom, base: null })).toMatchObject({ ok: false, current: { doc: custom } });
+    expect((await client.backup.export.query()).catalog).toContainEqual({ id: customId, name: "Custom raise", section: null, aliases: "" });
+    const invalid = structuredClone(custom);
+    invalid.sessions[0].main[0] = { ...invalid.sessions[0].main[0], results: [] } as typeof invalid.sessions[0]["main"][number];
+    await expect(client.days.save.mutate({ date: custom.date, doc: invalid, base: saved.ok ? saved.updatedAt : null })).rejects.toMatchObject({ data: { code: "BAD_REQUEST" } });
+    const emptied = structuredClone(custom);
+    emptied.sessions[0].main[0] = { ...emptied.sessions[0].main[0], members: [], results: [] } as typeof emptied.sessions[0]["main"][number];
+    const emptySave = await client.days.save.mutate({ date: custom.date, doc: emptied, base: saved.ok ? saved.updatedAt : null });
+    expect(emptySave.ok).toBe(true);
+    expect((await client.days.get.query(custom.date)).doc?.sessions[0].main[0]).toMatchObject({ kind: "superset", rounds: [{ id: "round" }], members: [], results: [] });
   });
 });

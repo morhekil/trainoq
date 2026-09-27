@@ -1,6 +1,6 @@
 // Finds the most recent earlier session with a given section filled in, for "Repeat" buttons.
 
-import type { Block, Section } from "../../../shared/exercises/model";
+import type { SessionItem, Section } from "../../../shared/exercises/model";
 import type { DayDoc } from "../../../shared/days/model";
 import { request, trpc } from "../../api";
 import { cachedDays, ingestServerDays } from "../days/store";
@@ -21,7 +21,7 @@ export async function loadRecentSessions(beforeDate: string): Promise<boolean> {
   }
 }
 
-export type RepeatSource = { date: string; sameDay: boolean; blocks: Block[] };
+export type RepeatSource = { date: string; sameDay: boolean; items: SessionItem[] };
 
 function pickFrom(doc: DayDoc, section: Section, beforeSessionId?: string): RepeatSource | null {
   let sessions = doc.sessions;
@@ -31,7 +31,7 @@ function pickFrom(doc: DayDoc, section: Section, beforeSessionId?: string): Repe
   }
   for (let i = sessions.length - 1; i >= 0; i--) {
     const s = sessions[i];
-    if (s[section].some((b) => b.exercises.some((e) => e.name.trim()))) return { date: doc.date, sameDay: !!beforeSessionId, blocks: s[section] };
+    if (s[section].some((item) => item.kind === "exercise" || item.members.length)) return { date: doc.date, sameDay: !!beforeSessionId, items: s[section] };
   }
   return null;
 }

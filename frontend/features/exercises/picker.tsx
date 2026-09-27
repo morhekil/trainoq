@@ -4,7 +4,8 @@ import { nameKey } from "../../../shared/exercises/model";
 import { Icon } from "../../icons";
 import { Modal } from "../../modal";
 import type { PickerState } from "../../overlays";
-import { canonicalName, libraryVersion, refreshLibrary, searchExercises, subscribeLibrary } from "./library";
+import { libraryVersion, refreshLibrary, searchExercises, subscribeLibrary } from "./library";
+import { createLocalExercise, findExerciseByName } from "./catalog";
 
 function useLibraryVersion() {
   return useSyncExternalStore(subscribeLibrary, libraryVersion);
@@ -34,10 +35,11 @@ export function ExercisePicker({ state, onClose }: { state: PickerState; onClose
   const typed = q.trim();
   const exact = groups.some((g) => g.items.some((i) => i.key === nameKey(typed)));
 
-  const pick = (name: string) => {
+  const pick = (id: string) => {
     onClose();
-    state.onPick(name);
+    state.onPick(id);
   };
+  const pickTyped = () => pick((findExerciseByName(typed) ?? createLocalExercise(typed)).id);
 
   return (
     <Modal variant="picker" label={state.title} onClose={onClose}>
@@ -59,7 +61,7 @@ export function ExercisePicker({ state, onClose }: { state: PickerState; onClose
               enterKeyHint="done"
               onChange={(e) => setQ(e.target.value)}
               onKeyUp={(e) => {
-                if (e.key === "Enter" && typed) pick(canonicalName(typed));
+                if (e.key === "Enter" && typed) pickTyped();
               }}
             />
             {q && (
@@ -72,7 +74,7 @@ export function ExercisePicker({ state, onClose }: { state: PickerState; onClose
       </div>
       <div className="picker-list">
         {typed && !exact && (
-          <button type="button" className="picker-item use-typed" onClick={() => pick(canonicalName(typed))}>
+          <button type="button" className="picker-item use-typed" onClick={pickTyped}>
             <Icon name="plus" size={18} />
             <span>
               Use "<strong>{typed}</strong>"
@@ -83,7 +85,7 @@ export function ExercisePicker({ state, onClose }: { state: PickerState; onClose
           <div key={g.title}>
             {!typed && <div className="picker-group">{g.title}</div>}
             {g.items.map((i) => (
-              <button key={i.key} type="button" className="picker-item" onClick={() => pick(i.name)}>
+              <button key={i.id} type="button" className="picker-item" onClick={() => pick(i.id)}>
                 <span className="picker-name">{i.name}</span>
                 {i.last && (
                   <span className="picker-meta">

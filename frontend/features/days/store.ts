@@ -2,7 +2,9 @@
 // synced to the server in the background, so a flaky gym connection never loses data.
 
 import { emptyDay, type DayDoc } from "../../../shared/days/model";
-import { normalizeDay, type LegacyDayDoc } from "../../../shared/days/migrate";
+import { legacyExerciseNames, normalizeDay, type LegacyDayDoc, type V2DayDoc } from "../../../shared/days/migrate";
+import { exerciseIdForName } from "../../../shared/exercises/catalog";
+import { clearLocalCatalog, registerExercise, syncDefinitions } from "../exercises/catalog";
 import { trpc, request, NetworkError } from "../../api";
 import { AuthError } from "../auth/session";
 import { lsGet, lsKeys, lsRemove, lsSet } from "../../storage";
@@ -76,9 +78,15 @@ export function getEntry(date: string): Entry | null {
   if (!mem.has(date)) {
     const entry = lsGet<Entry>(PREFIX + date);
     if (entry) {
-      const doc = normalizeDay(entry.doc as DayDoc | LegacyDayDoc);
+      const raw = entry.doc as DayDoc | LegacyDayDoc | V2DayDoc;
+      if (raw.v !== 3) legacyExerciseNames(raw).forEach((name) => registerExercise(exerciseIdForName(name), name));
+      const doc = normalizeDay(raw);
       const conflict = entry.conflict?.doc
-        ? { ...entry.conflict, doc: normalizeDay(entry.conflict.doc as DayDoc | LegacyDayDoc) }
+        ? (() => {
+          const rawConflict = entry.conflict!.doc as DayDoc | LegacyDayDoc | V2DayDoc;
+          if (rawConflict.v !== 3) legacyExerciseNames(rawConflict).forEach((name) => registerExercise(exerciseIdForName(name), name));
+          return { ...entry.conflict, doc: normalizeDay(rawConflict) };
+        })()
         : entry.conflict;
       const normalized = { ...entry, doc, conflict };
       if (doc !== entry.doc || conflict?.doc !== entry.conflict?.doc) lsSet(PREFIX + date, normalized);
@@ -181,6 +189,7 @@ export async function sync(date: string): Promise<void> {
   notifyStatus();
   const rev = e.rev;
   try {
+    await syncDefinitions(e.doc);
     const result = await request(trpc.days.save.mutate({ date, doc: e.doc, base: e.base }));
     offline = false;
     if (result.ok) {
@@ -241,6 +250,8 @@ export function clearLocalData(): void {
   mem.clear();
   dirty.clear();
   conflicts.clear();
+  lsRemove("tq:catalog");
+  clearLocalCatalog();
   notifyStatus();
 }
 

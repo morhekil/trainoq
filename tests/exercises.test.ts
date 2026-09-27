@@ -4,14 +4,23 @@ import { nameKey, type Section } from "../shared/exercises/model";
 import { searchExercises, suggestedSet } from "../frontend/features/exercises/library";
 import { exerciseLibrary } from "../backend/features/exercises/db";
 import { emptyDay } from "../shared/days/model";
+import { exerciseIdForName } from "../shared/exercises/catalog";
+import { allCatalog, clearLocalCatalog, setRemoteCatalog } from "../frontend/features/exercises/catalog";
 
 const names = (query: string, section: Section) => searchExercises(query, section).flatMap((g) => g.items.map((i) => i.name));
 
 describe("starter exercise list", () => {
+  it("clears cached custom definitions from a signed-out session", () => {
+    setRemoteCatalog([{ id: "old", name: "Private move", section: null, aliases: "" }]);
+    expect(allCatalog().some((entry) => entry.id === "old")).toBe(true);
+    clearLocalCatalog();
+    expect(allCatalog().some((entry) => entry.id === "old")).toBe(false);
+  });
   it("has no duplicate names, which would collapse into one search entry", () => {
     const seen = new Set<string>();
     const dupes = SEED_EXERCISES.map((s) => nameKey(s.name)).filter((k) => seen.has(k) || !seen.add(k));
     expect(dupes).toEqual([]);
+    expect(new Set(SEED_EXERCISES.map((seed) => seed.id)).size).toBe(SEED_EXERCISES.length);
   });
 
   it("finds band and calisthenics work by the short names people type", () => {
@@ -41,26 +50,26 @@ describe("exercise history", () => {
     });
     const doc = emptyDay("2026-08-19");
     doc.sessions = [{ id: "s", startedAt: "2026-08-19T07:00:00Z", endedAt: null, calories: null, notes: "",
-      warmup: [{ id: "w", exercises: [{ id: "we", name: "Squat", comment: "", sets: [{ id: "ws", type: "working", weight: 20, reps: 10 }] }] }],
-      main: [{ id: "m", exercises: [{ id: "me", name: "Squat", comment: "", sets: [{ id: "ms", type: "working", weight: 100, reps: 5 }] }] }],
+      warmup: [{ kind: "exercise", id: "we", exerciseId: exerciseIdForName("Squat"), comment: "", sets: [{ id: "ws", type: "working", weight: 20, reps: 10 }] }],
+      main: [{ kind: "exercise", id: "me", exerciseId: exerciseIdForName("Squat"), comment: "", sets: [{ id: "ms", type: "working", weight: 100, reps: 5 }] }],
       cooldown: [],
     }];
     map.set(`tq:day:${doc.date}`, JSON.stringify({ doc, dirty: true, base: null, rev: 1 }));
-    expect(suggestedSet("Squat", "2026-08-20", "warmup")?.weight).toBe(20);
-    expect(suggestedSet("Squat", "2026-08-20", "main")?.weight).toBe(100);
-    expect(suggestedSet("Squat", "2026-08-20", "cooldown")).toBeNull();
+    expect(suggestedSet(exerciseIdForName("Squat"), "2026-08-20", "warmup")?.weight).toBe(20);
+    expect(suggestedSet(exerciseIdForName("Squat"), "2026-08-20", "main")?.weight).toBe(100);
+    expect(suggestedSet(exerciseIdForName("Squat"), "2026-08-20", "cooldown")).toBeNull();
   });
 
   it("returns section-tagged set history from current and legacy log rows", async () => {
-    const db = { prepare: () => ({}), async batch() { return [
-      { results: [{ name_key: "squat", name: "Squat", section: "warmup", c: 1, last: "2026-09-01" }] },
+    const db = { prepare: () => ({ all: async () => ({ results: [] }) }), async batch() { return [
+      { results: [{ exercise_id: exerciseIdForName("Squat"), name_key: "squat", name: "Squat", section: "warmup", c: 1, last: "2026-09-01" }] },
       { results: [
-        { name_key: "squat", date: "2026-09-01", section: "warmup", detail: JSON.stringify({ sets: [{ type: "working", weight: 20, reps: 10 }] }) },
-        { name_key: "squat", date: "2026-08-01", section: "cooldown", detail: JSON.stringify({ reps: "2x8" }) },
+        { exercise_id: exerciseIdForName("Squat"), name: "Squat", date: "2026-09-01", section: "warmup", detail: JSON.stringify({ sets: [{ type: "working", weight: 20, reps: 10 }] }) },
+        { exercise_id: exerciseIdForName("Squat"), name: "Squat", date: "2026-08-01", section: "cooldown", detail: JSON.stringify({ reps: "2x8" }) },
       ] },
     ]; } } as unknown as D1Database;
     const lib = await exerciseLibrary(db);
-    expect(lib.history.squat).toEqual([
+    expect(lib.history[exerciseIdForName("Squat")]).toEqual([
       { date: "2026-09-01", section: "warmup", sets: [{ type: "working", weight: 20, reps: 10 }] },
       { date: "2026-08-01", section: "cooldown", sets: [{ type: "working", weight: null, reps: 8 }, { type: "working", weight: null, reps: 8 }] },
     ]);
