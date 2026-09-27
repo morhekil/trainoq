@@ -481,6 +481,25 @@ test("set rows have no immediate delete control", async ({ page }) => {
   await expect(page.locator(".set-row button[aria-label^='Delete']")).toHaveCount(0);
 });
 
+test("set type announcement stays available at 200% zoom", async ({ page }) => {
+  // A 640px wide window at 200% browser zoom has a 320 CSS pixel viewport.
+  await page.setViewportSize({ width: 320, height: 422 });
+  await mockApi(page);
+  await page.addInitScript(({ date, doc }) => {
+    localStorage.setItem("tq:authed", JSON.stringify(true));
+    localStorage.setItem(`tq:day:${date}`, JSON.stringify({ doc, base: null, dirty: false, rev: 1 }));
+  }, { date: day, doc });
+  await page.goto(`/#/d/${day}`);
+  const status = page.locator(".set-row").first().getByRole("status", { includeHidden: true });
+  expect(await status.evaluate((node) => getComputedStyle(node).display)).not.toBe("none");
+  await page.locator(".set-row .set-badge").first().click();
+  await expect(status).toHaveText("back-off");
+  await checkWidth(page);
+  const lastAction = page.locator(".section").last().getByRole("button", { name: "Add exercise", exact: true });
+  await lastAction.scrollIntoViewIfNeeded();
+  await expect(lastAction).toBeInViewport();
+});
+
 test("a custom exercise name appears when its catalog record arrives", async ({ page }) => {
   await mockApi(page);
   const customId = "e164c8eb-a785-4c78-a854-f7a9f0787215";
@@ -521,10 +540,15 @@ test("dragging an exercise creates a durable one-member superset and reorders it
   const from = await handle.boundingBox();
   await page.mouse.move(from!.x + from!.width / 2, from!.y + from!.height / 2);
   await page.mouse.down();
-  await expect(main.getByRole("status")).toContainText("Drag to a labelled drop target");
+  await expect(main.locator(".sr-only[role='status']")).toContainText("Drag to a labelled drop target");
   const to = await target.boundingBox();
   await page.mouse.move(to!.x + to!.width / 2, to!.y + to!.height / 2, { steps: 8 });
   await expect(target).toHaveClass(/drop-over/);
+  for (const colorScheme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme });
+    const colors = await target.evaluate((node) => ({ foreground: getComputedStyle(node).color, background: getComputedStyle(node).backgroundColor }));
+    expect(contrastRatio(rgb(colors.foreground), rgb(colors.background))).toBeGreaterThanOrEqual(4.5);
+  }
   await page.mouse.up();
   await expect(page.getByRole("dialog")).toHaveCount(0);
   const block = main.locator(".block.superset");
@@ -542,7 +566,14 @@ test("dragging an exercise creates a durable one-member superset and reorders it
   const roundTo = await roundTarget.boundingBox();
   await page.mouse.move(roundTo!.x + roundTo!.width / 2, roundTo!.y + roundTo!.height / 2, { steps: 8 });
   await expect(roundTarget).toHaveClass(/drop-over/);
+  const colors = await roundTarget.evaluate((node) => ({ foreground: getComputedStyle(node).color, background: getComputedStyle(node).backgroundColor }));
+  expect(contrastRatio(rgb(colors.foreground), rgb(colors.background))).toBeGreaterThanOrEqual(4.5);
   await page.mouse.up();
+  await round.focus();
+  await round.press("Enter");
+  await expect(page.getByRole("dialog", { name: "Superset A" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(round).toBeFocused();
   const entry = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!), day);
   const item = entry.doc.sessions[0].main[0];
   expect(item.kind).toBe("superset");
@@ -605,7 +636,7 @@ test("touch drag scrolls to the superset target", async ({ page }) => {
   const cdp = await page.context().newCDPSession(page);
   await cdp.send("Emulation.setTouchEmulationEnabled", { enabled: true, maxTouchPoints: 1 });
   await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x, y }] });
-  await expect(main.getByRole("status")).toContainText("Drag to a labelled drop target");
+  await expect(main.locator(".sr-only[role='status']")).toContainText("Drag to a labelled drop target");
   const target = main.locator('[data-drop-key="superset:new"]');
   const to = await target.boundingBox();
   await cdp.send("Input.dispatchTouchEvent", { type: "touchMove", touchPoints: [{ x: to!.x + to!.width / 2, y: 825 }] });

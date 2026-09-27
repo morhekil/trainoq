@@ -643,14 +643,11 @@ textarea {
   position: absolute;
   inset-inline-start: 0;
   inset-block-end: 100%;
-  padding: 2px 5px;
-  border-radius: 4px;
-  background: var(--surface-2);
   color: var(--text);
   font-size: 12px;
   white-space: nowrap;
 }
-.type-hint:empty { display: none; }
+.type-hint:not(:empty) { padding: 2px 5px; border-radius: 4px; background: var(--surface-2); }
 .drag-handle {
   min-width: 28px;
   min-height: 40px;
@@ -661,7 +658,7 @@ textarea {
 }
 .drag-handle:active { cursor: grabbing; }
 .drop-target.drop-over,
-.round-drop.drop-over { background: var(--accent-soft); outline: 2px solid var(--accent); }
+.round-drop.drop-over { background: var(--accent-soft); color: var(--text); outline: 2px solid var(--accent); }
 .drop-caption { font-size: 11px; }
 .member-drop,
 .round-drop {
