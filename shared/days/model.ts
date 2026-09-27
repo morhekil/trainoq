@@ -11,7 +11,7 @@ export interface Activity {
 }
 
 export interface DayDoc {
-  v: 1;
+  v: 2;
   date: string; // YYYY-MM-DD
   morning: string;
   sessions: Session[];
@@ -22,7 +22,7 @@ export interface DayDoc {
 }
 
 export function emptyDay(date: string): DayDoc {
-  return { v: 1, date, morning: "", sessions: [], activities: [], totalCalories: null, notes: "" };
+  return { v: 2, date, morning: "", sessions: [], activities: [], totalCalories: null, notes: "" };
 }
 
 export function isDayEmpty(d: DayDoc): boolean {

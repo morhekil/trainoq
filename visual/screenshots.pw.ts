@@ -3,14 +3,17 @@ import { expect, test, type Page } from "@playwright/test";
 const day = "2026-09-15";
 const emptyDay = "2026-09-16";
 const doc = {
-  v: 1,
+  v: 2,
   date: day,
   morning: "Slept well. Left shoulder feels a little stiff.",
   sessions: [{
     id: "session-1",
     startedAt: "2026-09-15T07:00:00.000Z",
     endedAt: "2026-09-15T08:00:00.000Z",
-    warmup: [{ id: "warmup-1", name: "Band pull-apart", reps: "2x15", comment: "" }],
+    warmup: [{ id: "warmup-1", exercises: [{ id: "warmup-exercise-1", name: "Band pull-apart", comment: "", sets: [
+      { id: "warmup-set-1", type: "working", weight: null, reps: 15 },
+      { id: "warmup-set-2", type: "working", weight: null, reps: 15 },
+    ] }] }],
     main: [{ id: "block-1", exercises: [{
       id: "exercise-1", name: "Squat", comment: "",
       sets: [
@@ -172,7 +175,7 @@ test("overlays keep keyboard focus inside and return it on Escape", async ({ pag
   await menu.click();
   await checkModalKeyboard(page, "Actions", menu);
 
-  const addExercise = page.getByRole("button", { name: "Add exercise" }).first();
+  const addExercise = page.getByRole("button", { name: "Add exercise", exact: true }).first();
   await addExercise.click();
   await checkModalKeyboard(page, "Warm-up exercise", addExercise);
 
@@ -215,7 +218,7 @@ test("exercise search shows keyboard focus", async ({ page }) => {
     localStorage.setItem(`tq:day:${date}`, JSON.stringify({ doc, base: null, dirty: false, rev: 1 }));
   }, { date: day, doc });
   await page.goto(`/#/d/${day}`);
-  await page.getByRole("button", { name: "Add exercise" }).first().click();
+  await page.getByRole("button", { name: "Add exercise", exact: true }).first().click();
   const search = page.getByRole("searchbox", { name: "Warm-up exercise" });
   await search.focus();
   const indicator = await search.evaluate((input) => ({
@@ -233,7 +236,7 @@ test("exercise search keeps its context after typing", async ({ page }) => {
     localStorage.setItem(`tq:day:${date}`, JSON.stringify({ doc, base: null, dirty: false, rev: 1 }));
   }, { date: day, doc });
   await page.goto(`/#/d/${day}`);
-  await page.getByRole("button", { name: "Add exercise" }).first().click();
+  await page.getByRole("button", { name: "Add exercise", exact: true }).first().click();
   await page.getByRole("searchbox", { name: "Warm-up exercise" }).fill("squat");
   await expect(page.getByRole("dialog", { name: "Warm-up exercise" }).getByText("Warm-up exercise", { exact: true })).toBeVisible();
 });
@@ -407,6 +410,138 @@ test("copy feedback stays above the share dialog", async ({ page }) => {
   await expect(page).toHaveScreenshot("share-copy-320.png");
 });
 
+test("warm-up and cool-down can edit supersets with numeric sets", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockApi(page);
+  await page.addInitScript(({ date, doc }) => {
+    localStorage.setItem("tq:authed", JSON.stringify(true));
+    localStorage.setItem(`tq:day:${date}`, JSON.stringify({ doc, base: null, dirty: false, rev: 1 }));
+  }, { date: day, doc });
+  await page.goto(`/#/d/${day}`);
+
+  for (const title of ["Warm-up", "Cool-down"]) {
+    const section = page.locator(".section").filter({ has: page.getByRole("heading", { name: title, exact: true }) });
+    await section.getByRole("button", { name: "Superset", exact: true }).click();
+    await page.getByRole("searchbox", { name: "Superset – first exercise" }).fill(`${title} press`);
+    await page.getByRole("searchbox", { name: "Superset – first exercise" }).press("Enter");
+    await page.getByRole("searchbox", { name: "Superset – second exercise" }).fill(`${title} row`);
+    await page.getByRole("searchbox", { name: "Superset – second exercise" }).press("Enter");
+    const block = section.locator(".block.superset");
+    await expect(block.locator(".exercise")).toHaveCount(2);
+    await block.getByRole("textbox", { name: `${title} press W1 weight` }).fill("12");
+    await block.getByRole("group", { name: "Add Round" }).getByRole("button", { name: "Working" }).click();
+    await expect(block.locator(".exercise").first().locator(".set-row")).toHaveCount(2);
+    await expect(block.locator(".exercise").last().locator(".set-row")).toHaveCount(2);
+    await block.getByRole("button", { name: "Delete round 1" }).first().click();
+    await page.getByRole("button", { name: "Undo" }).last().click();
+    await expect(block.locator(".exercise").first().locator(".set-row")).toHaveCount(2);
+    await checkWidth(page);
+  }
+  await expect(page.locator(".sync.saved")).toBeVisible();
+  for (const width of [320, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const colorScheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme });
+      await page.evaluate(() => window.scrollTo(0, 0));
+      await checkWidth(page);
+      await expect(page).toHaveScreenshot(`sections-supersets-${width}-${colorScheme}.png`, { fullPage: true });
+    }
+  }
+  const lastAction = page.locator(".section").filter({ has: page.getByRole("heading", { name: "Cool-down", exact: true }) }).getByRole("button", { name: "Add exercise", exact: true });
+  await page.setViewportSize({ width: 320, height: 844 });
+  await lastAction.scrollIntoViewIfNeeded();
+  await expect(lastAction).toBeInViewport();
+  const warmup = page.locator(".section").filter({ has: page.getByRole("heading", { name: "Warm-up", exact: true }) });
+  await warmup.getByRole("button", { name: "Warm-up row options" }).click();
+  await page.getByRole("button", { name: "Take out of superset" }).click();
+  await expect(warmup.locator(".block.superset")).toHaveCount(0);
+  await warmup.getByRole("button", { name: "Warm-up row options" }).click();
+  await page.getByRole("button", { name: "Move up" }).click();
+  await expect(warmup.locator(".block").nth(1).getByRole("button", { name: "Warm-up row", exact: true })).toBeVisible();
+  await warmup.getByRole("button", { name: "Warm-up row options" }).click();
+  await page.getByRole("button", { name: "Delete exercise" }).click();
+  await page.getByRole("button", { name: "Undo" }).last().click();
+  await expect(warmup.getByRole("button", { name: "Warm-up row", exact: true })).toBeVisible();
+});
+
+test("an offline v1 draft syncs as v2 and preserves its revision base", async ({ page }) => {
+  await mockApi(page);
+  const legacy = { ...doc, v: 1, sessions: [{ ...doc.sessions[0],
+    warmup: [{ id: "legacy-warm", name: "Band pull-apart", reps: "2x15", comment: "" }],
+    cooldown: [{ id: "legacy-cool", name: "Stretch", reps: "30s", comment: "" }],
+  }] };
+  await page.addInitScript(({ date, legacy }) => {
+    localStorage.setItem("tq:authed", JSON.stringify(true));
+    localStorage.setItem(`tq:day:${date}`, JSON.stringify({ doc: legacy, base: "previous-revision", dirty: true, rev: 7 }));
+  }, { date: day, legacy });
+  const save = page.waitForRequest((request) => request.url().endsWith("/api/trpc/days.save"));
+  await page.goto(`/#/d/${day}`);
+  const request = await save;
+  const payload = request.postDataJSON();
+  const input = payload.json ?? payload;
+  expect(input.base).toBe("previous-revision");
+  expect(input.doc.v).toBe(2);
+  expect(input.doc.sessions[0].warmup[0].exercises[0].sets.map((set: { reps: number }) => set.reps)).toEqual([15, 15]);
+  await expect(page.getByText("Band pull-apart", { exact: true })).toBeVisible();
+  const entry = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!), day);
+  expect(entry.rev).toBe(7);
+  expect(entry.doc.v).toBe(2);
+});
+
+test("v1 conflict copies normalize before either version is chosen", async ({ page }) => {
+  await mockApi(page);
+  const legacy = { ...doc, v: 1, sessions: [{ ...doc.sessions[0],
+    warmup: [{ id: "old-warm", name: "Band pull-apart", reps: "2x15", comment: "" }],
+    cooldown: [{ id: "old-cool", name: "Stretch", reps: "30s", comment: "" }],
+  }] };
+  await page.addInitScript(({ date, legacy }) => {
+    localStorage.setItem("tq:authed", JSON.stringify(true));
+    localStorage.setItem(`tq:day:${date}`, JSON.stringify({
+      doc: legacy, base: "old-revision", dirty: true, rev: 9,
+      conflict: { doc: { ...legacy, morning: "Other device" }, updatedAt: "new-revision" },
+    }));
+  }, { date: day, legacy });
+  await page.goto(`/#/d/${day}`);
+  const before = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!), day);
+  expect([before.doc.v, before.conflict.doc.v, before.base, before.dirty, before.rev, before.conflict.updatedAt]).toEqual([2, 2, "old-revision", true, 9, "new-revision"]);
+  await page.getByRole("button", { name: "Use other device's" }).click();
+  const dialog = page.getByRole("dialog", { name: "Review day versions" });
+  await expect(dialog).toContainText("Other device");
+  await dialog.getByRole("button", { name: "Replace this device's edits" }).click();
+  const after = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!), day);
+  expect([after.doc.v, after.doc.morning, after.base, after.dirty, after.rev]).toEqual([2, "Other device", "new-revision", false, 10]);
+});
+
+test("repeat keeps grouping and set types across every section without recorded values", async ({ page }) => {
+  await mockApi(page);
+  const previous = { ...doc, sessions: [{ ...doc.sessions[0], cooldown: [{ id: "cool", exercises: [{
+    id: "cool-ex", name: "Stretch", comment: "done", sets: [{ id: "cool-set", type: "backoff", weight: 4, reps: 8 }],
+  }] }] }] };
+  await page.addInitScript(({ date, previous }) => {
+    localStorage.setItem("tq:authed", JSON.stringify(true));
+    localStorage.setItem(`tq:day:${date}`, JSON.stringify({ doc: previous, base: null, dirty: false, rev: 1 }));
+  }, { date: day, previous });
+  await page.goto(`/#/d/${day}`);
+  await page.getByRole("button", { name: "Start another session" }).click();
+  const session = page.locator(".session").last();
+  for (const title of ["Warm-up", "Main", "Cool-down"]) {
+    const section = session.locator(".section").filter({ has: page.getByRole("heading", { name: title, exact: true }) });
+    await section.getByRole("button", { name: /Repeat earlier session/ }).click();
+    await expect(section.locator(".exercise")).toHaveCount(1);
+    const setRows = section.locator(".set-row");
+    await expect(setRows).toHaveCount(title === "Main" ? 3 : title === "Warm-up" ? 2 : 1);
+    for (const row of await setRows.all()) {
+      await expect(row.getByRole("textbox").first()).toHaveValue("");
+      await expect(row.getByRole("textbox").last()).toHaveValue("");
+    }
+  }
+  const entry = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!), day);
+  const repeated = entry.doc.sessions[1];
+  expect(repeated.warmup[0].exercises[0].sets.map((set: { type: string }) => set.type)).toEqual(["working", "working"]);
+  expect(repeated.main[0].exercises[0].sets.map((set: { type: string }) => set.type)).toEqual(["warmup", "working", "backoff"]);
+  expect(repeated.cooldown[0].exercises[0].sets[0].type).toBe("backoff");
+});
+
 async function checkModalKeyboard(page: Page, name: string, trigger: ReturnType<Page["getByRole"]>) {
   const dialog = page.getByRole("dialog", { name });
   await expect(dialog).toBeVisible();
@@ -443,7 +578,7 @@ for (const width of [320, 390, 1280]) {
     await checkWidth(page);
     await expect(page).toHaveScreenshot(`logged-day-${width}.png`, { fullPage: true });
 
-    await page.getByRole("button", { name: "Add exercise" }).first().click();
+    await page.getByRole("button", { name: "Add exercise", exact: true }).first().click();
     await expect(page.getByRole("dialog", { name: "Warm-up exercise" })).toBeVisible();
     await checkWidth(page);
     await expect(page).toHaveScreenshot(`exercise-picker-${width}.png`);

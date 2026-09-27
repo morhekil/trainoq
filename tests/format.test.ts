@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { dayToText } from "../shared/days/format";
+import { dayToText, daySummary } from "../shared/days/format";
 import { formatSets } from "../shared/exercises/format";
 import type { DayDoc } from "../shared/days/model";
 import type { WorkSet } from "../shared/exercises/model";
@@ -23,7 +23,7 @@ describe("formatSets", () => {
 describe("dayToText", () => {
   it("renders a day the way it gets shared", () => {
     const doc: DayDoc = {
-      v: 1,
+      v: 2,
       date: "2026-09-22",
       morning: "Morning stiffness: 4/10",
       sessions: [
@@ -31,7 +31,7 @@ describe("dayToText", () => {
           id: "s",
           startedAt: "2026-09-22T07:00:00.000Z",
           endedAt: "2026-09-22T08:10:00.000Z",
-          warmup: [{ id: "a", name: "Side plank", reps: "30s", comment: "" }],
+          warmup: [{ id: "a", exercises: [{ id: "wa", name: "Side plank", sets: [{ id: "w1", ...set("working", null, null) }], comment: "30s" }] }],
           main: [
             {
               id: "b",
@@ -41,7 +41,7 @@ describe("dayToText", () => {
               ],
             },
           ],
-          cooldown: [{ id: "c", name: "Jefferson curl", reps: "4", comment: "4kg" }],
+          cooldown: [{ id: "c", exercises: [{ id: "ce", name: "Jefferson curl", sets: [{ id: "c1", ...set("working", 4, 4) }], comment: "4kg" }] }],
           calories: 317,
           notes: "",
         },
@@ -61,7 +61,8 @@ describe("dayToText", () => {
         "Session 5:00pm–6:10pm (70 min) · 317 active cal",
         "",
         "Warm-up",
-        "- Side plank 30s",
+        "Side plank",
+        "  – 30s",
         "",
         "Main",
         "Superset: Pull-up / Bench press",
@@ -70,7 +71,8 @@ describe("dayToText", () => {
         "  – easy",
         "",
         "Cool-down",
-        "- Jefferson curl ×4 – 4kg",
+        "Jefferson curl: 4kg×4",
+        "  – 4kg",
         "",
         "----",
         "Activities",
@@ -80,5 +82,6 @@ describe("dayToText", () => {
         "Total daily active calories: 710",
       ].join("\n"),
     );
+    expect(daySummary(doc, "Australia/Sydney")).toContain("4 exercises");
   });
 });

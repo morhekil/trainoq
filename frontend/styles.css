@@ -499,25 +499,6 @@ textarea {
   gap: 8px;
 }
 
-/* warm-up / cool-down rows */
-
-.simple-list {
-  display: flex;
-  flex-direction: column;
-}
-.simple-row {
-  padding: 2px 0;
-  border-bottom: 1px solid var(--line);
-}
-.simple-row:last-child {
-  border-bottom: 0;
-}
-.simple-main {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-  min-height: 48px;
-}
 .name-btn {
   flex: 1;
   min-width: 0;
@@ -534,20 +515,13 @@ textarea {
   color: var(--muted);
   font-style: italic;
 }
-.reps-input {
-  width: 72px;
-  flex: none;
-  text-align: center;
-  padding: 8px 6px;
-  height: 40px;
-}
 .comment {
   font-size: 15px;
   margin: 2px 0 8px;
   padding: 8px 10px;
 }
 
-/* main training */
+/* exercise blocks */
 
 .block {
   display: flex;

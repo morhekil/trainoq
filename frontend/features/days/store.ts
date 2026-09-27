@@ -2,6 +2,7 @@
 // synced to the server in the background, so a flaky gym connection never loses data.
 
 import { emptyDay, type DayDoc } from "../../../shared/days/model";
+import { normalizeDay, type LegacyDayDoc } from "../../../shared/days/migrate";
 import { trpc, request, NetworkError } from "../../api";
 import { AuthError } from "../auth/session";
 import { lsGet, lsKeys, lsRemove, lsSet } from "../../storage";
@@ -72,7 +73,18 @@ function notifyStatus() {
 }
 
 export function getEntry(date: string): Entry | null {
-  if (!mem.has(date)) mem.set(date, lsGet<Entry>(PREFIX + date));
+  if (!mem.has(date)) {
+    const entry = lsGet<Entry>(PREFIX + date);
+    if (entry) {
+      const doc = normalizeDay(entry.doc as DayDoc | LegacyDayDoc);
+      const conflict = entry.conflict?.doc
+        ? { ...entry.conflict, doc: normalizeDay(entry.conflict.doc as DayDoc | LegacyDayDoc) }
+        : entry.conflict;
+      const normalized = { ...entry, doc, conflict };
+      if (doc !== entry.doc || conflict?.doc !== entry.conflict?.doc) lsSet(PREFIX + date, normalized);
+      mem.set(date, normalized);
+    } else mem.set(date, null);
+  }
   return mem.get(date) ?? null;
 }
 

@@ -2,6 +2,7 @@ import type { DayDoc } from "../../../shared/days/model";
 import type { Section } from "../../../shared/exercises/model";
 import { isDayEmpty } from "../../../shared/days/model";
 import { nameKey } from "../../../shared/exercises/model";
+import { inputDaySchema } from "../../../shared/days/schema";
 
 export interface StoredDay {
   date: string;
@@ -18,26 +19,24 @@ interface LogRow {
 function logRows(doc: DayDoc): LogRow[] {
   const rows: LogRow[] = [];
   for (const s of doc.sessions) {
-    for (const it of s.warmup) if (it.name.trim()) rows.push({ section: "warmup", name: it.name.trim(), detail: JSON.stringify({ reps: it.reps }) });
-    for (const b of s.main)
-      for (const e of b.exercises)
-        if (e.name.trim())
-          rows.push({
-            section: "main",
+    for (const section of ["warmup", "main", "cooldown"] as const)
+      for (const b of s[section])
+        for (const e of b.exercises)
+          if (e.name.trim()) rows.push({
+            section,
             name: e.name.trim(),
             detail: JSON.stringify({
               sets: e.sets.map((x) => ({ type: x.type, weight: x.weight, reps: x.reps })),
               superset: b.exercises.length > 1,
             }),
           });
-    for (const it of s.cooldown) if (it.name.trim()) rows.push({ section: "cooldown", name: it.name.trim(), detail: JSON.stringify({ reps: it.reps }) });
   }
   return rows;
 }
 
 export async function getDay(db: D1Database, date: string): Promise<StoredDay | null> {
   const row = await db.prepare("SELECT date, doc, updated_at FROM days WHERE date = ?").bind(date).first<{ date: string; doc: string; updated_at: string }>();
-  return row ? { date: row.date, doc: JSON.parse(row.doc), updatedAt: row.updated_at } : null;
+  return row ? { date: row.date, doc: inputDaySchema.parse(JSON.parse(row.doc)), updatedAt: row.updated_at } : null;
 }
 
 export type PutResult = { ok: true; updatedAt: string | null } | { ok: false; current: StoredDay | null };
@@ -84,5 +83,5 @@ export async function listDays(db: D1Database, opts: { before?: string; limit: n
     .prepare(sql)
     .bind(...binds, opts.limit)
     .all<{ date: string; doc: string; updated_at: string }>();
-  return results.map((r) => ({ date: r.date, doc: JSON.parse(r.doc), updatedAt: r.updated_at }));
+  return results.map((r) => ({ date: r.date, doc: inputDaySchema.parse(JSON.parse(r.doc)), updatedAt: r.updated_at }));
 }

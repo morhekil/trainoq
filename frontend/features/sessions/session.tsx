@@ -2,28 +2,24 @@ import { useEffect, useState } from "react";
 import { formatDateShort } from "../../../shared/days/format";
 import { minutesBetween } from "../../../shared/sessions/format";
 import { formatSets } from "../../../shared/exercises/format";
-import type { Block, MainExercise, SetType, SimpleItem, WorkSet } from "../../../shared/exercises/model";
-import type { DayDoc } from "../../../shared/days/model";
+import type { Block, Exercise, Section, SetType, WorkSet } from "../../../shared/exercises/model";
 import type { Session } from "../../../shared/sessions/model";
 import { lastTime } from "../exercises/library";
 import {
   addRound,
   addToBlock,
   blockLetter,
-  copyMain,
-  copySimple,
+  copyBlocks,
   findBlock,
   findExercise,
   findSession,
   makeSet,
   move,
   newExercise,
-  newSimple,
   nextSetType,
   removeRound,
   setLabels,
   setRoundType,
-  type SimpleSection as SimpleSectionKey,
 } from "./ops";
 import { findRepeatSource } from "./recent";
 import { hhmmToIso, isoToHHMM } from "./time";
@@ -112,9 +108,9 @@ export function SessionCard({ s, index, total }: { s: Session; index: number; to
         </button>
       </div>
 
-      <SimpleSection s={s} section="warmup" title="Warm-up" />
-      <MainSection s={s} />
-      <SimpleSection s={s} section="cooldown" title="Cool-down" />
+      <SectionEditor s={s} section="warmup" title="Warm-up" />
+      <SectionEditor s={s} section="main" title="Main" />
+      <SectionEditor s={s} section="cooldown" title="Cool-down" />
 
       <div className="session-foot">
         <label className="inline-field">
@@ -149,12 +145,12 @@ function SectionHead({ title, count, open, onToggle }: { title: string; count: n
   );
 }
 
-function RepeatButton({ section, s }: { section: "warmup" | "main" | "cooldown"; s: Session }) {
+function RepeatButton({ section, s }: { section: Section; s: Session }) {
   const { doc, update, recentVersion } = useDayCtx();
   void recentVersion; // re-evaluate when recent sessions arrive
   const src = findRepeatSource(section, doc, s.id);
   if (!src) return null;
-  const n = src.kind === "main" ? src.blocks.reduce((k, b) => k + b.exercises.length, 0) : src.items.filter((i) => i.name.trim()).length;
+  const n = src.blocks.reduce((k, b) => k + b.exercises.length, 0);
   const when = src.sameDay ? "earlier session" : formatDateShort(src.date);
   return (
     <button
@@ -163,8 +159,7 @@ function RepeatButton({ section, s }: { section: "warmup" | "main" | "cooldown";
       onClick={() =>
         update((d) => {
           const x = findSession(d, s.id);
-          if (src.kind === "main") x.main.push(...copyMain(src.blocks));
-          else x[section as SimpleSectionKey].push(...copySimple(src.items));
+          x[section].push(...copyBlocks(src.blocks));
         })
       }
     >
@@ -174,165 +169,53 @@ function RepeatButton({ section, s }: { section: "warmup" | "main" | "cooldown";
   );
 }
 
-// ---------------------------------------------------------------- warm-up / cool-down
+// ---------------------------------------------------------------- session sections
 
-function SimpleSection({ s, section, title }: { s: Session; section: SimpleSectionKey; title: string }) {
-  const { update } = useDayCtx();
-  const { openPicker } = useOverlays();
-  const [open, setOpen] = useState(true);
-  const items = s[section];
-
-  const add = () =>
-    openPicker({
-      section,
-      title: `${title} exercise`,
-      onPick: (name) => update((d) => findSession(d, s.id)[section].push(newSimple(name))),
-    });
-
-  return (
-    <div className="section">
-      <SectionHead title={title} count={items.length} open={open} onToggle={() => setOpen(!open)} />
-      {open && (
-        <>
-          {items.length > 0 && (
-            <div className="simple-list">
-              {items.map((it, i) => (
-                <SimpleRow key={it.id} s={s} section={section} it={it} index={i} count={items.length} />
-              ))}
-            </div>
-          )}
-          <div className="row-actions">
-            <button type="button" className="btn ghost" onClick={add}>
-              <Icon name="plus" size={18} />
-              Add exercise
-            </button>
-            {items.length === 0 && <RepeatButton section={section} s={s} />}
-          </div>
-        </>
-      )}
-    </div>
-  );
-}
-
-function SimpleRow({ s, section, it, index, count }: { s: Session; section: SimpleSectionKey; it: SimpleItem; index: number; count: number }) {
-  const { update, undoable } = useDayCtx();
-  const { openPicker, openSheet } = useOverlays();
-  const [noteOpen, setNoteOpen] = useState(false);
-  const up = (fn: (x: SimpleItem) => void) =>
-    update((d) => {
-      const x = findSession(d, s.id)[section].find((y) => y.id === it.id);
-      if (x) fn(x);
-    });
-  const list = (d: DayDoc) => findSession(d, s.id)[section];
-
-  const rename = () => openPicker({ section, title: "Change exercise", initial: it.name, onPick: (name) => up((x) => (x.name = name)) });
-
-  const menu = () =>
-    openSheet({
-      title: it.name,
-      actions: [
-        { label: "Change exercise", onClick: rename },
-        ...(index > 0 ? [{ label: "Move up", icon: "chevronUp" as const, onClick: () => update((d) => move(list(d), index, -1)) }] : []),
-        ...(index < count - 1 ? [{ label: "Move down", icon: "chevronDown" as const, onClick: () => update((d) => move(list(d), index, 1)) }] : []),
-        {
-          label: "Delete",
-          danger: true,
-          onClick: () => undoable(`${it.name || "Exercise"} deleted`, (d) => (findSession(d, s.id)[section] = list(d).filter((y) => y.id !== it.id))),
-        },
-      ],
-    });
-
-  return (
-    <div className="simple-row">
-      <div className="simple-main">
-        <button type="button" className={`name-btn ${it.name ? "" : "placeholder"}`} onClick={rename}>
-          {it.name || "Choose exercise"}
-        </button>
-        <input
-          className="text reps-input"
-          type="text"
-          aria-label={`${it.name} reps`}
-          placeholder="reps"
-          enterKeyHint="done"
-          value={it.reps}
-          onChange={(e) => up((x) => (x.reps = e.target.value))}
-          onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
-        />
-        <button
-          type="button"
-          className={`icon-btn ${it.comment ? "on" : ""}`}
-          aria-label="Comment"
-          aria-pressed={noteOpen || !!it.comment}
-          onClick={() => setNoteOpen(!noteOpen)}
-        >
-          <Icon name="note" size={18} />
-        </button>
-        <button type="button" className="icon-btn" aria-label={`${it.name} options`} onClick={menu}>
-          <Icon name="more" />
-        </button>
-      </div>
-      {(noteOpen || it.comment) && (
-        <AutoTextarea
-          minRows={1}
-          className="comment"
-          placeholder="Comment"
-          aria-label={`${it.name} comment`}
-          autoFocus={noteOpen && !it.comment}
-          value={it.comment}
-          onChange={(e) => up((x) => (x.comment = e.target.value))}
-        />
-      )}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------- main training
-
-function MainSection({ s }: { s: Session }) {
+function SectionEditor({ s, section, title }: { s: Session; section: Section; title: string }) {
   const { date, update } = useDayCtx();
   const { openPicker } = useOverlays();
   const [open, setOpen] = useState(true);
 
   const addExercise = () =>
     openPicker({
-      section: "main",
-      title: "Exercise",
-      onPick: (name) => update((d) => findSession(d, s.id).main.push({ id: uid(), exercises: [newExercise(name, date)] })),
+      section,
+      title: `${title} exercise`,
+      onPick: (name) => update((d) => findSession(d, s.id)[section].push({ id: uid(), exercises: [newExercise(name, date, section)] })),
     });
 
   const addSuperset = () =>
     openPicker({
-      section: "main",
+      section,
       title: "Superset – first exercise",
       onPick: (first) => {
         const blockId = uid();
-        update((d) => findSession(d, s.id).main.push({ id: blockId, exercises: [newExercise(first, date)] }));
+        update((d) => findSession(d, s.id)[section].push({ id: blockId, exercises: [newExercise(first, date, section)] }));
         openPicker({
-          section: "main",
+          section,
           title: "Superset – second exercise",
-          onPick: (second) => update((d) => addToBlock(findBlock(findSession(d, s.id), blockId), second, date)),
+          onPick: (second) => update((d) => addToBlock(findBlock(findSession(d, s.id), section, blockId), second, date, section)),
         });
       },
     });
 
   return (
     <div className="section">
-      <SectionHead title="Main" count={s.main.reduce((n, b) => n + b.exercises.length, 0)} open={open} onToggle={() => setOpen(!open)} />
+      <SectionHead title={title} count={s[section].reduce((n, b) => n + b.exercises.length, 0)} open={open} onToggle={() => setOpen(!open)} />
       {open && (
         <>
-          {s.main.map((b, i) => (
-            <BlockCard key={b.id} s={s} b={b} index={i} count={s.main.length} />
+          {s[section].map((b, i) => (
+            <BlockCard key={b.id} s={s} section={section} b={b} index={i} count={s[section].length} />
           ))}
           <div className="row-actions">
             <button type="button" className="btn ghost" onClick={addExercise}>
               <Icon name="plus" size={18} />
-              Exercise
+              Add exercise
             </button>
             <button type="button" className="btn ghost" onClick={addSuperset}>
               <Icon name="plus" size={18} />
               Superset
             </button>
-            {s.main.length === 0 && <RepeatButton section="main" s={s} />}
+            {s[section].length === 0 && <RepeatButton section={section} s={s} />}
           </div>
         </>
       )}
@@ -362,18 +245,18 @@ function AddSetButtons({ lastType, onAdd, noun }: { lastType: SetType | undefine
   );
 }
 
-function BlockCard({ s, b, index, count }: { s: Session; b: Block; index: number; count: number }) {
+function BlockCard({ s, section, b, index, count }: { s: Session; section: Section; b: Block; index: number; count: number }) {
   const { date, update, undoable } = useDayCtx();
   const { openPicker, openSheet } = useOverlays();
   const superset = b.exercises.length > 1;
   const letter = blockLetter(index);
-  const upBlock = (fn: (x: Block) => void) => update((d) => fn(findBlock(findSession(d, s.id), b.id)));
+  const upBlock = (fn: (x: Block) => void) => update((d) => fn(findBlock(findSession(d, s.id), section, b.id)));
 
   const addToSuperset = () =>
     openPicker({
-      section: "main",
+      section,
       title: "Add to superset",
-      onPick: (name) => upBlock((x) => addToBlock(x, name, date)),
+      onPick: (name) => upBlock((x) => addToBlock(x, name, date, section)),
     });
 
   const blockMenu = () =>
@@ -381,14 +264,14 @@ function BlockCard({ s, b, index, count }: { s: Session; b: Block; index: number
       title: `Superset ${letter}`,
       actions: [
         { label: "Add exercise to superset", icon: "plus", onClick: addToSuperset },
-        ...(index > 0 ? [{ label: "Move superset up", icon: "chevronUp" as const, onClick: () => update((d) => move(findSession(d, s.id).main, index, -1)) }] : []),
+        ...(index > 0 ? [{ label: "Move superset up", icon: "chevronUp" as const, onClick: () => update((d) => move(findSession(d, s.id)[section], index, -1)) }] : []),
         ...(index < count - 1
-          ? [{ label: "Move superset down", icon: "chevronDown" as const, onClick: () => update((d) => move(findSession(d, s.id).main, index, 1)) }]
+          ? [{ label: "Move superset down", icon: "chevronDown" as const, onClick: () => update((d) => move(findSession(d, s.id)[section], index, 1)) }]
           : []),
         {
           label: "Delete superset",
           danger: true,
-          onClick: () => undoable("Superset deleted", (d) => (findSession(d, s.id).main = findSession(d, s.id).main.filter((x) => x.id !== b.id))),
+          onClick: () => undoable("Superset deleted", (d) => (findSession(d, s.id)[section] = findSession(d, s.id)[section].filter((x) => x.id !== b.id))),
         },
       ],
     });
@@ -409,6 +292,7 @@ function BlockCard({ s, b, index, count }: { s: Session; b: Block; index: number
         <ExerciseEditor
           key={e.id}
           s={s}
+          section={section}
           b={b}
           e={e}
           label={superset ? `${letter}${j + 1}` : letter}
@@ -418,7 +302,7 @@ function BlockCard({ s, b, index, count }: { s: Session; b: Block; index: number
         />
       ))}
       {superset ? (
-        <AddSetButtons noun="Round" lastType={lastSetType} onAdd={(t) => upBlock((x) => addRound(x, date, t))} />
+        <AddSetButtons noun="Round" lastType={lastSetType} onAdd={(t) => upBlock((x) => addRound(x, date, section, t))} />
       ) : null}
       <button type="button" className="link-btn" onClick={addToSuperset}>
         <Icon name="plus" size={16} />
@@ -430,6 +314,7 @@ function BlockCard({ s, b, index, count }: { s: Session; b: Block; index: number
 
 function ExerciseEditor({
   s,
+  section,
   b,
   e,
   label,
@@ -438,8 +323,9 @@ function ExerciseEditor({
   exIndex,
 }: {
   s: Session;
+  section: Section;
   b: Block;
-  e: MainExercise;
+  e: Exercise;
   label: string;
   blockIndex: number;
   blockCount: number;
@@ -449,33 +335,33 @@ function ExerciseEditor({
   const { openPicker, openSheet } = useOverlays();
   const [noteOpen, setNoteOpen] = useState(false);
   const superset = b.exercises.length > 1;
-  const last = e.name ? lastTime(e.name, date) : null;
+  const last = e.name ? lastTime(e.name, date, section) : null;
   const labels = setLabels(e.sets);
 
-  const upEx = (fn: (x: MainExercise) => void) => update((d) => fn(findExercise(findBlock(findSession(d, s.id), b.id), e.id)));
-  const rename = () => openPicker({ section: "main", title: "Change exercise", initial: e.name, onPick: (name) => upEx((x) => (x.name = name)) });
+  const upEx = (fn: (x: Exercise) => void) => update((d) => fn(findExercise(findBlock(findSession(d, s.id), section, b.id), e.id)));
+  const rename = () => openPicker({ section, title: "Change exercise", initial: e.name, onPick: (name) => upEx((x) => (x.name = name)) });
 
   const menu = () => {
     const actions: SheetAction[] = [{ label: "Change exercise", onClick: rename }];
     if (superset) {
       if (exIndex > 0)
-        actions.push({ label: "Move up", icon: "chevronUp", onClick: () => update((d) => move(findBlock(findSession(d, s.id), b.id).exercises, exIndex, -1)) });
+        actions.push({ label: "Move up", icon: "chevronUp", onClick: () => update((d) => move(findBlock(findSession(d, s.id), section, b.id).exercises, exIndex, -1)) });
       if (exIndex < b.exercises.length - 1)
-        actions.push({ label: "Move down", icon: "chevronDown", onClick: () => update((d) => move(findBlock(findSession(d, s.id), b.id).exercises, exIndex, 1)) });
+        actions.push({ label: "Move down", icon: "chevronDown", onClick: () => update((d) => move(findBlock(findSession(d, s.id), section, b.id).exercises, exIndex, 1)) });
       actions.push({
         label: "Take out of superset",
         onClick: () =>
           update((d) => {
             const x = findSession(d, s.id);
-            const blk = findBlock(x, b.id);
+            const blk = findBlock(x, section, b.id);
             const [ex] = blk.exercises.splice(exIndex, 1);
-            x.main.splice(blockIndex + 1, 0, { id: uid(), exercises: [ex] });
+            x[section].splice(blockIndex + 1, 0, { id: uid(), exercises: [ex] });
           }),
       });
     } else {
-      if (blockIndex > 0) actions.push({ label: "Move up", icon: "chevronUp", onClick: () => update((d) => move(findSession(d, s.id).main, blockIndex, -1)) });
+      if (blockIndex > 0) actions.push({ label: "Move up", icon: "chevronUp", onClick: () => update((d) => move(findSession(d, s.id)[section], blockIndex, -1)) });
       if (blockIndex < blockCount - 1)
-        actions.push({ label: "Move down", icon: "chevronDown", onClick: () => update((d) => move(findSession(d, s.id).main, blockIndex, 1)) });
+        actions.push({ label: "Move down", icon: "chevronDown", onClick: () => update((d) => move(findSession(d, s.id)[section], blockIndex, 1)) });
     }
     actions.push({
       label: "Delete exercise",
@@ -483,9 +369,9 @@ function ExerciseEditor({
       onClick: () =>
         undoable(`${e.name || "Exercise"} deleted`, (d) => {
           const x = findSession(d, s.id);
-          const blk = findBlock(x, b.id);
+          const blk = findBlock(x, section, b.id);
           blk.exercises = blk.exercises.filter((y) => y.id !== e.id);
-          if (!blk.exercises.length) x.main = x.main.filter((y) => y.id !== b.id);
+          if (!blk.exercises.length) x[section] = x[section].filter((y) => y.id !== b.id);
         }),
     });
     openSheet({ title: e.name || "Exercise", actions });
@@ -550,20 +436,20 @@ function ExerciseEditor({
               noun={superset ? "round" : "set"}
               onCycle={() =>
                 update((d) => {
-                  const blk = findBlock(findSession(d, s.id), b.id);
+                  const blk = findBlock(findSession(d, s.id), section, b.id);
                   setRoundType(blk, k, nextSetType(findExercise(blk, e.id).sets[k].type));
                 })
               }
               onWeight={(v) => upSet(st.id, (x) => (x.weight = v))}
               onReps={(v) => upSet(st.id, (x) => (x.reps = v))}
               onRemove={() =>
-                undoable(`${superset ? "Round" : "Set"} ${labels[k]} deleted`, (d) => removeRound(findBlock(findSession(d, s.id), b.id), k))
+                undoable(`${superset ? "Round" : "Set"} ${labels[k]} deleted`, (d) => removeRound(findBlock(findSession(d, s.id), section, b.id), k))
               }
             />
           ))}
         </div>
       )}
-      {!superset && <AddSetButtons noun="Set" lastType={e.sets.at(-1)?.type} onAdd={(t) => upEx((x) => x.sets.push(makeSet(x, date, t)))} />}
+      {!superset && <AddSetButtons noun="Set" lastType={e.sets.at(-1)?.type} onAdd={(t) => upEx((x) => x.sets.push(makeSet(x, date, section, t)))} />}
     </div>
   );
 }

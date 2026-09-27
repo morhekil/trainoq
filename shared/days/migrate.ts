@@ -1,13 +1,20 @@
-import type { Block, SimpleItem, WorkSet } from "../exercises/model";
+import type { Block, WorkSet } from "../exercises/model";
 import type { Session } from "../sessions/model";
 import type { DayDoc } from "./model";
 
-export type MigratedDayDoc = Omit<DayDoc, "v" | "sessions"> & {
-  v: 2;
-  sessions: (Omit<Session, "warmup" | "cooldown"> & { warmup: Block[]; cooldown: Block[] })[];
+interface LegacyItem {
+  id: string;
+  name: string;
+  reps: string;
+  comment: string;
+}
+
+export type LegacyDayDoc = Omit<DayDoc, "v" | "sessions"> & {
+  v: 1;
+  sessions: (Omit<Session, "warmup" | "cooldown"> & { warmup: LegacyItem[]; cooldown: LegacyItem[] })[];
 };
 
-function migrateItem(item: SimpleItem): Block {
+export function migrateLegacyItem(item: LegacyItem): Block {
   const value = item.reps.trim();
   let count = 1;
   let reps: number | null = null;
@@ -42,15 +49,19 @@ function migrateItem(item: SimpleItem): Block {
 }
 
 /** Convert the audited v1 day shape to numeric-set blocks in every section. */
-export function migrateDay(doc: DayDoc): MigratedDayDoc {
+export function migrateDay(doc: LegacyDayDoc): DayDoc {
   const copy = structuredClone(doc);
   return {
     ...copy,
     v: 2,
     sessions: copy.sessions.map((s) => ({
       ...s,
-      warmup: s.warmup.map(migrateItem),
-      cooldown: s.cooldown.map(migrateItem),
+      warmup: s.warmup.map(migrateLegacyItem),
+      cooldown: s.cooldown.map(migrateLegacyItem),
     })),
   };
+}
+
+export function normalizeDay(doc: DayDoc | LegacyDayDoc): DayDoc {
+  return doc.v === 1 ? migrateDay(doc) : doc;
 }

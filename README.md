@@ -4,21 +4,20 @@ Mobile-first training log: morning check-in, sessions with warm-up / main / cool
 
 Runs on Cloudflare: a Worker serves the app and a tRPC API, data lives in D1.
 
-## What it does (v1)
+## What it does
 
 - **Day view**, defaults to today. Arrows or tap the date to move around; "Today" jumps back.
 - **Keyboard date navigation** – the date picker shows its focus position, even though the native date input sits over the displayed date.
 - **Morning check-in** – free text.
 - **Start training session** – records the start time; "Finish" records the end. Both editable.
-- **Warm-up / cool-down** – exercise + reps (free text, so `30s` or `2x10` work) + comment.
-- **Main** – single exercises or supersets (A, B1/B2/B3…). Each set has a type:
+- **Warm-up / main / cool-down** – each section supports single exercises and supersets (A, B1/B2/B3…). Every exercise has a comment and numeric weight and reps for each set. Set type is independent of section:
   - `W1 W2` warm-up (dashed), `1 2 3` working (solid), `B1` back-off (tinted). Tap the label to change type.
   - **+ Set / + Round → Warm-up | Working | Back-off.** A new set copies the last set of that type; the first working or back-off set starts from what you did last session. Correct with the ± buttons (2.5 kg / 1 rep) or type.
   - Every exercise in a superset has the same sets. A round adds one set to each exercise, changing a set's type changes it for the whole round, and ✕ removes the whole round (with Undo). An exercise added to a superset gets the same set types as the others. Weights and reps stay per exercise.
   - ✕ on a single exercise removes one set (with Undo).
-  - "Last Tue 22 Sep: …" under each exercise shows the previous session.
+  - "Last Tue 22 Sep: …" under each exercise shows its previous entry in the same section.
 - **Exercise search** – full-screen picker: recent first, starter list, search by name or alias (`rdl`, `ohp`). If it's not there, "Use "…"" saves what you typed and it shows up in search from then on.
-- **Repeat** – an empty section offers "Repeat <last date>" to copy the last session's warm-up, main structure (no sets) or cool-down.
+- **Repeat** – an empty section offers "Repeat <last date>" to copy exercise names, block grouping, and set types. Recorded weight and reps are cleared.
 - **Calories** – per session, per extra activity (walk etc.), and a daily total.
 - **Narrow screens** – activity name and numeric fields use two compact rows when a single row would hide the name.
 - **Share day with PT / physio** – plain-text summary via the phone share sheet (WhatsApp, SMS, email) or copy.
@@ -79,7 +78,9 @@ API.md                  procedure and wire contract
 
 ### Data model
 
-One JSON document per day (`days` table) is the source of truth. On every save the worker rebuilds `exercise_log` – one row per exercise per day – which powers search, "last time" hints and, later, progress charts. Types are in `shared/days/model.ts`, `shared/sessions/model.ts`, and `shared/exercises/model.ts`.
+One JSON document per day (`days` table) is the source of truth. On every save the worker rebuilds `exercise_log` – one row per exercise occurrence – which powers search, "last time" hints and, later, progress charts. Types are in `shared/days/model.ts`, `shared/sessions/model.ts`, and `shared/exercises/model.ts`.
+
+The current document is v2. All three session sections hold the same block and numeric-set shape. Older v1 days and offline drafts convert on read; the Worker accepts v1 during the transition and saves v2. A backup exports v2 without rewriting untouched D1 rows.
 
 ### API seam
 

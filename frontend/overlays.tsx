@@ -58,7 +58,7 @@ export function OverlayProvider({ children }: { children: ReactNode }) {
     <Ctx.Provider value={value}>
       {children}
       {sheet && <Sheet state={sheet} onClose={() => setSheet(null)} />}
-      {picker && <ExercisePicker state={picker} onClose={() => setPicker(null)} />}
+      {picker && <ExercisePicker key={picker.title} state={picker} onClose={() => setPicker((current) => current === picker ? null : current)} />}
       {toasts.length > 0 && (
         <div className="toast-stack">
           {toasts.map((item) => (

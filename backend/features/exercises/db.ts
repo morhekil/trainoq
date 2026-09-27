@@ -1,14 +1,15 @@
 import type { ExerciseLibrary, ExerciseStat, Section } from "../../../shared/exercises/model";
+import { migrateLegacyItem } from "../../../shared/days/migrate";
 
 export async function exerciseLibrary(db: D1Database): Promise<ExerciseLibrary> {
   const [statsRes, histRes] = await db.batch([
     // bare `name` takes the value from the row holding MAX(date), i.e. the latest spelling
     db.prepare("SELECT name_key, name, section, COUNT(*) AS c, MAX(date) AS last FROM exercise_log GROUP BY name_key, section"),
     db.prepare(
-      `SELECT name_key, date, detail FROM (
-         SELECT name_key, date, detail, ROW_NUMBER() OVER (PARTITION BY name_key ORDER BY date DESC, ord ASC) AS rn
-         FROM exercise_log WHERE section = 'main'
-       ) WHERE rn <= 4 ORDER BY name_key, date DESC`,
+      `SELECT name_key, date, section, detail FROM (
+         SELECT name_key, date, section, detail, ROW_NUMBER() OVER (PARTITION BY name_key, section ORDER BY date DESC, ord ASC) AS rn
+         FROM exercise_log
+       ) WHERE rn <= 4 ORDER BY name_key, section, date DESC`,
     ),
   ]);
   const stats = new Map<string, ExerciseStat>();
@@ -23,8 +24,10 @@ export async function exerciseLibrary(db: D1Database): Promise<ExerciseLibrary> 
     }
   }
   const history: ExerciseLibrary["history"] = {};
-  for (const r of histRes.results as { name_key: string; date: string; detail: string }[]) {
-    (history[r.name_key] ??= []).push({ date: r.date, sets: JSON.parse(r.detail).sets ?? [] });
+  for (const r of histRes.results as { name_key: string; date: string; section: Section; detail: string }[]) {
+    const detail = JSON.parse(r.detail) as { sets?: ExerciseLibrary["history"][string][number]["sets"]; reps?: string };
+    const sets = detail.sets ?? migrateLegacyItem({ id: "legacy-log", name: r.name_key, reps: detail.reps ?? "", comment: "" }).exercises[0].sets;
+    (history[r.name_key] ??= []).push({ date: r.date, section: r.section, sets: sets.map(({ type, weight, reps }) => ({ type, weight, reps })) });
   }
   return { stats: [...stats.values()], history };
 }

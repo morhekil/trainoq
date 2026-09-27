@@ -31,13 +31,13 @@ const day = await api.days.get.query("2026-09-26");
 
 Every procedure except `auth.login` and `auth.logout` requires the signed `tq_session` cookie. It is HttpOnly, SameSite=Lax, and lasts one year. HTTPS adds the Secure flag. The server checks the cookie against `APP_PASSWORD`.
 
-`date` and `before` use `YYYY-MM-DD`. `days.list` defaults to 30 days, caps `limit` at 200, and includes every saved day unless `withSessions` is true. `before` is exclusive. `StoredDay` is `{ date: string, doc: DayDoc, updatedAt: string }`. `DayDoc` is defined in `shared/days/model.ts`; the nested session and exercise types live beside their features under `shared/`.
+`date` and `before` use `YYYY-MM-DD`. `days.list` defaults to 30 days, caps `limit` at 200, and includes every saved day unless `withSessions` is true. `before` is exclusive. `StoredDay` is `{ date: string, doc: DayDoc, updatedAt: string }`. `DayDoc` v2 is defined in `shared/days/model.ts`. Each session has ordered `warmup`, `main`, and `cooldown` arrays of blocks. A block holds one or more exercises; each exercise has a comment and numeric sets `{ type, weight: number | null, reps: number | null }`. Two or more exercises in a block form a superset with matching set counts and types.
 
-`exercises.library.stats` contains each name's usage count, last date, and counts by section. `history` maps normalized exercise names to up to four recent main-training entries with `{ date, sets: [{ type, weight, reps }] }`. `backup.export` returns the same stored days in ascending date order, plus the export time in ISO format.
+`exercises.library.stats` contains each name's usage count, last date, and counts by section. `history` maps normalized exercise names to up to four recent entries per section with `{ date, section, sets: [{ type, weight, reps }] }`. History includes old log rows with text reps converted to numeric sets. `backup.export` returns the same stored days in ascending date order, plus the export time in ISO format. Get, list, and export return v2 even when D1 still holds a v1 day.
 
 ## Saving a day
 
-`days.save` sends the **whole** `DayDoc`. The document's `date` must equal the input `date`. The server validates nested fields with Zod and rejects a serialized document longer than 524,288 JavaScript string code units. An empty document deletes that day and its exercise log.
+`days.save` sends the **whole** `DayDoc`. The document's `date` must equal the input `date`. The server validates nested fields with Zod and rejects a serialized document longer than 524,288 JavaScript string code units. An empty document deletes that day and its exercise log. During the transition, the server accepts v1 days, converts the audited text reps to numeric sets, and saves only v2. Unknown legacy reps text is rejected. Existing D1 days convert on read and on their next save; no bulk rewrite is needed. An unsynced v1 browser draft converts locally without changing its revision base or conflict state.
 
 `base` is the `updatedAt` value from the last server copy the client saw. Use `null` if the client has never seen a saved copy. The result is one of:
 

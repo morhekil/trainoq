@@ -58,7 +58,7 @@ export function ExercisePicker({ state, onClose }: { state: PickerState; onClose
               autoCorrect="off"
               enterKeyHint="done"
               onChange={(e) => setQ(e.target.value)}
-              onKeyDown={(e) => {
+              onKeyUp={(e) => {
                 if (e.key === "Enter" && typed) pick(canonicalName(typed));
               }}
             />

@@ -1,12 +1,12 @@
-import type { Block, SimpleItem } from "../exercises/model";
+import type { Block } from "../exercises/model";
 
 export interface Session {
   id: string;
   startedAt: string; // ISO timestamp
   endedAt: string | null;
-  warmup: SimpleItem[];
+  warmup: Block[];
   main: Block[];
-  cooldown: SimpleItem[];
+  cooldown: Block[];
   /** active calories for the session, entered manually for now */
   calories: number | null;
   notes: string;

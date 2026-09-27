@@ -61,9 +61,8 @@ onSynced(() => {
 function namesInDoc(d: DayDoc): [string, Section][] {
   const out: [string, Section][] = [];
   for (const s of d.sessions) {
-    s.warmup.forEach((i) => out.push([i.name, "warmup"]));
-    s.main.forEach((b) => b.exercises.forEach((e) => out.push([e.name, "main"])));
-    s.cooldown.forEach((i) => out.push([i.name, "cooldown"]));
+    for (const section of ["warmup", "main", "cooldown"] as const)
+      s[section].forEach((b) => b.exercises.forEach((e) => out.push([e.name, section])));
   }
   return out;
 }
@@ -160,21 +159,21 @@ export function canonicalName(typed: string): string {
   return hit ? hit.name : typed.trim().replace(/\s+/g, " ");
 }
 
-/** Most recent main-training entry for an exercise before `beforeDate`. */
-export function lastTime(name: string, beforeDate: string): ExerciseHistoryEntry | null {
+/** Most recent entry for an exercise in this section before `beforeDate`. */
+export function lastTime(name: string, beforeDate: string, section: Section): ExerciseHistoryEntry | null {
   const key = nameKey(name);
   if (!key) return null;
-  const serverHits = (lib.history[key] ?? []).filter((h) => h.date < beforeDate);
+  const serverHits = (lib.history[key] ?? []).filter((h) => h.date < beforeDate && (h.section ?? "main") === section);
   // include unsynced local days too
   let best: ExerciseHistoryEntry | null = serverHits[0] ?? null;
   for (const e of cachedDays()) {
     const d = e.doc;
     if (d.date >= beforeDate || (best && d.date <= best.date)) continue;
     for (const s of d.sessions)
-      for (const b of s.main)
+      for (const b of s[section])
         for (const ex of b.exercises)
           if (nameKey(ex.name) === key && ex.sets.length && (!best || d.date > best.date)) {
-            best = { date: d.date, sets: ex.sets.map(({ type, weight, reps }) => ({ type, weight, reps })) };
+            best = { date: d.date, section, sets: ex.sets.map(({ type, weight, reps }) => ({ type, weight, reps })) };
           }
   }
   return best;
@@ -184,10 +183,11 @@ export function lastTime(name: string, beforeDate: string): ExerciseHistoryEntry
 export function suggestedSet(
   name: string,
   beforeDate: string,
+  section: Section,
   type?: WorkSet["type"],
   strict = false,
 ): Pick<WorkSet, "type" | "weight" | "reps"> | null {
-  const h = lastTime(name, beforeDate);
+  const h = lastTime(name, beforeDate, section);
   if (!h || !h.sets.length) return null;
   const s = (type && h.sets.find((x) => x.type === type)) || (strict ? null : h.sets[0]);
   if (!s) return null;

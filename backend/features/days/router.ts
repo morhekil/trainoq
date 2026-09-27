@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { dateSchema, daySchema } from "../../../shared/days/schema";
+import { dateSchema, inputDaySchema } from "../../../shared/days/schema";
 import { t } from "../../trpc";
 import { authed } from "../auth/router";
 import { getDay, listDays, putDay } from "./db";
@@ -15,7 +15,7 @@ export const daysRouter = t.router({
   })).query(({ ctx, input }) => listDays(ctx.env.DB, input)),
   save: authed.input(z.object({
     date: dateSchema,
-    doc: daySchema,
+    doc: inputDaySchema,
     base: z.string().nullable(),
   }).refine(({ date, doc }) => doc.date === date, "doc.date does not match date")
     .refine(({ doc }) => JSON.stringify(doc).length <= 512 * 1024, "Day is too large"))

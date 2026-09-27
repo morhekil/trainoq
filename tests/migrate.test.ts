@@ -1,9 +1,11 @@
 import { describe, expect, it } from "vitest";
-import { emptyDay, type DayDoc } from "../shared/days/model";
-import { migrateDay } from "../shared/days/migrate";
+import { emptyDay } from "../shared/days/model";
+import { migrateDay, normalizeDay, type LegacyDayDoc } from "../shared/days/migrate";
+import { daySchema } from "../shared/days/schema";
 
-const doc: DayDoc = {
+const doc: LegacyDayDoc = {
   ...emptyDay("2026-09-25"),
+  v: 1,
   sessions: [{
     id: "session",
     startedAt: "2026-09-25T07:00:00.000Z",
@@ -54,5 +56,13 @@ describe("v1 day migration", () => {
     const unknown = structuredClone(doc);
     unknown.sessions[0].warmup[0].reps = "tenish";
     expect(() => migrateDay(unknown)).toThrow(/tenish/);
+  });
+
+  it("normalizes v1 once and validates the canonical v2 day", () => {
+    const migrated = normalizeDay(doc);
+    expect(migrated).toEqual(migrateDay(doc));
+    expect(normalizeDay(migrated)).toBe(migrated);
+    expect(daySchema.parse(migrated)).toEqual(migrated);
+    expect(() => daySchema.parse(doc)).toThrow();
   });
 });

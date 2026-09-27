@@ -1,4 +1,4 @@
-import type { Block, SimpleItem } from "../exercises/model";
+import type { Block, Section } from "../exercises/model";
 import { formatNum, formatSets } from "../exercises/format";
 import type { Session } from "./model";
 
@@ -14,15 +14,6 @@ export function formatTime(iso: string, timeZone?: string): string {
 
 export function minutesBetween(a: string, b: string): number {
   return Math.max(0, Math.round((new Date(b).getTime() - new Date(a).getTime()) / 60000));
-}
-
-function simpleLine(it: SimpleItem): string | null {
-  const name = it.name.trim();
-  if (!name) return null;
-  const reps = it.reps.trim();
-  const repsText = reps ? (/^\d+$/.test(reps) ? ` ×${reps}` : ` ${reps}`) : "";
-  const comment = it.comment.trim() ? ` – ${it.comment.trim()}` : "";
-  return `- ${name}${repsText}${comment}`;
 }
 
 function blockLines(b: Block): string[] {
@@ -54,26 +45,20 @@ export function sessionHeading(s: Session, timeZone?: string): string {
 
 export function sessionLines(s: Session, timeZone?: string): string[] {
   const out: string[] = [sessionHeading(s, timeZone)];
-  const warm = s.warmup.map(simpleLine).filter(Boolean) as string[];
-  if (warm.length) out.push("", "Warm-up", ...warm);
-  const main = s.main.map(blockLines).filter((l) => l.length);
-  if (main.length) {
-    out.push("", "Main");
-    main.forEach((l, i) => {
-      if (i > 0 && (l.length > 1 || main[i - 1].length > 1)) out.push("");
+  for (const [section, title] of [["warmup", "Warm-up"], ["main", "Main"], ["cooldown", "Cool-down"]] as const) {
+    const blocks = s[section].map(blockLines).filter((l) => l.length);
+    if (!blocks.length) continue;
+    out.push("", title);
+    blocks.forEach((l, i) => {
+      if (i > 0 && (l.length > 1 || blocks[i - 1].length > 1)) out.push("");
       out.push(...l);
     });
   }
-  const cool = s.cooldown.map(simpleLine).filter(Boolean) as string[];
-  if (cool.length) out.push("", "Cool-down", ...cool);
   if (s.notes.trim()) out.push("", `Notes: ${s.notes.trim()}`);
   return out;
 }
 
 export function countExercises(s: Session): number {
-  return (
-    s.warmup.filter((x) => x.name.trim()).length +
-    s.main.reduce((n, b) => n + b.exercises.filter((e) => e.name.trim()).length, 0) +
-    s.cooldown.filter((x) => x.name.trim()).length
-  );
+  const sections: Section[] = ["warmup", "main", "cooldown"];
+  return sections.reduce((n, section) => n + s[section].reduce((m, b) => m + b.exercises.filter((e) => e.name.trim()).length, 0), 0);
 }

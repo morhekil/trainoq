@@ -1,6 +1,6 @@
 // Finds the most recent earlier session with a given section filled in, for "Repeat" buttons.
 
-import type { Block, SimpleItem } from "../../../shared/exercises/model";
+import type { Block, Section } from "../../../shared/exercises/model";
 import type { DayDoc } from "../../../shared/days/model";
 import { request, trpc } from "../../api";
 import { cachedDays, ingestServerDays } from "../days/store";
@@ -21,11 +21,9 @@ export async function loadRecentSessions(beforeDate: string): Promise<boolean> {
   }
 }
 
-export type RepeatSource =
-  | { date: string; sameDay: boolean; kind: "simple"; items: SimpleItem[] }
-  | { date: string; sameDay: boolean; kind: "main"; blocks: Block[] };
+export type RepeatSource = { date: string; sameDay: boolean; blocks: Block[] };
 
-function pickFrom(doc: DayDoc, section: "warmup" | "main" | "cooldown", beforeSessionId?: string): RepeatSource | null {
+function pickFrom(doc: DayDoc, section: Section, beforeSessionId?: string): RepeatSource | null {
   let sessions = doc.sessions;
   if (beforeSessionId) {
     const idx = sessions.findIndex((s) => s.id === beforeSessionId);
@@ -33,16 +31,12 @@ function pickFrom(doc: DayDoc, section: "warmup" | "main" | "cooldown", beforeSe
   }
   for (let i = sessions.length - 1; i >= 0; i--) {
     const s = sessions[i];
-    if (section === "main") {
-      if (s.main.some((b) => b.exercises.some((e) => e.name.trim()))) return { date: doc.date, sameDay: !!beforeSessionId, kind: "main", blocks: s.main };
-    } else if (s[section].some((x) => x.name.trim())) {
-      return { date: doc.date, sameDay: !!beforeSessionId, kind: "simple", items: s[section] };
-    }
+    if (s[section].some((b) => b.exercises.some((e) => e.name.trim()))) return { date: doc.date, sameDay: !!beforeSessionId, blocks: s[section] };
   }
   return null;
 }
 
-export function findRepeatSource(section: "warmup" | "main" | "cooldown", current: DayDoc, sessionId: string): RepeatSource | null {
+export function findRepeatSource(section: Section, current: DayDoc, sessionId: string): RepeatSource | null {
   const same = pickFrom(current, section, sessionId);
   if (same) return same;
   const earlier = cachedDays()
