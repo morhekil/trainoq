@@ -18,13 +18,30 @@ Warm-up, Main, and Cool-down use the same exercise, set, block, and superset beh
 ## Target shape and decisions
 
 - Keep the three ordered session properties, but make **each one `Block[]`**. A block has one or more exercises; two or more form a superset. Rename `MainExercise` to `Exercise` and remove `SimpleItem` and the simple-section branch. Use the existing block and round operations with a `Section` argument. Do not add a second store or a generic section framework.
-- Give every exercise the same set fields: `type`, `weight: number | null`, and `reps: string | null`, plus the existing exercise comment. A string preserves legacy values such as `30s` and `2x15`; existing numeric main reps convert to decimal strings. Keep numeric stepping for numeric values and allow free text for other values in the shared editor. The set type (`warmup`/`working`/`backoff`) is independent of the session section.
+- Give every exercise the existing numeric set fields: `type`, `weight: number | null`, and `reps: number | null`, plus the exercise comment. Keep the numeric weight/reps controls. The set type (`warmup`/`working`/`backoff`) is independent of the session section.
 - Use one section editor and the same add, rename, move, split, delete, undo, superset, round, set, and comment controls in all three places. Pass the section to picker/search and last-time lookup; the heading and suggestions remain contextual labels.
 - Scope last-time values by section and exercise name so a main load is not suggested for the same exercise in warm-up. Use the same history mechanism for all sections. Repeat copies exercise names, block grouping, and set types, but clears recorded weight/reps in every section. This deliberately replaces the old simple-section repeat behavior, which copied reps, and avoids presenting copied values as a newly performed session.
 
+## Production data and migration rules
+
+The 27 Sep 2026 authenticated backup is at `/Users/Saruman/Downloads/trainoq-export-2026-09-27.json` (SHA-256 `11b6268f8a5784f2705c993414548632d40baa489ed9cab74cfb99b7ba25aa40`). It is private and must not be committed. It contains five v1 days, four sessions, 38 simple warm-up/cool-down entries, and 81 existing numeric/null main sets. The 38 text values are exactly: 18 integers, five `2xN`, two `30s`, two `12kg 10r` (one with `each way`), and 11 blanks. Three comments contain explicit numeric kg values (`4kg`, `12kg`, `20kg`).
+
+The user confirmed these conversions:
+
+| Existing value | v2 set(s) | Comment |
+| --- | --- | --- |
+| Integer `N` | One `working` set, numeric `reps: N` | Preserve |
+| `2xN` | Two `working` sets, each with numeric `reps: N` | Preserve |
+| `12kg 10r` | One set, `weight: 12`, `reps: 10` | Preserve; add `each way` when present |
+| `30s` | One set with null numeric reps and weight | Append `30s` to exercise comment |
+| Blank | One set with null numeric reps and weight | Preserve |
+| Explicit numeric kg in comment | Set numeric weight from the stated kg | Keep the original comment verbatim |
+
+Leave weight null for descriptions such as `Light band`, `Empty bar`, or `Bodyweight` rather than inferring a load. Migrate every simple item to a one-exercise block, retain its exercise ID and name, and derive stable IDs for its block and sets. Leave existing main blocks and numeric sets unchanged. Preserve section order, comments, notes, and dates. `migrateDay` was dry-run against all five production days: all 38 entries became 43 numeric/null sets, and every main block remained unchanged. This dry run did not write to production.
+
 ## Implementation sequence
 
-1. **Lock down conversion first (red/green).** Add v1 fixtures covering empty entries, comments, order, supersets, numeric main reps, and free-text simple reps. Bump `DayDoc` to v2 and write one pure, deterministic v1-to-v2 normalizer in `shared/days/`. A legacy simple item becomes a one-exercise block with one `working` set, null weight, and its original reps text; derive stable block/set IDs from its existing ID. Preserve existing exercise IDs and comments. Conversion must be idempotent for v2.
+1. **Lock down conversion first (red/green).** The audited v1-to-v2 converter is in `shared/days/migrate.ts`, with a focused test in `tests/migrate.test.ts`. Promote its target type into `shared/days/model.ts` when changing the app's canonical `DayDoc`; do not change `WorkSet.reps` from `number | null`. Keep stable block/set IDs derived from the old item ID. Reject an unseen legacy text value instead of guessing or dropping it. Refresh and re-audit production data before rollout in case entries were added after the snapshot below.
 2. **Read and save one canonical shape.** Normalize D1 `days.get`/`days.list`, backup output, local cached entries, and both sides of a conflict before they reach app logic. Preserve each local entry's `dirty`, `base`, `rev`, and conflict metadata. Accept v1 during the transition at `days.save`, normalize it, and persist v2. Existing D1 days can convert on read and on their next save; no bulk rewrite or new table is needed. Verify a dirty offline v1 draft can sync after an upgrade.
 3. **Unify domain operations and UI.** Change `Session` and Zod to three `Block[]` properties. Make block lookup and edits section-aware in the existing operations module. Replace the simple editor with the existing block editor parameterized by section. Preserve the shared round invariant: all exercises in a superset have the same set count/types, while weight and reps belong to each exercise. Update repeat to use one block path.
 4. **Update all consumers.** Make text sharing and exercise counting traverse blocks in each section. Write one `exercise_log.detail` set shape for new saves. Update library history and local last-time lookup to cover all sections, including old log rows with `{ reps }`; keep the existing section-scoped picker ranking. Update `API.md`, `README.md` where behavior is described, fixtures, and screenshot data in the same change. Coordinate with `.tasks/20260924T0031-add-agent-intent-mutations.md` so later agent actions reuse the unified operations.
@@ -33,6 +50,6 @@ Warm-up, Main, and Cool-down use the same exercise, set, block, and superset beh
 ## Done when
 
 - Each section can create and edit a single exercise or superset with identical weight, reps, set-type, round, ordering, and deletion behavior.
-- Existing v1 days, unsynced drafts, conflict copies, backup data, free-text reps, and comments remain readable without loss. v2 is the only new persisted shape.
+- Existing v1 days, unsynced drafts, conflict copies, backup data, and comments remain readable without loss. v2 is the only new persisted shape, and all set reps remain numeric or null.
 - History, suggestions, repeat, share text, and exercise counts work for all three sections through one model and one editor.
 - The Worker/API, focused tests, full checks, and rendered interaction checks pass; documentation and fixtures describe v2.
