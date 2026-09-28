@@ -33,6 +33,7 @@ export interface Entry {
 export type SyncStatus = "saved" | "saving" | "offline" | "error" | "conflict";
 
 const PREFIX = "tq:day:";
+const MOVE_PREFIX = "tq:garmin-move:";
 const MAX_CACHED_DAYS = 150;
 
 const mem = new Map<string, Entry | null>();
@@ -131,10 +132,19 @@ export function onSynced(fn: () => void): () => void {
 }
 
 /** Replace the local copy of a day with an edited version. */
-export function setDoc(date: string, doc: DayDoc): void {
+export function setDoc(date: string, doc: DayDoc, autoSync = true): void {
   const prev = getEntry(date);
   persist(date, { doc, base: prev?.base ?? null, dirty: true, rev: (prev?.rev ?? 0) + 1, conflict: prev?.conflict });
-  schedule(date, 800);
+  if (autoSync) schedule(date, 800);
+}
+
+export function registerGarminMove(fromDate: string, toDate: string, sourceKey: string): void {
+  lsSet(MOVE_PREFIX + toDate + ":" + sourceKey, fromDate);
+}
+
+function pendingMoves(date: string): { storageKey: string; sourceKey: string; fromDate: string }[] {
+  const prefix = MOVE_PREFIX + date + ":";
+  return lsKeys(prefix).map((storageKey) => ({ storageKey, sourceKey: storageKey.slice(prefix.length), fromDate: lsGet<string>(storageKey)! }));
 }
 
 function schedule(date: string, ms: number) {
@@ -181,6 +191,10 @@ export async function loadFromServer(date: string): Promise<void> {
 export async function sync(date: string): Promise<void> {
   const e = getEntry(date);
   if (!e || !e.dirty || e.conflict) return;
+  if (pendingMoves(date).some(({ fromDate, sourceKey }) => {
+    const old = getEntry(fromDate);
+    return old?.dirty || old?.conflict || old?.doc.activities.some((activity) => activity.garminSourceKey === sourceKey);
+  })) return;
   if (inflight.has(date)) {
     schedule(date, 500);
     return;
@@ -199,6 +213,10 @@ export async function sync(date: string): Promise<void> {
       persist(date, { ...cur, base: result.updatedAt, dirty: stillDirty });
       if (stillDirty) schedule(date, 300);
       syncedListeners.forEach((fn) => fn());
+      for (const key of lsKeys(MOVE_PREFIX)) {
+        if (lsGet<string>(key) === date) schedule(key.slice(MOVE_PREFIX.length).slice(0, 10), 0);
+      }
+      pendingMoves(date).forEach(({ storageKey }) => lsRemove(storageKey));
     } else {
       const cur = getEntry(date)!;
       persist(date, {
@@ -247,6 +265,7 @@ export function cachedDays(): Entry[] {
 
 export function clearLocalData(): void {
   for (const k of lsKeys(PREFIX)) lsRemove(k);
+  for (const k of lsKeys(MOVE_PREFIX)) lsRemove(k);
   mem.clear();
   dirty.clear();
   conflicts.clear();

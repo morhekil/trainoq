@@ -28,8 +28,8 @@ Runs on Cloudflare: a Worker serves the app and a tRPC API, data lives in D1.
 - **Works with no signal** – every change is saved on the phone first and synced in the background. If the same day was edited on two devices, compare both versions and confirm which one replaces the other.
 - **Sync retry** – when saving fails or the device is offline, the status badge has a keyboard-accessible retry action.
 - **Installable** – "Add to Home Screen" gives a full-screen app that opens offline.
-- **Backup** – menu → Download backup (JSON of every day and the exercise catalog).
-- **Garmin activities** – menu → Garmin activities. Export original FIT files from Garmin Connect, unzip the download, then choose one or more `.fit` files. Review the FIT start time, timer duration and active calories before adding an activity, linking a strength recording to a completed session, or ignoring it. Edit the proposed date and activity name before accepting. Later FIT imports update the source values without changing Trainoq edits. Unlink and restore decisions in the review screen; edit accepted activity names, start times and calories on their day. The backup includes imported summaries.
+- **Backup** – menu → Download backup (JSON of every day, the exercise catalog, and imported Garmin summaries).
+- **Garmin activities** – menu → Garmin activities. Export original FIT files from Garmin Connect, unzip the download, then choose one or more `.fit` files. Review the FIT start time, timer duration and active calories before adding an activity, linking a strength recording to a completed session, or ignoring it. Edit the proposed date and activity name before accepting. Later FIT imports update the source values without changing Trainoq edits. Unlink, restore, or move an accepted activity to another date in the review screen; edit its name, start time, duration and calories on its day. The backup includes imported summaries.
 
 ## Run locally
 

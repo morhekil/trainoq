@@ -1,11 +1,11 @@
 import { useEffect, useState, type ChangeEvent } from "react";
 import type { GarminActivitySummary } from "../../../shared/garmin/fit";
 import { emptyDay } from "../../../shared/days/model";
-import { acceptActivity, ignoreGarmin, linkStrengthSession, strengthMatches, unlinkGarmin } from "../../../shared/garmin/decisions";
+import { acceptActivity, ignoreGarmin, linkStrengthSession, moveLinkedActivity, strengthMatches, unlinkGarmin } from "../../../shared/garmin/decisions";
 import { request, trpc } from "../../api";
 import { addDays, goToDate, todayLocal } from "../days/dates";
 import { useDay } from "../days/hooks";
-import { getEntry, loadFromServer, onSynced, setDoc } from "../days/store";
+import { getEntry, loadFromServer, onSynced, registerGarminMove, setDoc, sync } from "../days/store";
 import { createLocalExercise } from "../exercises/catalog";
 
 type Listed = GarminActivitySummary & { importedAt: string; status: string; targetId: string | null; decisionDate: string | null };
@@ -105,6 +105,7 @@ export function GarminView() {
 
 function GarminRecord({ source }: { source: Listed }) {
   const [date, setDate] = useState(source.decisionDate ?? sourceDate(source));
+  const [moveDate, setMoveDate] = useState(source.decisionDate ?? sourceDate(source));
   const [name, setName] = useState(source.title);
   const [choice, setChoice] = useState("");
   const [error, setError] = useState("");
@@ -123,6 +124,25 @@ function GarminRecord({ source }: { source: Listed }) {
       update(action);
       setError("");
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to save. Retry this action."); }
+  };
+  const moveActivity = async () => {
+    try {
+      if (moveDate === date) return;
+      await Promise.all([loadFromServer(date), loadFromServer(moveDate)]);
+      const from = structuredClone(getEntry(date)?.doc ?? emptyDay(date));
+      const to = structuredClone(getEntry(moveDate)?.doc ?? emptyDay(moveDate));
+      moveLinkedActivity(from, to, source.sourceKey);
+      registerGarminMove(date, moveDate, source.sourceKey);
+      setDoc(moveDate, to, false);
+      setDoc(date, from, false);
+      const oldDate = date;
+      await sync(oldDate);
+      if (getEntry(oldDate)?.dirty || getEntry(oldDate)?.conflict) throw new Error("Date change is saved locally. Sync the old day before retrying.");
+      await sync(moveDate);
+      if (getEntry(moveDate)?.dirty || getEntry(moveDate)?.conflict) throw new Error("Date change is saved locally. Retry sync when connected.");
+      setDate(moveDate);
+      setError("");
+    } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to move activity. Retry after syncing."); }
   };
   const recordedMinutes = source.timerSeconds == null ? "unknown duration" : `${Math.round(source.timerSeconds / 60)} min timer`;
   const saved = localActivity ? `${localActivity.result.minutes ?? "–"} min · ${localActivity.result.calories ?? "–"} active cal` : localSession ? `${localSession.calories ?? "–"} active cal` : null;
@@ -147,9 +167,15 @@ function GarminRecord({ source }: { source: Listed }) {
         <button type="button" className="btn small secondary" onClick={() => void decide((day) => acceptActivity(day, source, createLocalExercise(name.trim() || source.title).id))}>Create activity</button>
         <button type="button" className="btn small ghost" aria-label={`Ignore ${source.title}`} onClick={() => void decide((day) => ignoreGarmin(day, source.sourceKey))}>Ignore</button>
       </div>
-    </> : <div className="garmin-actions">
-      {status !== "ignored" && <button type="button" className="btn small secondary" onClick={() => goToDate(date)}>Edit saved day</button>}
-      <button type="button" className="btn small ghost" aria-label={`${status === "ignored" ? "Restore" : "Unlink"} ${source.title}`} onClick={() => void decide((day) => unlinkGarmin(day, source.sourceKey))}>{status === "ignored" ? "Restore" : "Unlink"}</button>
-    </div>}
+    </> : <>
+      {status === "activity" && <div className="garmin-fields">
+        <label>Correct Trainoq date<input type="date" value={moveDate} onChange={(event) => setMoveDate(event.target.value)} /></label>
+        <button type="button" className="btn small secondary" disabled={moveDate === date} onClick={() => void moveActivity()}>Move activity</button>
+      </div>}
+      <div className="garmin-actions">
+        {status !== "ignored" && <button type="button" className="btn small secondary" onClick={() => goToDate(date)}>Edit saved day</button>}
+        <button type="button" className="btn small ghost" aria-label={`${status === "ignored" ? "Restore" : "Unlink"} ${source.title}`} onClick={() => void decide((day) => unlinkGarmin(day, source.sourceKey))}>{status === "ignored" ? "Restore" : "Unlink"}</button>
+      </div>
+    </>}
   </section>;
 }

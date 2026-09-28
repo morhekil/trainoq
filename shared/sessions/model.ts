@@ -7,7 +7,7 @@ export interface Session {
   warmup: SessionItem[];
   main: SessionItem[];
   cooldown: SessionItem[];
-  /** active calories for the session, entered manually for now */
+  /** active calories for the session, entered manually or copied once from Garmin */
   calories: number | null;
   notes: string;
   garminSourceKey?: string;
