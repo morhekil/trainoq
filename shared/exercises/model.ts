@@ -1,6 +1,7 @@
 export type SetType = "warmup" | "working" | "backoff";
 export type SetValues = { weight: number | null; reps: number | null };
 export type WorkSet = SetValues & { id: string; type: SetType };
+export type ActivityResult = { minutes: number | null; calories: number | null };
 
 export interface Exercise { id: string; name: string }
 export interface PerformedExercise { id: string; exerciseId: string; comment: string }
@@ -14,20 +15,19 @@ export interface Superset {
 }
 export type SessionItem = StandaloneExercise | Superset;
 export type Section = "warmup" | "main" | "cooldown";
+export type ExerciseContext = Section | "activity";
 
 export interface ExerciseStat {
   exerciseId: string;
   count: number;
   last: string;
-  sections: Partial<Record<Section, number>>;
+  sections: Partial<Record<ExerciseContext, number>>;
 }
-export interface ExerciseHistoryEntry {
-  date: string;
-  section: Section;
-  sets: Pick<WorkSet, "type" | "weight" | "reps">[];
-}
+export type ExerciseHistoryEntry =
+  | { date: string; section: Section; sets: Pick<WorkSet, "type" | "weight" | "reps">[] }
+  | { date: string; section: "activity"; result: ActivityResult };
 export interface ExerciseLibrary {
-  catalog: (Exercise & { section: Section | "any" | null; aliases: string })[];
+  catalog: (Exercise & { section: ExerciseContext | "any" | null; aliases: string })[];
   stats: ExerciseStat[];
   history: Record<string, ExerciseHistoryEntry[]>;
 }

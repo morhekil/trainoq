@@ -1,17 +1,12 @@
 // One DayDoc per calendar day; stored as JSON in D1 and localStorage.
 
 import type { Session } from "../sessions/model";
+import type { ActivityResult, PerformedExercise } from "../exercises/model";
 
-export interface Activity {
-  id: string;
-  name: string;
-  minutes: number | null;
-  calories: number | null;
-  notes: string;
-}
+export type Activity = PerformedExercise & { result: ActivityResult };
 
 export interface DayDoc {
-  v: 3;
+  v: 4;
   date: string; // YYYY-MM-DD
   morning: string;
   sessions: Session[];
@@ -22,7 +17,7 @@ export interface DayDoc {
 }
 
 export function emptyDay(date: string): DayDoc {
-  return { v: 3, date, morning: "", sessions: [], activities: [], totalCalories: null, notes: "" };
+  return { v: 4, date, morning: "", sessions: [], activities: [], totalCalories: null, notes: "" };
 }
 
 export function isDayEmpty(d: DayDoc): boolean {

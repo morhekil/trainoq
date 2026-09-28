@@ -74,4 +74,24 @@ describe("exercise history", () => {
       { date: "2026-08-01", section: "cooldown", sets: [{ type: "working", weight: null, reps: 8 }, { type: "working", weight: null, reps: 8 }] },
     ]);
   });
+
+  it("includes activity results in the same exercise history and usage counts", async () => {
+    const id = exerciseIdForName("Walk");
+    const db = { prepare: () => ({ all: async () => ({ results: [] }) }), async batch() { return [
+      { results: [
+        { exercise_id: "legacy:walk", name: "Walk", section: "activity", c: 4, last: "2026-09-27" },
+        { exercise_id: id, name: "Walk", section: "activity", c: 1, last: "2026-09-28" },
+      ] },
+      { results: [
+        ...[27, 26, 25, 24].map((day) => ({ exercise_id: "legacy:walk", name: "Walk", date: `2026-09-${day}`, section: "activity", detail: JSON.stringify({ minutes: day, calories: null }) })),
+        { exercise_id: id, name: "Walk", date: "2026-09-28", section: "activity", detail: JSON.stringify({ minutes: 45, calories: 190 }) },
+      ] },
+    ]; } } as unknown as D1Database;
+    const lib = await exerciseLibrary(db);
+    expect(lib.stats[0]).toMatchObject({ exerciseId: id, count: 5, sections: { activity: 5 } });
+    expect(lib.history[id]).toEqual([
+      { date: "2026-09-28", section: "activity", result: { minutes: 45, calories: 190 } },
+      ...[27, 26, 25].map((day) => ({ date: `2026-09-${day}`, section: "activity", result: { minutes: day, calories: null } })),
+    ]);
+  });
 });

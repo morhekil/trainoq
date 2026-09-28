@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useMemo, useRef, useState, type ReactNode } from "react";
-import type { Section } from "../shared/exercises/model";
+import type { ExerciseContext } from "../shared/exercises/model";
 import { Icon } from "./icons";
 import { Modal } from "./modal";
 import { ExercisePicker } from "./features/exercises/picker";
@@ -18,7 +18,7 @@ interface SheetState {
   actions: SheetAction[];
 }
 export interface PickerState {
-  section: Section;
+  section: ExerciseContext;
   title: string;
   initial?: string;
   onPick: (exerciseId: string) => void;

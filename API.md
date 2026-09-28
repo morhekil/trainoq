@@ -33,13 +33,95 @@ const day = await api.days.get.query("2026-09-26");
 
 Every procedure except `auth.login` and `auth.logout` requires the signed `tq_session` cookie. It is HttpOnly, SameSite=Lax, and lasts one year. HTTPS adds the Secure flag. The server checks the cookie against `APP_PASSWORD`.
 
-`date` and `before` use `YYYY-MM-DD`. `days.list` defaults to 30 days, caps `limit` at 200, and includes every saved day unless `withSessions` is true. `before` is exclusive. `StoredDay` is `{ date: string, doc: DayDoc, updatedAt: string }`. `DayDoc` v3 is defined in `shared/days/model.ts`. Each session has ordered `warmup`, `main`, and `cooldown` arrays of `SessionItem`. A standalone item is `{ kind: "exercise", id, exerciseId, comment, sets }`. A superset is `{ kind: "superset", id, members: [{ id, exerciseId, comment }], rounds: [{ id, type }], results: [{ memberId, roundId, weight, reps }] }`. Member and round arrays define display order. Results have exactly one row per member-round pair. A superset remains a superset with zero or one member; an empty superset may retain rounds. `null` means no value, while zero weight means bodyweight.
+`date` and `before` use `YYYY-MM-DD`. `days.list` defaults to 30 days, caps `limit` at 200, and includes every saved day unless `withSessions` is true. `before` is exclusive.
 
-The catalog owns names, search aliases and section hints. Seed IDs are explicit constants; newly typed custom exercises get UUIDs on the device. `exercises.library.stats` contains usage counts by `exerciseId`, last date and section. `history` maps exercise IDs to up to four recent entries per section with `{ date, section, sets: [{ type, weight, reps }] }`. The Worker maps old log rows and text reps to the same IDs. `backup.export` includes catalog records and stored days in ascending date order. Get, list, and export return v3 even when D1 still holds v1 or v2.
+## Data model
+
+The saved document is `DayDoc` v4. These shapes are a map for readers; the current types live in [`shared/days/model.ts`](shared/days/model.ts), [`shared/sessions/model.ts`](shared/sessions/model.ts), and [`shared/exercises/model.ts`](shared/exercises/model.ts).
+
+```ts
+type SetType = "warmup" | "working" | "backoff";
+type SetValues = { weight: number | null; reps: number | null };
+type WorkSet = SetValues & { id: string; type: SetType };
+type ActivityResult = { minutes: number | null; calories: number | null };
+
+interface Exercise { id: string; name: string } // catalog definition
+interface PerformedExercise { id: string; exerciseId: string; comment: string }
+type StandaloneExercise = PerformedExercise & { kind: "exercise"; sets: WorkSet[] };
+interface Superset {
+  kind: "superset";
+  id: string;
+  members: PerformedExercise[];
+  rounds: { id: string; type: SetType }[];
+  results: (SetValues & { memberId: string; roundId: string })[];
+}
+type SessionItem = StandaloneExercise | Superset;
+type Section = "warmup" | "main" | "cooldown";
+type ExerciseContext = Section | "activity";
+
+interface Session {
+  id: string;
+  startedAt: string; // ISO timestamp
+  endedAt: string | null;
+  warmup: SessionItem[];
+  main: SessionItem[];
+  cooldown: SessionItem[];
+  calories: number | null;
+  notes: string;
+}
+type Activity = PerformedExercise & { result: ActivityResult };
+interface DayDoc {
+  v: 4;
+  date: string; // YYYY-MM-DD
+  morning: string;
+  sessions: Session[];
+  activities: Activity[];
+  totalCalories: number | null;
+  notes: string;
+}
+```
+
+`Activity` is a performed exercise outside a training session. It uses the same catalog ID and comment as a session performance, with minutes and calories in `result`. Session calories, activity calories, and the manually entered daily `totalCalories` are separate fields. `Section` locates an item within a session; `ExerciseContext` also includes activities. `SetType` describes a set or superset round independently of its section. A catalog `Exercise.id` identifies the exercise name, while each `PerformedExercise.id` identifies one occurrence. Built-in definitions come from [`shared/exercises/seed.ts`](shared/exercises/seed.ts); custom definitions use UUIDs created on the device and are stored in `exercise_catalog`. The same exercise can be chosen in a session or as an activity.
+
+A standalone item owns its ordered `sets`. A superset owns ordered `members` and `rounds`, with one `results` row for every `(memberId, roundId)` pair. For two members and three rounds, there are six results. Validation rejects duplicate member or round IDs, unknown or repeated result pairs, and missing pairs. The explicit `kind` keeps a superset a superset with zero or one member; an empty superset can retain rounds. `null` is an unentered weight or rep count, and weight `0` means bodyweight. See [`shared/days/schema.ts`](shared/days/schema.ts) for validation and [`shared/sessions/ops.ts`](shared/sessions/ops.ts) for shared editing operations.
+
+There is no `Block` in v4. V2 used `{ id, exercises: [...] }` blocks in all three session sections; v1 used them in `main` and individual legacy items in `warmup` and `cooldown`. [`shared/days/migrate.ts`](shared/days/migrate.ts) converts v1/v2 session data and v1/v2/v3 name-based activities. Old activity `notes` become the performance `comment`; minutes and calories keep their values. The UI still uses `block` as a CSS class. Get, list, and export return v4 even when an untouched D1 row contains an older version; saving writes v4.
+
+### Storage and read models
+
+| Store | Contents | Role |
+| --- | --- | --- |
+| D1 `days` | `date`, full `DayDoc` JSON, server `updated_at` | Source of truth, one row per saved day |
+| D1 `exercise_catalog` | Custom exercise `id`, `name`, normalized `name_key` | Definitions referenced by `exerciseId` |
+| D1 `exercise_log` | One row per session performance or activity, with date, context, ID, name, order, and set or activity result detail | Derived index rebuilt from the day on each save |
+| Browser `tq:day:<date>` | `Entry { doc, base, dirty, rev, conflict? }` | Local draft, sync revision, and optional conflict copy |
+
+The table definitions are in [`migrations/0001_init.sql`](migrations/0001_init.sql) and [`migrations/0002_exercise_catalog.sql`](migrations/0002_exercise_catalog.sql). [`migrations/0003_activity_catalog.sql`](migrations/0003_activity_catalog.sql) adds old activities to the catalog and log without rewriting day JSON. [`backend/features/days/db.ts`](backend/features/days/db.ts) rebuilds `exercise_log`; the full day JSON retains the superset structure. The browser's [`store.ts`](frontend/features/days/store.ts) writes drafts locally first and syncs whole days. Custom definitions sync before a day that references them.
+
+`exercises.library` returns the read model defined in [`shared/exercises/model.ts`](shared/exercises/model.ts):
+
+```ts
+interface ExerciseStat {
+  exerciseId: string;
+  count: number;
+  last: string;
+  sections: Partial<Record<ExerciseContext, number>>;
+}
+type ExerciseHistoryEntry =
+  | { date: string; section: Section; sets: Pick<WorkSet, "type" | "weight" | "reps">[] }
+  | { date: string; section: "activity"; result: ActivityResult };
+interface ExerciseLibrary {
+  catalog: (Exercise & { section: ExerciseContext | "any" | null; aliases: string })[];
+  stats: ExerciseStat[];
+  history: Record<string, ExerciseHistoryEntry[]>;
+}
+```
+
+History is keyed by exercise ID; the Worker returns up to four recent entries per context. Activities contribute to recent usage and have minutes and calories in history. `backup.export` includes catalog records and stored days in ascending date order. `StoredDay` is `{ date, doc: DayDoc, updatedAt }`.
 
 ## Saving a day
 
-`days.save` sends the **whole** `DayDoc`. The document's `date` must equal the input `date`. The server validates nested fields, unique member and round IDs, and the complete result-pair grid with Zod; it rejects a serialized document longer than 524,288 JavaScript string code units. Each referenced custom exercise ID must exist in the catalog. Create local custom definitions before saving a day that uses them; the browser does this on reconnect. An empty document deletes that day and its exercise log. The server accepts v1 and v2 days, migrates names and numeric sets without dropping values or comments, and saves v3. Unknown legacy reps text is rejected. An old client receives `PRECONDITION_FAILED` if it tries to save v1 or v2 over an existing v3 day. Existing D1 days convert on read and on their next save; no bulk day rewrite is needed. Unsynced drafts and conflict copies convert locally without changing their revision base or conflict state.
+`days.save` sends the **whole** `DayDoc`. The document's `date` must equal the input `date`. The server validates nested fields, unique member and round IDs, and the complete result-pair grid with Zod; it rejects a serialized document longer than 524,288 JavaScript string code units. Each referenced custom exercise ID, including an activity's, must exist in the catalog. Create local custom definitions before saving a day that uses them; the browser does this on reconnect. An empty document deletes that day and its exercise log. The server accepts v1, v2 and v3 days, migrates names and results without dropping values or comments, and saves v4. Unknown legacy reps text is rejected. An old client receives `PRECONDITION_FAILED` if it tries to save an older version over an existing v4 day. Existing D1 days convert on read and on their next save; no bulk day rewrite is needed. Unsynced drafts and conflict copies convert locally without changing their revision base or conflict state.
 
 `base` is the `updatedAt` value from the last server copy the client saw. Use `null` if the client has never seen a saved copy. The result is one of:
 
@@ -55,6 +137,6 @@ The current D1 revision check and write are separate operations. Simultaneous sa
 
 ## Errors
 
-tRPC returns `UNAUTHORIZED` for a missing or invalid session or a wrong password. Invalid input, including a malformed day or unresolved exercise ID, returns `BAD_REQUEST`. An old client write over v3 returns `PRECONDITION_FAILED`. Other server failures use the usual tRPC error envelope. The browser wrapper in `frontend/api.ts` turns `UNAUTHORIZED` into `AuthError` and transport failures into `NetworkError`; these wrapper classes are not wire responses. A revision conflict is a successful `days.save` response with `ok: false`.
+tRPC returns `UNAUTHORIZED` for a missing or invalid session or a wrong password. Invalid input, including a malformed day or unresolved exercise ID, returns `BAD_REQUEST`. An old client write over v4 returns `PRECONDITION_FAILED`. Other server failures use the usual tRPC error envelope. The browser wrapper in `frontend/api.ts` turns `UNAUTHORIZED` into `AuthError` and transport failures into `NetworkError`; these wrapper classes are not wire responses. A revision conflict is a successful `days.save` response with `ok: false`.
 
 The API does not yet provide agent-specific credentials or intent-level mutations. Those are tracked in `.tasks/`. Pure session edit rules in `shared/sessions/ops.ts` can be reused by those future mutations. Clients that need to write today must send a validated whole-day document through `days.save`.

@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { DayDoc } from "./model";
-import { normalizeDay, type LegacyDayDoc, type V2DayDoc } from "./migrate";
+import { normalizeDay, type LegacyDayDoc, type V2DayDoc, type V3DayDoc } from "./migrate";
 import { DATE_RE } from "./model";
 
 export const dateSchema = z.string().regex(DATE_RE);
@@ -33,16 +33,19 @@ const sessionFields = {
 const session = z.object({ ...sessionFields, warmup: z.array(z.union([exercise, superset])), main: z.array(z.union([exercise, superset])), cooldown: z.array(z.union([exercise, superset])) });
 const dayFields = {
   date: dateSchema, morning: z.string(),
-  activities: z.array(z.object({ id: z.string(), name: z.string(), minutes: z.number().finite().nullable(), calories: z.number().finite().nullable(), notes: z.string() })),
   totalCalories: z.number().finite().nullable(), notes: z.string(),
 };
-export const daySchema = z.object({ v: z.literal(3), ...dayFields, sessions: z.array(session) }) satisfies z.ZodType<DayDoc>;
+const activityResult = { minutes: z.number().finite().nullable(), calories: z.number().finite().nullable() };
+const activities = z.array(z.object({ ...performed, result: z.object(activityResult) }));
+const legacyActivities = z.array(z.object({ id: z.string(), name: z.string(), ...activityResult, notes: z.string() }));
+export const daySchema = z.object({ v: z.literal(4), ...dayFields, sessions: z.array(session), activities }) satisfies z.ZodType<DayDoc>;
+export const v3DaySchema = z.object({ v: z.literal(3), ...dayFields, sessions: z.array(session), activities: legacyActivities }) satisfies z.ZodType<V3DayDoc>;
 
 const legacyExercise = z.object({ id: z.string(), name: z.string(), sets: z.array(workSet), comment: z.string() });
 const block = z.object({ id: z.string(), exercises: z.array(legacyExercise) });
 const legacyItem = z.object({ id: z.string(), name: z.string(), reps: z.string(), comment: z.string() });
 const v2Session = z.object({ ...sessionFields, warmup: z.array(block), main: z.array(block), cooldown: z.array(block) });
-export const v2DaySchema = z.object({ v: z.literal(2), ...dayFields, sessions: z.array(v2Session) }) satisfies z.ZodType<V2DayDoc>;
-export const legacyDaySchema = z.object({ v: z.literal(1), ...dayFields, sessions: z.array(v2Session.extend({ warmup: z.array(legacyItem), cooldown: z.array(legacyItem) })) }) satisfies z.ZodType<LegacyDayDoc>;
-export const rawDaySchema = z.union([daySchema, v2DaySchema, legacyDaySchema]);
+export const v2DaySchema = z.object({ v: z.literal(2), ...dayFields, sessions: z.array(v2Session), activities: legacyActivities }) satisfies z.ZodType<V2DayDoc>;
+export const legacyDaySchema = z.object({ v: z.literal(1), ...dayFields, sessions: z.array(v2Session.extend({ warmup: z.array(legacyItem), cooldown: z.array(legacyItem) })), activities: legacyActivities }) satisfies z.ZodType<LegacyDayDoc>;
+export const rawDaySchema = z.union([daySchema, v3DaySchema, v2DaySchema, legacyDaySchema]);
 export const inputDaySchema = rawDaySchema.transform(normalizeDay);

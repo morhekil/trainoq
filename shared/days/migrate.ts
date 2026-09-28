@@ -5,13 +5,15 @@ import type { DayDoc } from "./model";
 export interface LegacyExercise { id: string; name: string; sets: WorkSet[]; comment: string }
 export interface LegacyBlock { id: string; exercises: LegacyExercise[] }
 export interface LegacyItem { id: string; name: string; reps: string; comment: string }
+export interface LegacyActivity { id: string; name: string; minutes: number | null; calories: number | null; notes: string }
+export type V3DayDoc = Omit<DayDoc, "v" | "activities"> & { v: 3; activities: LegacyActivity[] };
 type LegacySession = Omit<DayDoc["sessions"][number], "warmup" | "main" | "cooldown"> & {
   warmup: LegacyItem[];
   main: LegacyBlock[];
   cooldown: LegacyItem[];
 };
-export type LegacyDayDoc = Omit<DayDoc, "v" | "sessions"> & { v: 1; sessions: LegacySession[] };
-export type V2DayDoc = Omit<DayDoc, "v" | "sessions"> & { v: 2; sessions: (Omit<LegacySession, "warmup" | "cooldown"> & { warmup: LegacyBlock[]; cooldown: LegacyBlock[] })[] };
+export type LegacyDayDoc = Omit<V3DayDoc, "v" | "sessions"> & { v: 1; sessions: LegacySession[] };
+export type V2DayDoc = Omit<V3DayDoc, "v" | "sessions"> & { v: 2; sessions: (Omit<LegacySession, "warmup" | "cooldown"> & { warmup: LegacyBlock[]; cooldown: LegacyBlock[] })[] };
 
 export function migrateLegacyItem(item: LegacyItem): LegacyBlock {
   const value = item.reps.trim();
@@ -54,10 +56,14 @@ function migrateBlock(block: LegacyBlock): SessionItem {
   return { kind: "superset", id: block.id, members, rounds, results: rounds.flatMap((r) => members.map((m) => ({ memberId: m.id, roundId: r.id, ...(values.get(`${m.id}:${r.id}`) ?? { weight: null, reps: null }) }))) };
 }
 
-export function migrateDay(doc: LegacyDayDoc | V2DayDoc): DayDoc {
+export function migrateDay(doc: LegacyDayDoc | V2DayDoc | V3DayDoc): DayDoc {
   return {
-    ...doc, v: 3,
-    sessions: doc.sessions.map((session) => ({
+    ...doc, v: 4,
+    activities: doc.activities.map(({ id, name, notes, minutes, calories }) => ({
+      id, exerciseId: exerciseIdForName(name.trim() || "Activity"), comment: notes,
+      result: { minutes, calories },
+    })),
+    sessions: doc.v === 3 ? doc.sessions : doc.sessions.map((session) => ({
       ...session,
       warmup: session.warmup.map((item) => migrateBlock("exercises" in item ? item : migrateLegacyItem(item))),
       main: session.main.map(migrateBlock),
@@ -66,11 +72,12 @@ export function migrateDay(doc: LegacyDayDoc | V2DayDoc): DayDoc {
   };
 }
 
-export function normalizeDay(doc: DayDoc | LegacyDayDoc | V2DayDoc): DayDoc {
-  return doc.v === 3 ? doc : migrateDay(doc);
+export function normalizeDay(doc: DayDoc | LegacyDayDoc | V2DayDoc | V3DayDoc): DayDoc {
+  return doc.v === 4 ? doc : migrateDay(doc);
 }
 
-export function legacyExerciseNames(doc: LegacyDayDoc | V2DayDoc): string[] {
-  return [...new Set(doc.sessions.flatMap((session) => ["warmup", "main", "cooldown"].flatMap((section) =>
-    session[section as "warmup" | "main" | "cooldown"].flatMap((item) => "exercises" in item ? item.exercises.map((exercise) => exercise.name) : [item.name]))))];
+export function legacyExerciseNames(doc: LegacyDayDoc | V2DayDoc | V3DayDoc): string[] {
+  const sessions = doc.v === 3 ? [] : doc.sessions.flatMap((session) => ["warmup", "main", "cooldown"].flatMap((section) =>
+    session[section as "warmup" | "main" | "cooldown"].flatMap((item) => "exercises" in item ? item.exercises.map((exercise) => exercise.name) : [item.name])));
+  return [...new Set([...sessions, ...doc.activities.map((activity) => activity.name.trim() || "Activity")])];
 }

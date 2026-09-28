@@ -1,11 +1,11 @@
-import type { Section } from "./model";
+import type { ExerciseContext } from "./model";
 
 /**
  * Starter exercise list for search. Anything typed that isn't here is saved as-is
  * and shows up in search from then on.
  * [stable ID, name, section hint, aliases]
  */
-export type Seed = [string, string, Section | "any", string?];
+export type Seed = [string, string, ExerciseContext | "any", string?];
 
 export const SEEDS: Seed[] = [
   // mobility / warm-up / physio
@@ -189,4 +189,12 @@ export const SEEDS: Seed[] = [
   ["seed:0167", "Pike stretch", "cooldown", "forward fold hamstring compression"],
   ["seed:0168", "Pancake stretch", "cooldown", "straddle"],
   ["seed:0169", "Bridge", "any", "wheel back bend"],
+  // other activity
+  ["seed:0170", "Run", "activity", "running jogging"],
+  ["seed:0171", "Tennis", "activity"],
+  ["seed:0172", "Yoga", "activity"],
+  ["seed:0173", "Ride", "activity", "cycling outdoors"],
+  ["seed:0174", "Swim", "activity", "swimming"],
+  ["seed:0175", "Hike", "activity", "hiking"],
+  ["seed:0176", "Mobility", "activity"],
 ];

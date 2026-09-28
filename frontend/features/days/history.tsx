@@ -1,11 +1,14 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { daySummary, formatDateLong } from "../../../shared/days/format";
 import { isDayEmpty } from "../../../shared/days/model";
 import { request, trpc } from "../../api";
 import { cachedDays, getEntry, ingestServerDays } from "./store";
 import { goToDate } from "./dates";
+import { exerciseName } from "../exercises/catalog";
+import { libraryVersion, refreshLibrary, subscribeLibrary } from "../exercises/library";
 
 export function HistoryView() {
+  useSyncExternalStore(subscribeLibrary, libraryVersion);
   const [version, setVersion] = useState(0);
   const [loading, setLoading] = useState(false);
   const [done, setDone] = useState(false);
@@ -26,6 +29,7 @@ export function HistoryView() {
 
   useEffect(() => {
     void load();
+    void refreshLibrary();
   }, []);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -50,7 +54,7 @@ export function HistoryView() {
               {e?.dirty && <span className="pill">not synced</span>}
             </div>
             {d.morning.trim() && <div className="history-morning">{d.morning.trim().split("\n")[0]}</div>}
-            <div className="history-summary muted">{daySummary(d) || "Notes only"}</div>
+            <div className="history-summary muted">{daySummary(d, undefined, exerciseName) || "Notes only"}</div>
           </button>
         );
       })}

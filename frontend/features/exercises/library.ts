@@ -1,6 +1,6 @@
 // Exercise search: starter list + everything logged before (server) + names in local unsynced days.
 
-import { nameKey, type ExerciseHistoryEntry, type ExerciseLibrary, type Section, type WorkSet } from "../../../shared/exercises/model";
+import { nameKey, type ExerciseContext, type ExerciseHistoryEntry, type ExerciseLibrary, type Section, type WorkSet } from "../../../shared/exercises/model";
 import { itemSets } from "../../../shared/sessions/format";
 import { allCatalog, exerciseName, setRemoteCatalog } from "./catalog";
 import { type DayDoc } from "../../../shared/days/model";
@@ -15,8 +15,8 @@ export interface LibItem {
   key: string;
   name: string;
   aliases: string;
-  hint: Section | "any" | null;
-  uses: Partial<Record<Section, number>>;
+  hint: ExerciseContext | "any" | null;
+  uses: Partial<Record<ExerciseContext, number>>;
   total: number;
   last: string | null;
 }
@@ -69,12 +69,13 @@ onSynced(() => {
   syncRefreshTimer = setTimeout(() => void refreshLibrary(true), 3000);
 });
 
-function namesInDoc(d: DayDoc): [string, Section][] {
-  const out: [string, Section][] = [];
+function namesInDoc(d: DayDoc): [string, ExerciseContext][] {
+  const out: [string, ExerciseContext][] = [];
   for (const s of d.sessions) {
     for (const section of ["warmup", "main", "cooldown"] as const)
       s[section].forEach((item) => (item.kind === "exercise" ? [item] : item.members).forEach((e) => out.push([e.exerciseId, section])));
   }
+  for (const activity of d.activities) out.push([activity.exerciseId, "activity"]);
   return out;
 }
 
@@ -114,7 +115,9 @@ export interface SearchGroup {
   items: LibItem[];
 }
 
-export function searchExercises(query: string, section: Section): SearchGroup[] {
+type SetHistoryEntry = Extract<ExerciseHistoryEntry, { section: Section }>;
+
+export function searchExercises(query: string, section: ExerciseContext): SearchGroup[] {
   const local = cachedDays()
     .filter((e) => e.dirty)
     .map((e) => e.doc);
@@ -127,7 +130,7 @@ export function searchExercises(query: string, section: Section): SearchGroup[] 
       .sort((a, b) => (b.last ?? "").localeCompare(a.last ?? "") || b.total - a.total)
       .slice(0, 25);
     const recentKeys = new Set(recent.map((i) => i.key));
-    const hints: (Section | "any")[] = section === "main" ? ["main", "any"] : ["warmup", "cooldown", "any"];
+    const hints: (ExerciseContext | "any")[] = section === "activity" ? ["activity"] : section === "main" ? ["main", "any"] : ["warmup", "cooldown", "any"];
     const suggested = items
       .filter((i) => !recentKeys.has(i.key) && i.hint != null && hints.includes(i.hint))
       .sort((a, b) => (a.hint === section ? 0 : 1) - (b.hint === section ? 0 : 1) || a.name.localeCompare(b.name));
@@ -164,10 +167,10 @@ export function searchExercises(query: string, section: Section): SearchGroup[] 
 }
 
 /** Most recent entry for an exercise in this section before `beforeDate`. */
-export function lastTime(exerciseId: string, beforeDate: string, section: Section): ExerciseHistoryEntry | null {
-  const serverHits = (lib.history[exerciseId] ?? []).filter((h) => h.date < beforeDate && h.section === section);
+export function lastTime(exerciseId: string, beforeDate: string, section: Section): SetHistoryEntry | null {
+  const serverHits = (lib.history[exerciseId] ?? []).filter((h): h is SetHistoryEntry => h.date < beforeDate && h.section === section);
   // include unsynced local days too
-  let best: ExerciseHistoryEntry | null = serverHits[0] ?? null;
+  let best: SetHistoryEntry | null = serverHits[0] ?? null;
   for (const e of cachedDays()) {
     const d = e.doc;
     if (d.date >= beforeDate || (best && d.date <= best.date)) continue;

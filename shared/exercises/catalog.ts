@@ -1,10 +1,10 @@
 import { SEEDS } from "./seed";
-import { nameKey, type Section } from "./model";
+import { nameKey, type ExerciseContext } from "./model";
 
 export interface SeedExercise {
   id: string;
   name: string;
-  section: Section | "any";
+  section: ExerciseContext | "any";
   aliases: string;
 }
 

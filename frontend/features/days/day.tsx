@@ -17,8 +17,6 @@ import { useOverlays } from "../../overlays";
 import { Modal } from "../../modal";
 import { SessionCard } from "../sessions/session";
 
-const ACTIVITY_SUGGESTIONS = ["Walk", "Run", "Ride", "Bouldering", "Swim", "Hike", "Yoga", "Mobility"];
-
 export function DayView({ date }: { date: string }) {
   useSyncExternalStore(subscribeLibrary, libraryVersion);
   const { doc, entry, update, replace } = useDay(date);
@@ -133,7 +131,7 @@ function MorningCard() {
 
 function ActivitiesCard() {
   const { doc, update, undoable } = useDayCtx();
-  const { openSheet } = useOverlays();
+  const { openPicker, openSheet } = useOverlays();
   const up = (id: string, fn: (a: Activity) => void) =>
     update((d) => {
       const a = d.activities.find((x) => x.id === id);
@@ -146,21 +144,16 @@ function ActivitiesCard() {
       {doc.activities.map((a, i) => (
         <div key={a.id} className="activity">
           <div className="activity-row">
-            <input
-              className="text grow"
-              type="text"
-              list="activity-suggestions"
-              placeholder="Walk, ride…"
-              aria-label="Activity"
-              value={a.name}
-              onChange={(e) => up(a.id, (x) => (x.name = e.target.value))}
-            />
+            <button type="button" className="text grow activity-name" aria-label={`Change ${exerciseName(a.exerciseId)}`}
+              onClick={() => openPicker({ section: "activity", title: "Change activity", initial: exerciseName(a.exerciseId), onPick: (id) => up(a.id, (x) => (x.exerciseId = id)) })}>
+              {exerciseName(a.exerciseId)}
+            </button>
             <label className="unit-field">
-              <NumberField value={a.minutes} decimal={false} placeholder="–" ariaLabel="Minutes" onChange={(v) => up(a.id, (x) => (x.minutes = v))} />
+              <NumberField value={a.result.minutes} decimal={false} placeholder="–" ariaLabel="Minutes" onChange={(v) => up(a.id, (x) => (x.result.minutes = v))} />
               <span>min</span>
             </label>
             <label className="unit-field">
-              <NumberField value={a.calories} decimal={false} placeholder="–" ariaLabel="Active calories" onChange={(v) => up(a.id, (x) => (x.calories = v))} />
+              <NumberField value={a.result.calories} decimal={false} placeholder="–" ariaLabel="Active calories" onChange={(v) => up(a.id, (x) => (x.result.calories = v))} />
               <span>cal</span>
             </label>
             <button
@@ -169,7 +162,7 @@ function ActivitiesCard() {
               aria-label="Activity options"
               onClick={() =>
                 openSheet({
-                  title: a.name || "Activity",
+                  title: exerciseName(a.exerciseId),
                   actions: [
                     ...(i > 0 ? [{ label: "Move up", icon: "chevronUp" as const, onClick: () => update((d) => move(d.activities, i, -1)) }] : []),
                     {
@@ -190,24 +183,19 @@ function ActivitiesCard() {
         <button
           type="button"
           className="btn ghost"
-          onClick={() => update((d) => d.activities.push({ id: uid(), name: "", minutes: null, calories: null, notes: "" }))}
+          onClick={() => openPicker({ section: "activity", title: "Add activity", onPick: (exerciseId) => update((d) => d.activities.push({ id: uid(), exerciseId, comment: "", result: { minutes: null, calories: null } })) })}
         >
           <Icon name="plus" size={18} />
           Add activity
         </button>
       </div>
-      <datalist id="activity-suggestions">
-        {ACTIVITY_SUGGESTIONS.map((a) => (
-          <option key={a} value={a} />
-        ))}
-      </datalist>
     </section>
   );
 }
 
 function TotalsCard() {
   const { doc, update } = useDayCtx();
-  const logged = doc.sessions.reduce((n, s) => n + (s.calories ?? 0), 0) + doc.activities.reduce((n, a) => n + (a.calories ?? 0), 0);
+  const logged = doc.sessions.reduce((n, s) => n + (s.calories ?? 0), 0) + doc.activities.reduce((n, a) => n + (a.result.calories ?? 0), 0);
   return (
     <section className="card">
       <label className="inline-field">

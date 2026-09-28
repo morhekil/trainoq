@@ -41,6 +41,7 @@ export async function syncDefinitions(doc: DayDoc): Promise<void> {
     for (const section of ["warmup", "main", "cooldown"] as const)
       for (const item of session[section])
         for (const exercise of item.kind === "exercise" ? [item] : item.members) ids.add(exercise.exerciseId);
+  for (const activity of doc.activities) ids.add(activity.exerciseId);
   for (const id of ids) {
     if (seedExercise(id)) continue;
     const entry = allCatalog().find((candidate) => candidate.id === id);

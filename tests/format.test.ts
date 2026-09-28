@@ -24,7 +24,7 @@ describe("formatSets", () => {
 describe("dayToText", () => {
   it("renders a day the way it gets shared", () => {
     const doc: DayDoc = {
-      v: 3,
+      v: 4,
       date: "2026-09-22",
       morning: "Morning stiffness: 4/10",
       sessions: [
@@ -47,7 +47,7 @@ describe("dayToText", () => {
           notes: "",
         },
       ],
-      activities: [{ id: "w", name: "Walk", minutes: 30, calories: 115, notes: "" }],
+      activities: [{ id: "w", exerciseId: exerciseIdForName("Walk"), comment: "", result: { minutes: 30, calories: 115 } }],
       totalCalories: 710,
       notes: "",
     };

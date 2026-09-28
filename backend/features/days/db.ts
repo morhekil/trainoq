@@ -1,5 +1,5 @@
 import type { DayDoc } from "../../../shared/days/model";
-import type { Section } from "../../../shared/exercises/model";
+import type { ExerciseContext } from "../../../shared/exercises/model";
 import { isDayEmpty } from "../../../shared/days/model";
 import { nameKey } from "../../../shared/exercises/model";
 import { exerciseIdForName, seedExercise } from "../../../shared/exercises/catalog";
@@ -15,7 +15,7 @@ export interface StoredDay {
 }
 
 interface LogRow {
-  section: Section;
+  section: ExerciseContext;
   exerciseId: string;
   name: string;
   detail: string;
@@ -32,6 +32,11 @@ function logRows(doc: DayDoc): LogRow[] {
             detail: JSON.stringify({ sets: itemSets(item, e.id).map(({ type, weight, reps }) => ({ type, weight, reps })), superset: item.kind === "superset" }),
           });
   }
+  for (const activity of doc.activities)
+    rows.push({
+      section: "activity", exerciseId: activity.exerciseId, name: seedExercise(activity.exerciseId)?.name ?? "",
+      detail: JSON.stringify(activity.result),
+    });
   return rows;
 }
 
@@ -46,9 +51,9 @@ export type PutResult = { ok: true; updatedAt: string | null } | { ok: false; cu
  * Save a day. `base` is the updatedAt the client last saw from the server (null if it never saw one).
  * If the server copy has moved on since then, nothing is written and the current copy is returned.
  */
-export async function putDay(db: D1Database, date: string, doc: DayDoc, base: string | null, sourceVersion = 3, legacyNames: string[] = []): Promise<PutResult> {
+export async function putDay(db: D1Database, date: string, doc: DayDoc, base: string | null, sourceVersion = 4, legacyNames: string[] = []): Promise<PutResult> {
   const existing = await db.prepare("SELECT updated_at, doc FROM days WHERE date = ?").bind(date).first<{ updated_at: string; doc: string }>();
-  if (sourceVersion < 3 && existing && JSON.parse(existing.doc).v === 3)
+  if (sourceVersion < 4 && existing && JSON.parse(existing.doc).v === 4)
     throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Refresh this client before saving a newer day" });
   if (existing && existing.updated_at !== base) {
     return { ok: false, current: await getDay(db, date) };

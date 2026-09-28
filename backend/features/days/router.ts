@@ -20,5 +20,5 @@ export const daysRouter = t.router({
     base: z.string().nullable(),
   }).refine(({ date, doc }) => doc.date === date, "doc.date does not match date")
     .refine(({ doc }) => JSON.stringify(doc).length <= 512 * 1024, "Day is too large"))
-    .mutation(({ ctx, input }) => putDay(ctx.env.DB, input.date, normalizeDay(input.doc), input.base, input.doc.v, input.doc.v === 3 ? [] : legacyExerciseNames(input.doc))),
+    .mutation(({ ctx, input }) => putDay(ctx.env.DB, input.date, normalizeDay(input.doc), input.base, input.doc.v, input.doc.v === 4 ? [] : legacyExerciseNames(input.doc))),
 });

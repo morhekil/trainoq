@@ -692,6 +692,12 @@ textarea {
   flex: 1;
   min-width: 0;
 }
+.activity-name {
+  color: var(--text);
+  font: inherit;
+  text-align: start;
+  cursor: pointer;
+}
 .unit-field {
   display: flex;
   align-items: center;

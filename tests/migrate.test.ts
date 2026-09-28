@@ -7,6 +7,7 @@ import type { StandaloneExercise } from "../shared/exercises/model";
 const doc: LegacyDayDoc = {
   ...emptyDay("2026-09-25"),
   v: 1,
+  activities: [],
   sessions: [{
     id: "session",
     startedAt: "2026-09-25T07:00:00.000Z",
@@ -34,7 +35,7 @@ describe("v1 day migration", () => {
     const curl = s.cooldown[0] as StandaloneExercise;
     const values = (sets: typeof rows.sets) => sets.map(({ type, weight, reps }) => ({ type, weight, reps }));
 
-    expect(migrated.v).toBe(3);
+    expect(migrated.v).toBe(4);
     expect(s.warmup.map((item) => item.id)).toEqual(["a", "b", "c", "d", "e", "f"]);
     expect(values(rows.sets)).toEqual([{ type: "working", weight: null, reps: 10 }, { type: "working", weight: null, reps: 10 }]);
     expect(values(hold.sets)).toEqual([{ type: "working", weight: null, reps: null }]);
@@ -59,7 +60,7 @@ describe("v1 day migration", () => {
     expect(() => migrateDay(unknown)).toThrow(/tenish/);
   });
 
-  it("normalizes v1 once and validates the canonical v3 day", () => {
+  it("normalizes v1 once and validates the canonical v4 day", () => {
     const migrated = normalizeDay(doc);
     expect(migrated).toEqual(migrateDay(doc));
     expect(normalizeDay(migrated)).toBe(migrated);

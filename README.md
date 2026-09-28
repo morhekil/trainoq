@@ -16,7 +16,7 @@ Runs on Cloudflare: a Worker serves the app and a tRPC API, data lives in D1.
   - Supersets keep their identity even with zero or one member. Create an empty superset with **+ Superset**, or drag an existing exercise onto it to create a one-member superset. Add members through the picker or drag another standalone exercise onto the labelled superset target. If set types differ, review the alignment preview before appending rounds. Drag a round handle to reorder it without changing its recorded values.
   - Use the exercise or superset options sheet to delete sets, rounds, exercises or a whole superset with Undo. **Dissolve superset** converts members into standalone exercises with their comments and values intact. Taking out or deleting a member leaves the superset in place.
   - "Last Tue 22 Sep: …" under each exercise shows its previous entry in the same section.
-- **Exercise search** – full-screen picker: recent first, starter list, search by name or alias (`rdl`, `ohp`). If it's not there, "Use "…"" saves what you typed and it shows up in search from then on.
+- **Exercise search** – full-screen picker for session exercises and other activities: recent first, starter list, search by name or alias (`rdl`, `ohp`). If it's not there, "Use "…"" saves what you typed and it shows up in search from then on. Run, Walk, Tennis, Yoga, and Skipping use the same catalog.
 - **Repeat** – an empty section offers "Repeat <last date>" to copy exercise references, superset grouping, and set types. Recorded weight and reps are cleared.
 - **Calories** – per session, per extra activity (walk etc.), and a daily total.
 - **Narrow screens** – activity name and numeric fields use two compact rows when a single row would hide the name.
@@ -78,9 +78,7 @@ API.md                  procedure and wire contract
 
 ### Data model
 
-One JSON document per day (`days` table) is the source of truth. On every save the worker rebuilds `exercise_log` – one row per exercise occurrence – which powers search, "last time" hints and, later, progress charts. Types are in `shared/days/model.ts`, `shared/sessions/model.ts`, and `shared/exercises/model.ts`.
-
-The current document is v3. Each session section holds ordered standalone performances and explicit supersets; both reference names in the exercise catalog by stable ID. Supersets store members, shared rounds and a result for every member-round pair. Older v1/v2 days and offline drafts convert on read; the Worker accepts them during the transition and saves v3. A backup exports v3 and the catalog without rewriting untouched D1 rows.
+One JSON document per day (`days` table) is the source of truth. On every save the Worker rebuilds `exercise_log`, one row per session performance or activity. See the [data model in API.md](API.md#data-model) for the v4 shapes, exercise IDs, supersets, activities, legacy blocks, D1 tables, and local drafts.
 
 ### API seam
 

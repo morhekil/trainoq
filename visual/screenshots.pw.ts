@@ -55,6 +55,11 @@ async function checkWidth(page: Page) {
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(page.viewportSize()!.width);
 }
 
+async function addActivity(page: Page, name = "Walk") {
+  await page.getByRole("button", { name: "Add activity" }).click();
+  await page.getByRole("dialog", { name: "Add activity" }).getByRole("button", { name, exact: true }).click();
+}
+
 function contrastRatio(foreground: number[], background: number[]) {
   const luminance = (color: number[]) => color
     .map((channel) => channel / 255)
@@ -106,7 +111,7 @@ test("Undo remains readable in dark mode", async ({ page }) => {
   await mockApi(page);
   await page.addInitScript(() => localStorage.setItem("tq:authed", JSON.stringify(true)));
   await page.goto(`/#/d/${day}`);
-  await page.getByRole("button", { name: "Add activity" }).click();
+  await addActivity(page);
   await page.getByRole("button", { name: "Activity options" }).click();
   await page.getByRole("button", { name: "Delete", exact: true }).click();
   const colors = await page.getByRole("button", { name: "Undo" }).evaluate((button) => ({
@@ -124,7 +129,7 @@ test("Undo stays available until used", async ({ page }) => {
   await mockApi(page);
   await page.addInitScript(() => localStorage.setItem("tq:authed", JSON.stringify(true)));
   await page.goto(`/#/d/${day}`);
-  await page.getByRole("button", { name: "Add activity" }).click();
+  await addActivity(page);
   await page.getByRole("button", { name: "Activity options" }).click();
   await page.getByRole("button", { name: "Delete", exact: true }).click();
   await page.clock.fastForward(7_000);
@@ -136,8 +141,8 @@ test("later messages do not replace an earlier Undo", async ({ page }) => {
   await mockApi(page);
   await page.addInitScript(() => localStorage.setItem("tq:authed", JSON.stringify(true)));
   await page.goto(`/#/d/${day}`);
-  await page.getByRole("button", { name: "Add activity" }).click();
-  await page.getByRole("button", { name: "Add activity" }).click();
+  await addActivity(page);
+  await addActivity(page);
   for (let i = 0; i < 2; i++) {
     await page.getByRole("button", { name: "Activity options" }).first().click();
     await page.getByRole("button", { name: "Delete", exact: true }).click();
@@ -349,7 +354,7 @@ test("conflict review can be cancelled before replacing the server version", asy
   expect(await page.evaluate((date) => Boolean(JSON.parse(localStorage.getItem(`tq:day:${date}`)!).conflict), day)).toBe(false);
 });
 
-test("activity name stays readable at 320px", async ({ page }) => {
+test("activity choice stays readable at 320px", async ({ page }) => {
   await page.setViewportSize({ width: 320, height: 844 });
   await mockApi(page);
   await page.addInitScript(({ date, doc }) => {
@@ -357,16 +362,32 @@ test("activity name stays readable at 320px", async ({ page }) => {
     localStorage.setItem(`tq:day:${date}`, JSON.stringify({ doc, base: null, dirty: false, rev: 1 }));
   }, { date: day, doc });
   await page.goto(`/#/d/${day}`);
-  const activity = page.getByLabel("Activity", { exact: true });
-  await expect(activity).toHaveValue("Walk");
-  const fit = await activity.evaluate((input: HTMLInputElement) => {
-    const style = getComputedStyle(input);
+  const activity = page.getByRole("button", { name: "Change Walk" });
+  await expect(activity).toHaveText("Walk");
+  const fit = await activity.evaluate((button) => {
+    const style = getComputedStyle(button);
     const canvas = document.createElement("canvas");
     const context = canvas.getContext("2d")!;
     context.font = style.font;
-    return { width: input.clientWidth, text: context.measureText(input.value).width, padding: parseFloat(style.paddingLeft) + parseFloat(style.paddingRight), font: style.font };
+    return { width: button.clientWidth, text: context.measureText(button.textContent ?? "").width, padding: parseFloat(style.paddingLeft) + parseFloat(style.paddingRight), font: style.font };
   });
   expect(fit.text + fit.padding + 24).toBeLessThanOrEqual(fit.width);
+});
+
+test("activity uses the exercise picker at narrow width", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 844 });
+  await mockApi(page);
+  await page.addInitScript(({ date, doc }) => {
+    localStorage.setItem("tq:authed", JSON.stringify(true));
+    localStorage.setItem(`tq:day:${date}`, JSON.stringify({ doc, base: null, dirty: false, rev: 1 }));
+  }, { date: day, doc });
+  await page.goto(`/#/d/${day}`);
+  await page.getByRole("button", { name: "Add activity" }).click();
+  const picker = page.getByRole("dialog", { name: "Add activity" });
+  await expect(picker).toBeVisible();
+  await picker.getByRole("button", { name: "Tennis" }).click();
+  await expect(page.getByRole("button", { name: "Change Tennis" })).toBeVisible();
+  await checkWidth(page);
 });
 
 test("failed sync can be retried with the keyboard", async ({ page }) => {
@@ -653,7 +674,7 @@ test("touch drag scrolls to the superset target", async ({ page }) => {
   await expect(main.locator(".block.superset")).toHaveCount(1);
 });
 
-test("an offline v1 draft syncs as v3 and preserves its revision base", async ({ page }) => {
+test("an offline v1 draft syncs as v4 and preserves its revision base", async ({ page }) => {
   await mockApi(page);
   const requests: string[] = [];
   page.on("request", (request) => { if (request.url().includes("/api/trpc/")) requests.push(request.url().split("/").at(-1)!); });
@@ -671,14 +692,14 @@ test("an offline v1 draft syncs as v3 and preserves its revision base", async ({
   const payload = request.postDataJSON();
   const input = payload.json ?? payload;
   expect(input.base).toBe("previous-revision");
-  expect(input.doc.v).toBe(3);
+  expect(input.doc.v).toBe(4);
   expect(requests.indexOf("exercises.create")).toBeGreaterThanOrEqual(0);
   expect(requests.indexOf("exercises.create")).toBeLessThan(requests.indexOf("days.save"));
   expect(input.doc.sessions[0].warmup[0].sets.map((set: { reps: number }) => set.reps)).toEqual([15, 15]);
   await expect(page.getByText("Band pull-apart", { exact: true })).toBeVisible();
   const entry = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!), day);
   expect(entry.rev).toBe(7);
-  expect(entry.doc.v).toBe(3);
+  expect(entry.doc.v).toBe(4);
 });
 
 test("v1 conflict copies normalize before either version is chosen", async ({ page }) => {
@@ -696,13 +717,13 @@ test("v1 conflict copies normalize before either version is chosen", async ({ pa
   }, { date: day, legacy });
   await page.goto(`/#/d/${day}`);
   const before = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!), day);
-  expect([before.doc.v, before.conflict.doc.v, before.base, before.dirty, before.rev, before.conflict.updatedAt]).toEqual([3, 3, "old-revision", true, 9, "new-revision"]);
+  expect([before.doc.v, before.conflict.doc.v, before.base, before.dirty, before.rev, before.conflict.updatedAt]).toEqual([4, 4, "old-revision", true, 9, "new-revision"]);
   await page.getByRole("button", { name: "Use other device's" }).click();
   const dialog = page.getByRole("dialog", { name: "Review day versions" });
   await expect(dialog).toContainText("Other device");
   await dialog.getByRole("button", { name: "Replace this device's edits" }).click();
   const after = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!), day);
-  expect([after.doc.v, after.doc.morning, after.base, after.dirty, after.rev]).toEqual([3, "Other device", "new-revision", false, 10]);
+  expect([after.doc.v, after.doc.morning, after.base, after.dirty, after.rev]).toEqual([4, "Other device", "new-revision", false, 10]);
 });
 
 test("repeat keeps grouping and set types across every section without recorded values", async ({ page }) => {

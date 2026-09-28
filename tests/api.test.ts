@@ -7,7 +7,7 @@ import worker from "../backend/index";
 import type { AppRouter } from "../backend/router";
 
 describe("Worker tRPC boundary", () => {
-  it("migrates old days, protects v3 writes, resolves catalog IDs and exports definitions", async () => {
+  it("migrates old days, protects v4 writes, resolves catalog IDs and exports definitions", async () => {
     const days = new Map<string, { date: string; doc: string; updated_at: string }>();
     const catalog = new Map<string, string>();
     let logRows: { sql: string; args: unknown[] }[] = [];
@@ -69,7 +69,9 @@ describe("Worker tRPC boundary", () => {
     finally { log.mockRestore(); }
     await client.auth.login.mutate({ password: "test-password" });
 
-    const old: LegacyDayDoc = { ...emptyDay("2026-09-23"), v: 1, sessions: [{
+    const old: LegacyDayDoc = { ...emptyDay("2026-09-23"), v: 1, activities: [
+      { id: "activity", name: "Trail run", minutes: 35, calories: 280, notes: "Steady" },
+    ], sessions: [{
       id: "s", startedAt: "2026-09-23T07:00:00Z", endedAt: null,
       warmup: [{ id: "w", name: "Row", reps: "2x10", comment: "Light band" }],
       main: [], cooldown: [], calories: null, notes: "",
@@ -77,25 +79,33 @@ describe("Worker tRPC boundary", () => {
     const first = await client.days.save.mutate({ date: old.date, doc: old, base: null });
     expect(first.ok).toBe(true);
     const migrated = (await client.days.get.query(old.date)).doc!;
-    expect(migrated.v).toBe(3);
+    expect(migrated.v).toBe(4);
     expect(migrated.sessions[0].warmup[0]).toMatchObject({ kind: "exercise", exerciseId: exerciseIdForName("Row"), comment: "Light band", sets: [{ reps: 10 }, { reps: 10 }] });
+    expect(migrated.activities).toEqual([{ id: "activity", exerciseId: exerciseIdForName("Trail run"), comment: "Steady", result: { minutes: 35, calories: 280 } }]);
     expect((await client.days.list.query({ withSessions: true, limit: 10 }))[0].doc).toEqual(migrated);
     expect((await client.backup.export.query()).days[0].doc).toEqual(migrated);
     expect(logRows[0].args[6]).toBe(exerciseIdForName("Row"));
-    expect((await client.exercises.library.query()).history[exerciseIdForName("Row")][0].sets[0].reps).toBe(10);
+    expect(logRows[1]).toMatchObject({ args: [old.date, "activity", "Trail run", "trail run", JSON.stringify({ minutes: 35, calories: 280 }), 1, exerciseIdForName("Trail run")] });
+    expect((await client.exercises.catalog.query()).some((entry) => entry.id === exerciseIdForName("Trail run"))).toBe(true);
+    expect((await client.exercises.library.query()).history[exerciseIdForName("Row")][0]).toMatchObject({ sets: [{ reps: 10 }] });
     await expect(client.days.save.mutate({ date: old.date, doc: old, base: first.ok ? first.updatedAt : null })).rejects.toMatchObject({ data: { code: "PRECONDITION_FAILED" } });
 
     const customId = "e164c8eb-a785-4c78-a854-f7a9f0787215";
     const custom = emptyDay("2026-09-24");
+    const activityId = "d34437b6-06c3-4b89-a9ed-37825a68822e";
+    custom.activities = [{ id: "activity-2", exerciseId: activityId, comment: "Doubles", result: { minutes: 60, calories: 400 } }];
     custom.sessions = [{ id: "custom", startedAt: "2026-09-24T07:00:00Z", endedAt: null, warmup: [], main: [
       { kind: "superset", id: "ss", members: [{ id: "member", exerciseId: customId, comment: "" }], rounds: [{ id: "round", type: "working" }], results: [{ memberId: "member", roundId: "round", weight: 0, reps: 8 }] },
     ], cooldown: [], calories: null, notes: "" }];
     await expect(client.days.save.mutate({ date: custom.date, doc: custom, base: null })).rejects.toMatchObject({ data: { code: "BAD_REQUEST" } });
     await client.exercises.create.mutate({ id: customId, name: "Custom raise" });
+    await expect(client.days.save.mutate({ date: custom.date, doc: custom, base: null })).rejects.toMatchObject({ data: { code: "BAD_REQUEST" } });
+    await client.exercises.create.mutate({ id: activityId, name: "Beach tennis" });
     expect((await client.exercises.catalog.query()).some((entry) => entry.id === customId)).toBe(true);
     const saved = await client.days.save.mutate({ date: custom.date, doc: custom, base: null });
     expect(saved.ok).toBe(true);
     expect((await client.days.get.query(custom.date)).doc).toEqual(custom);
+    expect(logRows.some((row) => row.args[1] === "activity" && row.args[6] === activityId)).toBe(true);
     expect(await client.days.save.mutate({ date: custom.date, doc: custom, base: null })).toMatchObject({ ok: false, current: { doc: custom } });
     expect((await client.backup.export.query()).catalog).toContainEqual({ id: customId, name: "Custom raise", section: null, aliases: "" });
     const invalid = structuredClone(custom);

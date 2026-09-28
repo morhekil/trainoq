@@ -8,7 +8,7 @@ import { addMember, addRound, createSuperset, dissolveSuperset, joinPerformance,
 const exercise = (id: string, name: string, sets: WorkSet[] = [{ id: `${id}-set`, type: "working", weight: 0, reps: 8 }]) =>
   ({ kind: "exercise" as const, id, exerciseId: exerciseIdForName(name), comment: `${name} note`, sets });
 
-describe("v3 session items", () => {
+describe("session items", () => {
   it("migrates v2 values and comments without inferring a one-member superset", () => {
     const old = { ...emptyDay("2026-09-28"), v: 2, sessions: [{
       id: "s", startedAt: "2026-09-28T01:00:00Z", endedAt: null, calories: null, notes: "",
@@ -18,7 +18,7 @@ describe("v3 session items", () => {
       ] }, { id: "b2", exercises: [{ id: "c", name: "Press", comment: "pause", sets: [] }] }],
     }] };
     const migrated = inputDaySchema.parse(old);
-    expect(migrated.v).toBe(3);
+    expect(migrated.v).toBe(4);
     expect(migrated.sessions[0].main).toEqual([
       { kind: "superset", id: "b1", members: [
         { id: "a", exerciseId: exerciseIdForName("Squat"), comment: "depth" },

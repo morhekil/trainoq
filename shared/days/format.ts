@@ -1,6 +1,7 @@
 import type { DayDoc } from "./model";
 import { countExercises, formatTime, sessionLines } from "../sessions/format";
 import { formatNum } from "../exercises/format";
+import { seedExercise } from "../exercises/catalog";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -26,17 +27,18 @@ export function formatDateShort(date: string): string {
 /** "5:02pm" in the given (or the device's) time zone */
 /** Plain-text summary of a day, for sending to a PT or physio. */
 export function dayToText(d: DayDoc, timeZone?: string, resolveName?: (id: string) => string): string {
+  const name = resolveName ?? ((id: string) => seedExercise(id)?.name ?? id);
   const out: string[] = [formatDateLong(d.date)];
   if (d.morning.trim()) out.push("", "Morning", d.morning.trim());
   for (const s of d.sessions) out.push("", "----", ...sessionLines(s, timeZone, resolveName));
-  const acts = d.activities.filter((a) => a.name.trim() || a.minutes != null || a.calories != null);
+  const acts = d.activities;
   if (acts.length) {
     out.push("", "----", "Activities");
     for (const a of acts) {
-      const bits = [a.name.trim() || "Activity"];
-      if (a.minutes != null) bits.push(`${formatNum(a.minutes)} min`);
-      if (a.calories != null) bits.push(`${formatNum(a.calories)} cal`);
-      out.push(`- ${bits.join(" · ")}${a.notes.trim() ? ` – ${a.notes.trim()}` : ""}`);
+      const bits = [name(a.exerciseId)];
+      if (a.result.minutes != null) bits.push(`${formatNum(a.result.minutes)} min`);
+      if (a.result.calories != null) bits.push(`${formatNum(a.result.calories)} cal`);
+      out.push(`- ${bits.join(" · ")}${a.comment.trim() ? ` – ${a.comment.trim()}` : ""}`);
     }
   }
   if (d.totalCalories != null || d.notes.trim()) out.push("", "----");
@@ -46,14 +48,14 @@ export function dayToText(d: DayDoc, timeZone?: string, resolveName?: (id: strin
 }
 
 /** One-line summary for the history list. */
-export function daySummary(d: DayDoc, timeZone?: string): string {
+export function daySummary(d: DayDoc, timeZone?: string, resolveName: (id: string) => string = (id) => seedExercise(id)?.name ?? id): string {
   const bits: string[] = [];
   for (const s of d.sessions) {
     let t = `Session ${formatTime(s.startedAt, timeZone)} · ${countExercises(s)} exercises`;
     if (s.calories != null) t += ` · ${formatNum(s.calories)} cal`;
     bits.push(t);
   }
-  for (const a of d.activities) if (a.name.trim()) bits.push(a.name.trim());
+  for (const a of d.activities) bits.push(resolveName(a.exerciseId));
   if (d.totalCalories != null) bits.push(`${formatNum(d.totalCalories)} cal total`);
   return bits.join(" · ");
 }
