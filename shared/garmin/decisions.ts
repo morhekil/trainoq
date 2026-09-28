@@ -42,3 +42,17 @@ export function unlinkGarmin(doc: DayDoc, key: string): void {
   for (const session of doc.sessions) if (session.garminSourceKey === key) delete session.garminSourceKey;
   for (const activity of doc.activities) if (activity.garminSourceKey === key) delete activity.garminSourceKey;
 }
+
+export function moveLinkedActivity(from: DayDoc, to: DayDoc, key: string): void {
+  if (from.date === to.date) throw new Error("Choose another day");
+  ensurePending(to, key);
+  const index = from.activities.findIndex((item) => item.garminSourceKey === key);
+  if (index < 0) throw new Error("Linked activity is missing from this day");
+  const [activity] = from.activities.splice(index, 1);
+  if (activity.startedAt) {
+    const offset = activity.sourceOffsetMinutes ?? 0;
+    const localTime = new Date(Date.parse(activity.startedAt) + offset * 60_000).toISOString().slice(11);
+    activity.startedAt = new Date(Date.parse(`${to.date}T${localTime}`) - offset * 60_000).toISOString();
+  }
+  to.activities.push(activity);
+}

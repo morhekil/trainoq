@@ -41,6 +41,8 @@ The browser parses original FIT files with `shared/garmin/fit.ts` and sends summ
 
 Accepting a Garmin record as an activity copies its start time, source UTC offset when present, timer duration rounded to minutes, and active calories into a new editable activity. The offset preserves the Garmin time of day when reviewing a trip from another time zone. Linking a strength recording to a completed session keeps its exercises, sets, time, notes, and any already entered calories; otherwise it fills active calories once. Strength suggestions require the same source local date and a completed session starting within an hour. Multiple matches need an explicit choice. Ignoring stores the source key on the day. Unlinking or restoring removes the decision key while leaving the Trainoq item and its edits intact.
 
+Moving a linked activity to a corrected date preserves its ID, exercise, notes, duration, calories and displayed local time. The saved source offset remains the original FIT offset; edit the start time if the corrected date has another UTC offset.
+
 ## Data model
 
 The saved document is `DayDoc` v5. These shapes are a map for readers; the current types live in [`shared/days/model.ts`](shared/days/model.ts), [`shared/sessions/model.ts`](shared/sessions/model.ts), and [`shared/exercises/model.ts`](shared/exercises/model.ts).

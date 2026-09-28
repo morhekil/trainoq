@@ -2,7 +2,7 @@ import { expect, it } from "vitest";
 import { emptyDay } from "../shared/days/model";
 import type { GarminActivitySummary } from "../shared/garmin/fit";
 import type { Session } from "../shared/sessions/model";
-import { acceptActivity, ignoreGarmin, linkStrengthSession, strengthMatches, unlinkGarmin } from "../shared/garmin/decisions";
+import { acceptActivity, ignoreGarmin, linkStrengthSession, moveLinkedActivity, strengthMatches, unlinkGarmin } from "../shared/garmin/decisions";
 
 const source: GarminActivitySummary = { sourceKey: "garmin:1:2026-09-28T05:00:00.000Z:0", sport: "training", subSport: "strengthTraining", title: "Strength", startUtc: "2026-09-28T06:00:00.000Z", localDate: "2026-09-28", offsetMinutes: 600, timerSeconds: 3600, elapsedSeconds: 3700, activeCalories: 362 };
 const session = (id: string, start: string): Session => ({ id, startedAt: start, endedAt: "2026-09-28T07:00:00.000Z", warmup: [], main: [], cooldown: [], calories: null, notes: "sets stay here" });
@@ -34,4 +34,15 @@ it("accepts activity values once, keeps corrections through re-import, and can i
   unlinkGarmin(doc, source.sourceKey);
   expect(doc.ignoredGarminSourceKeys).toEqual([]);
   expect(doc.activities).toHaveLength(1);
+});
+
+it("moves an accepted activity to another day without replacing corrected values or its local time", () => {
+  const oldDay = emptyDay("2026-09-28");
+  const activity = acceptActivity(oldDay, source, "seed:0170");
+  activity.comment = "Corrected name and notes";
+  activity.result.calories = 350;
+  const newDay = emptyDay("2026-09-29");
+  moveLinkedActivity(oldDay, newDay, source.sourceKey);
+  expect(oldDay.activities).toEqual([]);
+  expect(newDay.activities).toMatchObject([{ id: activity.id, comment: "Corrected name and notes", garminSourceKey: source.sourceKey, sourceOffsetMinutes: 600, startedAt: "2026-09-29T06:00:00.000Z", result: { minutes: 60, calories: 350 } }]);
 });
