@@ -18,6 +18,7 @@
     "setup:local": "node -e \"require('fs').existsSync('.dev.vars')||require('fs').copyFileSync('.dev.vars.example','.dev.vars')\" && npm run db:migrate:local"
   },
   "dependencies": {
+    "@garmin/fitsdk": "^21.217.0",
     "@trpc/client": "^11.19.0",
     "@trpc/server": "^11.19.0",
     "react": "^19.3.0",

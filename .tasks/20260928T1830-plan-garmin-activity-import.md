@@ -1,5 +1,6 @@
 ---
 title: Investigate and implement Garmin activity import with active calories
+status: in-progress
 created_at: 2026-09-28T18:30:16+10:00
 ---
 
@@ -10,6 +11,21 @@ Bring Garmin runs, walks, tennis and other recorded activities into Trainoq with
 Garmin's displayed "Activity Calories" can include resting calories. That number does not satisfy this task. Do not substitute it for active calories, estimate active calories by subtracting resting expenditure, or silently import it into a field labelled active calories. See [Garmin's calorie definitions](https://support.garmin.com/en-AU/?faq=lkl4cwCLlK7ox362uGQEV7).
 
 ## Phase 0: inspect actual Garmin data before designing the importer
+
+Audit on 2026-09-28: Garmin Connect's `Export CSV` supplied `Activities.csv` (20 visible rows). `Calories` was total activity calories, not active calories; `Date` was local text without an offset, and the CSV had no source ID. Original `Export File` downloads supplied FIT files for run (`24523901155`), walk (`24511727768`), tennis (`24327475649`) and strength (`24525690096`). These remain in Downloads and are not checked into the repository.
+
+| Recording | FIT `session.totalCalories` | FIT `session.metabolicCalories` | Connect resting | Connect active | FIT `session.totalTimerTime` |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Run | 207 kcal | 35 kcal | 35 kcal | 172 kcal | 1561.339 s |
+| Walk | 99 kcal | 35 kcal | 35 kcal | 64 kcal | 1549.030 s |
+| Tennis | 479 kcal | 82 kcal | 82 kcal | 397 kcal | 3617.467 s |
+| Strength | 487 kcal | 125 kcal | 125 kcal | 362 kcal | 5522.563 s |
+
+The original FIT files pass Garmin's integrity check. FIT has no per-session `activeCalories` field in these samples; its `metabolicCalories` matches Connect's per-activity resting calories exactly, and `totalCalories - metabolicCalories` matches Connect's active calories in all four. The user explicitly approved this verified calculation on 2026-09-28. Require both source fields and reject missing or inconsistent values; do not use an estimated resting rate or daily active total.
+
+FIT `session.startTime` is UTC. `activity.localTimestamp` gives the local clock reading at the file's first session, yielding a +10:00 offset in these samples. `totalElapsedTime` and `totalTimerTime` differ for strength (5668.773 s versus 5522.563 s); the latter matches Connect's displayed activity time. `session.sport`/`subSport` distinguish the four sports. FIT `sportProfileName` is generic (`Run`, `Walk`, `Tennis`, `Strength`); custom Connect titles such as `Sydney Running` occur in the CSV but are not in these FIT files. FIT `fileId.serialNumber` plus `fileId.timeCreated` survives a repeat export of the run, which had identical FIT bytes. A separate multisport FIT (`24490389650`) has two session messages; do not silently sum them. No changed export, manually created Garmin activity, corrupt file, local-midnight activity or travel-day sample was available in this audit. FIT `activity.type = manual` occurred even in the four device recordings, so it does not identify a Connect-created manual activity.
+
+Selected format: an unzipped original FIT file. `shared/garmin/fit.ts` validates file integrity and emits one summary per session, using `fileId.serialNumber`, `fileId.timeCreated` and `session.messageIndex` for source identity. It rejects sessions without both calorie fields. The parser produced the four Connect-checked active values and two separate multisport summaries from the downloaded files.
 
 No Garmin export was available in the repository or Downloads on 2026-09-28. Obtain representative real exports for a run, walk, tennis session and strength session, including one recording the user can compare with Garmin Connect. Inspect the actual fields and values in the activity CSV, original FIT files and any relevant wellness export the user can provide. Record the source file, field name, units and an example value for:
 
