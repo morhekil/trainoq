@@ -18,7 +18,7 @@ describe("session items", () => {
       ] }, { id: "b2", exercises: [{ id: "c", name: "Press", comment: "pause", sets: [] }] }],
     }] };
     const migrated = inputDaySchema.parse(old);
-    expect(migrated.v).toBe(4);
+    expect(migrated.v).toBe(5);
     expect(migrated.sessions[0].main).toEqual([
       { kind: "superset", id: "b1", members: [
         { id: "a", exerciseId: exerciseIdForName("Squat"), comment: "depth" },

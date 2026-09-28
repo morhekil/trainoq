@@ -10,6 +10,7 @@ export interface Session {
   /** active calories for the session, entered manually for now */
   calories: number | null;
   notes: string;
+  garminSourceKey?: string;
 }
 
 /** Anything outside a training session: walk, ride, climbing... */

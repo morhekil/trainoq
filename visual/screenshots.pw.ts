@@ -674,7 +674,7 @@ test("touch drag scrolls to the superset target", async ({ page }) => {
   await expect(main.locator(".block.superset")).toHaveCount(1);
 });
 
-test("an offline v1 draft syncs as v4 and preserves its revision base", async ({ page }) => {
+test("an offline v1 draft syncs as v5 and preserves its revision base", async ({ page }) => {
   await mockApi(page);
   const requests: string[] = [];
   page.on("request", (request) => { if (request.url().includes("/api/trpc/")) requests.push(request.url().split("/").at(-1)!); });
@@ -692,14 +692,14 @@ test("an offline v1 draft syncs as v4 and preserves its revision base", async ({
   const payload = request.postDataJSON();
   const input = payload.json ?? payload;
   expect(input.base).toBe("previous-revision");
-  expect(input.doc.v).toBe(4);
+  expect(input.doc.v).toBe(5);
   expect(requests.indexOf("exercises.create")).toBeGreaterThanOrEqual(0);
   expect(requests.indexOf("exercises.create")).toBeLessThan(requests.indexOf("days.save"));
   expect(input.doc.sessions[0].warmup[0].sets.map((set: { reps: number }) => set.reps)).toEqual([15, 15]);
   await expect(page.getByText("Band pull-apart", { exact: true })).toBeVisible();
   const entry = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!), day);
   expect(entry.rev).toBe(7);
-  expect(entry.doc.v).toBe(4);
+  expect(entry.doc.v).toBe(5);
 });
 
 test("v1 conflict copies normalize before either version is chosen", async ({ page }) => {

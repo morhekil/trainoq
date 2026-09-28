@@ -24,8 +24,9 @@ describe("formatSets", () => {
 describe("dayToText", () => {
   it("renders a day the way it gets shared", () => {
     const doc: DayDoc = {
-      v: 4,
+      v: 5,
       date: "2026-09-22",
+      ignoredGarminSourceKeys: [],
       morning: "Morning stiffness: 4/10",
       sessions: [
         {
