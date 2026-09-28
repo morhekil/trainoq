@@ -4,7 +4,7 @@ import { t } from "../../trpc";
 import { authed } from "../auth/router";
 import { dateSchema } from "../../../shared/days/schema";
 import { loginGarmin, verifyGarminMfa } from "./connect";
-import { readGarminConnection, saveGarminConnection } from "./connection";
+import { readGarminConnection, saveGarminConnection, updateGarminConnection } from "./connection";
 import { importGarminSummaries, listGarmin } from "./db";
 import { syncGarminPage } from "./sync";
 
@@ -35,7 +35,7 @@ export const garminRouter = t.router({
     const connected = await readGarminConnection(ctx.env.DB, ctx.env.APP_PASSWORD);
     if (!connected?.state.pending) throw new TRPCError({ code: "BAD_REQUEST", message: "No Garmin verification is pending." });
     const tokens = await verifyGarminMfa(connected.state.pending, input.code);
-    await saveGarminConnection(ctx.env.DB, ctx.env.APP_PASSWORD, {
+    await updateGarminConnection(ctx.env.DB, ctx.env.APP_PASSWORD, {
       email: connected.state.email, password: connected.state.password, tokens,
     }, "connected");
     return { status: "connected" as const };

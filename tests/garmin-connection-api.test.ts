@@ -16,6 +16,10 @@ function connectionDb() {
           if (sql.startsWith("INSERT INTO garmin_connection")) row = {
             encrypted_state: args[0] as string, status: args[1] as string, last_sync_at: null, last_error: null, next_offset: 0,
           };
+          if (sql.startsWith("UPDATE garmin_connection") && row) {
+            row.encrypted_state = args[0] as string;
+            row.status = args[1] as string;
+          }
           if (sql.startsWith("DELETE FROM garmin_connection")) row = null;
           return { success: true };
         },
@@ -69,7 +73,8 @@ describe("Garmin connection tRPC boundary", () => {
 
     expect(await client.garmin.connect.mutate({ email: "me@example.com", password: "garmin-password" })).toEqual({ status: "mfa" });
     expect(await client.garmin.connection.query()).toMatchObject({ status: "mfa" });
+    db.row!.next_offset = 20;
     expect(await client.garmin.verifyMfa.mutate({ code: "123456" })).toEqual({ status: "connected" });
-    expect(await client.garmin.connection.query()).toMatchObject({ status: "connected" });
+    expect(await client.garmin.connection.query()).toMatchObject({ status: "connected", nextOffset: 20 });
   });
 });
