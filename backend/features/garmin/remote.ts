@@ -24,6 +24,7 @@ export async function refreshGarminTokens(tokens: GarminTokens, fetcher: Fetcher
     Authorization: `Basic ${btoa(`${tokens.clientId}:`)}`, Accept: "application/json", "Content-Type": "application/x-www-form-urlencoded",
   }, body: new URLSearchParams({ grant_type: "refresh_token", client_id: tokens.clientId,
     refresh_token: tokens.refreshToken }).toString() });
+  if (response.status === 400) throw new GarminUnauthorizedError("Garmin refresh token expired.");
   checkResponse(response);
   const data: unknown = await response.json();
   if (!data || typeof data !== "object" || !("access_token" in data) || typeof data.access_token !== "string")

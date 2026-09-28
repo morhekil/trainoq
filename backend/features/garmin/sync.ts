@@ -1,5 +1,6 @@
 import { parseGarminFit } from "../../../shared/garmin/fit";
 import { readGarminConnection, updateGarminConnection } from "./connection";
+import { loginGarmin } from "./connect";
 import { downloadGarminFits, GarminUnauthorizedError, listGarminActivityIds, refreshGarminTokens } from "./remote";
 import { importGarminSummaries } from "./db";
 
@@ -20,8 +21,18 @@ export async function syncGarminPage(db: D1Database, secret: string, fetcher: Fe
       try { return await request(tokens); }
       catch (error) {
         if (!(error instanceof GarminUnauthorizedError)) throw error;
-        tokens = await refreshGarminTokens(tokens, fetcher);
-        await updateGarminConnection(db, secret, { ...connection!.state, tokens });
+        try { tokens = await refreshGarminTokens(tokens, fetcher); }
+        catch (refreshError) {
+          if (!(refreshError instanceof GarminUnauthorizedError)) throw refreshError;
+          const login = await loginGarmin(connection!.state.email, connection!.state.password, fetcher);
+          if (login.kind === "mfa") {
+            await updateGarminConnection(db, secret, { email: connection!.state.email,
+              password: connection!.state.password, pending: login.pending }, "mfa");
+            throw new Error("Garmin needs a verification code to reconnect.");
+          }
+          tokens = login.tokens;
+        }
+        await updateGarminConnection(db, secret, { email: connection!.state.email, password: connection!.state.password, tokens });
         return request(tokens);
       }
     }

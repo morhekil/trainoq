@@ -119,3 +119,47 @@ it("syncs through the authenticated Worker API and its scheduled handler", async
   vi.unstubAllGlobals();
   sqlite.close();
 });
+
+it("signs in again with the stored password when Garmin rejects the refresh token", async () => {
+  const { sqlite, db } = database();
+  await saveGarminConnection(db, "app-secret", { email: "me@example.com", password: "stored-password", tokens: {
+    accessToken: "old", refreshToken: "expired", clientId: "client",
+  } }, "connected");
+  const archive = zipSync({ "activity.fit": fit });
+  const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url.includes("/activities/search/activities") && (init?.headers as Record<string, string>).Authorization === "Bearer old") return new Response("", { status: 401 });
+    if (url.includes("/di-oauth2-service/oauth/token") && String(init?.body).includes("refresh_token=expired")) return new Response("", { status: 400 });
+    if (url.includes("/mobile/api/login")) {
+      expect(String(init?.body)).toContain("stored-password");
+      return new Response(JSON.stringify({ responseStatus: { type: "SUCCESSFUL" }, serviceTicketId: "ST-new" }));
+    }
+    if (url.includes("/di-oauth2-service/oauth/token")) return new Response(JSON.stringify({ access_token: "new", refresh_token: "new-refresh" }));
+    if (url.includes("/activities/search/activities")) return new Response(JSON.stringify([{ activityId: 123 }]));
+    if (url.endsWith("/activity/123")) return new Response(archive as BodyInit);
+    throw new Error(`Unexpected Garmin URL ${url}`);
+  });
+  expect(await syncGarminPage(db, "app-secret", fetcher)).toMatchObject({ inserted: 1, complete: true });
+  expect((await readGarminConnection(db, "app-secret"))?.state.tokens).toMatchObject({ accessToken: "new", refreshToken: "new-refresh" });
+  sqlite.close();
+});
+
+it("asks for verification if a reconnect triggers Garmin's MFA challenge", async () => {
+  const { sqlite, db } = database();
+  await saveGarminConnection(db, "app-secret", { email: "me@example.com", password: "stored-password", tokens: {
+    accessToken: "old", refreshToken: "expired", clientId: "client",
+  } }, "connected");
+  const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url.includes("/activities/search/activities")) return new Response("", { status: 401 });
+    if (url.includes("/di-oauth2-service/oauth/token")) return new Response("", { status: 400 });
+    if (url.includes("/mobile/api/login")) return new Response(JSON.stringify({ responseStatus: { type: "MFA_REQUIRED" } }), { headers: { "Set-Cookie": "SSO=abc; Path=/" } });
+    throw new Error(`Unexpected Garmin URL ${url} ${init?.method}`);
+  });
+  await expect(syncGarminPage(db, "app-secret", fetcher)).rejects.toThrow("verification code");
+  const connection = await readGarminConnection(db, "app-secret");
+  expect(connection?.row.status).toBe("mfa");
+  expect(connection?.state.pending?.cookie).toBe("SSO=abc");
+  expect(connection?.row.next_offset).toBe(0);
+  sqlite.close();
+});
