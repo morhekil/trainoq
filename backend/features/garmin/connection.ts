@@ -23,3 +23,9 @@ export async function saveGarminConnection(db: D1Database, secret: string, state
       next_offset = 0, last_sync_at = NULL, last_error = NULL, updated_at = excluded.updated_at`)
     .bind(encrypted, status, new Date().toISOString()).run();
 }
+
+export async function updateGarminConnection(db: D1Database, secret: string, state: GarminStoredState): Promise<void> {
+  const encrypted = await encryptGarminState(state, secret);
+  await db.prepare("UPDATE garmin_connection SET encrypted_state = ?, updated_at = ? WHERE id = 1")
+    .bind(encrypted, new Date().toISOString()).run();
+}

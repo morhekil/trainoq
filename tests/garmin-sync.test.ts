@@ -1,7 +1,7 @@
 import { DatabaseSync } from "node:sqlite";
 import { zipSync } from "fflate";
 import { expect, it, vi } from "vitest";
-import { saveGarminConnection } from "../backend/features/garmin/connection";
+import { readGarminConnection, saveGarminConnection } from "../backend/features/garmin/connection";
 import { syncGarminPage } from "../backend/features/garmin/sync";
 
 const fit = Uint8Array.from(Buffer.from("DgLhUpUAAAAuRklURV5AAAAAAAUAAQIBAoQCAoQDBIwEBIYABAEAAQB7AAAAPXUcRUEAABIADP4ChAIEhv0EhgUBAgYBAm4EBwcEhggEhgsChMQChAABAgEBAgEAAD11HEVWexxFAQBSdW4A+9IXAPvSFwDPACMACAFCAAAiAAb9BIYFBIYBAoQABIYDAQIEAQICPXUcRd0BHUUBAPvSFwAaAVfl", "base64"));
@@ -40,5 +40,49 @@ it("backfills original FITs once, then skips recorded Garmin IDs", async () => {
   expect(sqlite.prepare("SELECT activity_id FROM garmin_downloads").get()).toMatchObject({ activity_id: "123" });
   expect(await syncGarminPage(db, "app-secret", fetcher)).toMatchObject({ scanned: 1, inserted: 0, unchanged: 1, complete: true });
   expect(fetcher.mock.calls.filter(([url]) => String(url).endsWith("/activity/123"))).toHaveLength(1);
+  sqlite.close();
+});
+
+it("refreshes an expired Garmin token and persists the replacement", async () => {
+  const { sqlite, db } = database();
+  await saveGarminConnection(db, "app-secret", { email: "me@example.com", password: "password", tokens: {
+    accessToken: "old", refreshToken: "refresh", clientId: "client",
+  } }, "connected");
+  const archive = zipSync({ "activity.fit": fit });
+  const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+    const url = String(input);
+    if (url.includes("/activities/search/activities") && (init?.headers as Record<string, string>).Authorization === "Bearer old")
+      return new Response("", { status: 401 });
+    if (url.includes("/di-oauth2-service/oauth/token")) return new Response(JSON.stringify({ access_token: "fresh", refresh_token: "next" }));
+    if (url.includes("/activities/search/activities")) return new Response(JSON.stringify([{ activityId: 123 }]));
+    if (url.endsWith("/activity/123")) return new Response(archive as BodyInit);
+    throw new Error(`Unexpected Garmin URL ${url}`);
+  });
+
+  expect(await syncGarminPage(db, "app-secret", fetcher)).toMatchObject({ inserted: 1, complete: true });
+  expect((await readGarminConnection(db, "app-secret"))?.state.tokens).toMatchObject({ accessToken: "fresh", refreshToken: "next" });
+  sqlite.close();
+});
+
+it("continues after an unusable FIT and retries that Garmin ID on the next scan", async () => {
+  const { sqlite, db } = database();
+  await saveGarminConnection(db, "app-secret", { email: "me@example.com", password: "password", tokens: {
+    accessToken: "access", refreshToken: "refresh", clientId: "client",
+  } }, "connected");
+  let firstExportIsBad = true;
+  const archive = zipSync({ "activity.fit": fit });
+  const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.includes("/activities/search/activities")) return new Response(JSON.stringify([{ activityId: 122 }, { activityId: 123 }]));
+    if (url.endsWith("/activity/122")) return new Response((firstExportIsBad ? zipSync({ "bad.fit": Uint8Array.from([1]) }) : archive) as BodyInit);
+    if (url.endsWith("/activity/123")) return new Response(archive as BodyInit);
+    throw new Error(`Unexpected Garmin URL ${url}`);
+  });
+
+  expect(await syncGarminPage(db, "app-secret", fetcher)).toMatchObject({ scanned: 2, inserted: 1, rejected: 1, complete: true });
+  expect(sqlite.prepare("SELECT activity_id FROM garmin_downloads ORDER BY activity_id").all()).toMatchObject([{ activity_id: "123" }]);
+  firstExportIsBad = false;
+  expect(await syncGarminPage(db, "app-secret", fetcher)).toMatchObject({ scanned: 2, unchanged: 2, rejected: 0 });
+  expect(sqlite.prepare("SELECT activity_id FROM garmin_downloads ORDER BY activity_id").all()).toMatchObject([{ activity_id: "122" }, { activity_id: "123" }]);
   sqlite.close();
 });

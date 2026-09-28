@@ -1,6 +1,6 @@
 import { parseGarminFit } from "../../../shared/garmin/fit";
-import { readGarminConnection } from "./connection";
-import { downloadGarminFits, listGarminActivityIds } from "./remote";
+import { readGarminConnection, updateGarminConnection } from "./connection";
+import { downloadGarminFits, GarminUnauthorizedError, listGarminActivityIds, refreshGarminTokens } from "./remote";
 import { importGarminSummaries } from "./db";
 
 const pageSize = 20;
@@ -15,16 +15,28 @@ export async function syncGarminPage(db: D1Database, secret: string, fetcher: Fe
   try {
     const connection = await readGarminConnection(db, secret);
     if (!connection?.state.tokens || connection.row.status !== "connected") throw new Error("Garmin connection needs sign-in.");
+    let tokens = connection.state.tokens;
+    async function withToken<T>(request: (current: typeof tokens) => Promise<T>): Promise<T> {
+      try { return await request(tokens); }
+      catch (error) {
+        if (!(error instanceof GarminUnauthorizedError)) throw error;
+        tokens = await refreshGarminTokens(tokens, fetcher);
+        await updateGarminConnection(db, secret, { ...connection!.state, tokens });
+        return request(tokens);
+      }
+    }
     const offset = connection.row.next_offset;
-    const ids = await listGarminActivityIds(connection.state.tokens, offset, pageSize, fetcher);
+    const ids = await withToken((current) => listGarminActivityIds(current, offset, pageSize, fetcher));
     const counts = { scanned: ids.length, inserted: 0, unchanged: 0, updated: 0, rejected: 0 };
     for (const id of ids) {
       const existing = await db.prepare("SELECT activity_id FROM garmin_downloads WHERE activity_id = ?").bind(id).first();
       if (existing) { counts.unchanged++; continue; }
-      const fits = await downloadGarminFits(connection.state.tokens, id, fetcher);
+      const fits = await withToken((current) => downloadGarminFits(current, id, fetcher));
       let accepted = 0;
       for (const fit of fits) {
-        const parsed = parseGarminFit(fit);
+        let parsed;
+        try { parsed = parseGarminFit(fit); }
+        catch { counts.rejected++; continue; }
         counts.rejected += parsed.rejected.length;
         const result = await importGarminSummaries(db, parsed.activities);
         counts.inserted += result.inserted;
