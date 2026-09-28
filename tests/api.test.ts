@@ -43,12 +43,18 @@ describe("Worker tRPC boundary", () => {
           { results: [{ exercise_id: exerciseIdForName("Row"), name: "Row", section: "warmup", c: 1, last: "2026-09-23" }] },
           { results: [{ exercise_id: exerciseIdForName("Row"), name: "Row", date: "2026-09-23", section: "warmup", detail: JSON.stringify({ sets: [{ type: "working", weight: null, reps: 10 }] }) }] },
         ];
-        logRows = statements.filter((statement) => statement.sql.startsWith("INSERT INTO exercise_log"));
-        for (const { sql, args } of statements) {
-          if (sql.startsWith("INSERT INTO days")) days.set(args[0] as string, { date: args[0] as string, doc: args[1] as string, updated_at: args[2] as string });
-          if (sql.startsWith("DELETE FROM days")) days.delete(args[0] as string);
+        const { sql, args } = statements[0];
+        const date = args[0] as string;
+        const existing = days.get(date);
+        const changes = sql.startsWith("INSERT INTO days")
+          ? Number(!existing || existing.updated_at === args[3])
+          : Number(!!existing && existing.updated_at === args[1]);
+        if (changes) {
+          if (sql.startsWith("INSERT INTO days")) days.set(date, { date, doc: args[1] as string, updated_at: args[2] as string });
+          else days.delete(date);
+          logRows = statements.filter((statement) => statement.sql.startsWith("INSERT INTO exercise_log"));
         }
-        return [];
+        return [{ meta: { changes } }];
       },
     } as unknown as D1Database;
     const env = { APP_PASSWORD: "test-password", DB: db } as Env;
@@ -85,7 +91,7 @@ describe("Worker tRPC boundary", () => {
     expect((await client.days.list.query({ withSessions: true, limit: 10 }))[0].doc).toEqual(migrated);
     expect((await client.backup.export.query()).days[0].doc).toEqual(migrated);
     expect(logRows[0].args[6]).toBe(exerciseIdForName("Row"));
-    expect(logRows[1]).toMatchObject({ args: [old.date, "activity", "Trail run", "trail run", JSON.stringify({ minutes: 35, calories: 280 }), 1, exerciseIdForName("Trail run")] });
+    expect(logRows[1].args.slice(0, 7)).toEqual([old.date, "activity", "Trail run", "trail run", JSON.stringify({ minutes: 35, calories: 280 }), 1, exerciseIdForName("Trail run")]);
     expect((await client.exercises.catalog.query()).some((entry) => entry.id === exerciseIdForName("Trail run"))).toBe(true);
     expect((await client.exercises.library.query()).history[exerciseIdForName("Row")][0]).toMatchObject({ sets: [{ reps: 10 }] });
     await expect(client.days.save.mutate({ date: old.date, doc: old, base: first.ok ? first.updatedAt : null })).rejects.toMatchObject({ data: { code: "PRECONDITION_FAILED" } });

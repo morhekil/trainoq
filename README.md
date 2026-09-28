@@ -86,7 +86,7 @@ All app data traffic goes through `/api/trpc`. The browser imports only the `App
 
 The browser keeps its local draft for offline use, creates any custom exercise definitions through `exercises.create`, then syncs the day with `days.save`. The shared document schema is the transport boundary. Session edit rules live in shared pure functions; another client can reuse them without reproducing the UI. Agent intent-level mutations can extend the same router when those workflows are built. Keep the day document and revision check as the common persistence contract until then.
 
-Before simultaneous clients are active, make the D1 revision check and write atomic: `putDay` currently reads the revision before its write batch, so two concurrent saves can both pass the check. Then add agent credentials and intent-level procedures for the concrete agent workflows, using the same router rather than another transport.
+`putDay` checks the revision in the same D1 batch that writes the day and exercise index. Of two saves from the same base, one wins and the other receives a conflict. Agent credentials and intent-level procedures remain future work on the same router.
 
 ## Next
 

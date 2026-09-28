@@ -71,22 +71,27 @@ export async function putDay(db: D1Database, date: string, doc: DayDoc, base: st
     rows.forEach((row) => { row.name = names.get(row.exerciseId) ?? row.name; });
   }
   if (isDayEmpty(doc)) {
-    await db.batch([db.prepare("DELETE FROM days WHERE date = ?").bind(date), db.prepare("DELETE FROM exercise_log WHERE date = ?").bind(date)]);
+    const [deleted] = await db.batch([
+      db.prepare("DELETE FROM days WHERE date = ? AND updated_at = ?").bind(date, base),
+      db.prepare("DELETE FROM exercise_log WHERE date = ? AND NOT EXISTS (SELECT 1 FROM days WHERE date = ?)").bind(date, date),
+    ]);
+    if (!deleted.meta.changes && (base || await getDay(db, date))) return { ok: false, current: await getDay(db, date) };
     return { ok: true, updatedAt: null };
   }
-  const updatedAt = new Date().toISOString();
+  const updatedAt = `${new Date().toISOString()}:${crypto.randomUUID()}`;
   const stmts = [
     db
-      .prepare("INSERT INTO days (date, doc, updated_at) VALUES (?1, ?2, ?3) ON CONFLICT(date) DO UPDATE SET doc = ?2, updated_at = ?3")
-      .bind(date, JSON.stringify(doc), updatedAt),
-    db.prepare("DELETE FROM exercise_log WHERE date = ?").bind(date),
+      .prepare("INSERT INTO days (date, doc, updated_at) VALUES (?1, ?2, ?3) ON CONFLICT(date) DO UPDATE SET doc = excluded.doc, updated_at = excluded.updated_at WHERE days.updated_at = ?4")
+      .bind(date, JSON.stringify(doc), updatedAt, base),
+    db.prepare("DELETE FROM exercise_log WHERE date = ? AND EXISTS (SELECT 1 FROM days WHERE date = ? AND updated_at = ?)").bind(date, date, updatedAt),
     ...rows.map((r, i) =>
       db
-        .prepare("INSERT INTO exercise_log (date, section, name, name_key, detail, ord, exercise_id) VALUES (?, ?, ?, ?, ?, ?, ?)")
-        .bind(date, r.section, r.name, nameKey(r.name), r.detail, i, r.exerciseId),
+        .prepare("INSERT INTO exercise_log (date, section, name, name_key, detail, ord, exercise_id) SELECT ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM days WHERE date = ? AND updated_at = ?)")
+        .bind(date, r.section, r.name, nameKey(r.name), r.detail, i, r.exerciseId, date, updatedAt),
     ),
   ];
-  await db.batch(stmts);
+  const [saved] = await db.batch(stmts);
+  if (!saved.meta.changes) return { ok: false, current: await getDay(db, date) };
   return { ok: true, updatedAt };
 }
 

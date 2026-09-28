@@ -133,7 +133,7 @@ type SaveResult =
 
 On success, retain `updatedAt` as the next `base`; `null` means the day was deleted. On conflict, nothing is written. Show or merge `current`, then save with its `updatedAt` as the new `base` if the user chooses to keep the local document. The browser keeps a local draft and retries synchronization when connectivity returns.
 
-The current D1 revision check and write are separate operations. Simultaneous saves can both pass the check, so `base` is not yet a transactional concurrency guarantee. See `.tasks/20260924T0031-make-day-writes-atomic.md` before adding concurrent clients.
+The revision comparison, day write and exercise-index update run in one D1 batch. Concurrent saves from the same `base` leave one winner; the loser receives the current day without changing the index. Treat `updatedAt` as an opaque, unique revision token, even though its column retains the old name.
 
 ## Errors
 
