@@ -11,9 +11,9 @@ describe("Garmin activity HTTP client", () => {
     const fetcher = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify([{ activityId: 123 }, { activityId: 456 }])))
       .mockResolvedValueOnce(new Response(archive as BodyInit));
 
-    expect(await listGarminActivityIds(tokens, 20, 100, fetcher)).toEqual(["123", "456"]);
+    expect(await listGarminActivityIds(tokens, 20, 100, "2026-09-19", fetcher)).toEqual(["123", "456"]);
     expect(await downloadGarminFits(tokens, "123", fetcher)).toEqual([fit]);
-    expect(String(fetcher.mock.calls[0][0])).toContain("start=20&limit=100");
+    expect(String(fetcher.mock.calls[0][0])).toContain("start=20&limit=100&startDate=2026-09-19");
     expect(fetcher.mock.calls[0][1].headers.Authorization).toBe("Bearer access");
     expect(String(fetcher.mock.calls[1][0])).toContain("/download-service/files/activity/123");
   });
@@ -22,7 +22,7 @@ describe("Garmin activity HTTP client", () => {
     const fetcher = vi.fn().mockResolvedValueOnce(new Response(JSON.stringify({ access_token: "fresh", refresh_token: "next" })))
       .mockResolvedValueOnce(new Response("", { status: 429 }));
     expect(await refreshGarminTokens(tokens, fetcher)).toEqual({ ...tokens, accessToken: "fresh", refreshToken: "next" });
-    await expect(listGarminActivityIds(tokens, 0, 20, fetcher)).rejects.toThrow("rate limited");
+    await expect(listGarminActivityIds(tokens, 0, 20, "2026-09-19", fetcher)).rejects.toThrow("rate limited");
     expect(fetcher).toHaveBeenCalledTimes(2);
   });
 

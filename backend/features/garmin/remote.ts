@@ -34,8 +34,8 @@ export async function refreshGarminTokens(tokens: GarminTokens, fetcher: Fetcher
     ? data.refresh_token : tokens.refreshToken, clientId: tokens.clientId };
 }
 
-export async function listGarminActivityIds(tokens: GarminTokens, start: number, limit: number, fetcher: Fetcher = fetch): Promise<string[]> {
-  const url = `${api}/activitylist-service/activities/search/activities?${new URLSearchParams({ start: String(start), limit: String(limit) })}`;
+export async function listGarminActivityIds(tokens: GarminTokens, start: number, limit: number, startDate: string, fetcher: Fetcher = fetch): Promise<string[]> {
+  const url = `${api}/activitylist-service/activities/search/activities?${new URLSearchParams({ start: String(start), limit: String(limit), startDate })}`;
   const response = await fetcher(url, { headers: apiHeaders(tokens, "application/json") });
   checkResponse(response);
   const data: unknown = await response.json();

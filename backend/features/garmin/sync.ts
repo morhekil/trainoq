@@ -5,6 +5,7 @@ import { downloadGarminFits, GarminUnauthorizedError, GarminUnusableExportError,
 import { importGarminSummaries } from "./db";
 
 const pageSize = 20;
+const historyDays = 10;
 type Fetcher = typeof fetch;
 
 export async function syncGarminPage(db: D1Database, secret: string, fetcher: Fetcher = fetch) {
@@ -37,7 +38,8 @@ export async function syncGarminPage(db: D1Database, secret: string, fetcher: Fe
       }
     }
     const offset = connection.row.next_offset;
-    const ids = await withToken((current) => listGarminActivityIds(current, offset, pageSize, fetcher));
+    const startDate = new Date(now.getTime() - historyDays * 86_400_000).toISOString().slice(0, 10);
+    const ids = await withToken((current) => listGarminActivityIds(current, offset, pageSize, startDate, fetcher));
     const counts = { scanned: ids.length, inserted: 0, unchanged: 0, updated: 0, rejected: 0 };
     for (const id of ids) {
       const existing = await db.prepare("SELECT activity_id FROM garmin_downloads WHERE activity_id = ?").bind(id).first();

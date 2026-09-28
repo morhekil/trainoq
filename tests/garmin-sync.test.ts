@@ -222,3 +222,17 @@ it("continues past an activity whose original export is unavailable", async () =
   expect(sqlite.prepare("SELECT activity_id FROM garmin_downloads").all()).toMatchObject([{ activity_id: "123" }]);
   sqlite.close();
 });
+
+it("lists only Garmin activities from the last 10 days", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-09-29T03:00:00Z"));
+  const { sqlite, db } = database();
+  await saveGarminConnection(db, "app-secret", { email: "me@example.com", password: "password", tokens: {
+    accessToken: "access", refreshToken: "refresh", clientId: "client",
+  } }, "connected");
+  const fetcher = vi.fn(async (_input: RequestInfo | URL) => new Response("[]"));
+  expect(await syncGarminPage(db, "app-secret", fetcher)).toMatchObject({ scanned: 0, complete: true });
+  expect(String(fetcher.mock.calls[0][0])).toContain("startDate=2026-09-19");
+  vi.useRealTimers();
+  sqlite.close();
+});
