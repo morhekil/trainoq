@@ -65,6 +65,27 @@ test("shows a code field only when Garmin requests verification", async ({ page 
   await expect(page.getByRole("button", { name: "Sync all now" })).toBeVisible();
 });
 
+test("explains a failed scheduled sign-in and accepts replacement credentials", async ({ page }) => {
+  let status = "error";
+  await page.route("**/api/trpc/**", async (route) => {
+    const procedure = new URL(route.request().url()).pathname.split("/").at(-1);
+    if (procedure === "garmin.connect") status = "connected";
+    const data = procedure === "auth.me" ? { ok: true }
+      : procedure === "garmin.connection" ? { ...disconnected, status, email: "me@example.com", lastError: status === "error" ? "Garmin rejected the email or password." : null }
+      : procedure === "garmin.connect" ? { status: "connected" }
+      : procedure === "garmin.sync" ? { scanned: 0, inserted: 0, unchanged: 0, updated: 0, rejected: 0, nextOffset: 0, complete: true }
+      : procedure === "garmin.list" ? [] : null;
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify({ result: { data } }) });
+  });
+  await page.addInitScript(() => localStorage.setItem("tq:authed", "true"));
+  await page.goto("/#/garmin");
+  await expect(page.getByRole("alert")).toContainText("Garmin rejected the email or password.");
+  await page.getByLabel("Garmin email").fill("me@example.com");
+  await page.getByLabel("Garmin password").fill("new-password");
+  await page.getByRole("button", { name: "Connect Garmin" }).click();
+  await expect(page.getByText("Backfill complete", { exact: false })).toBeVisible();
+});
+
 test("Garmin review can ignore and restore a recording in the local day draft", async ({ page }) => {
   const source = { sourceKey: "garmin:123:2026-09-28T01:22:05.000Z:0", sport: "running", subSport: "generic", title: "Run", startUtc: "2026-09-28T01:22:05.000Z", localDate: "2026-09-28", offsetMinutes: 600, timerSeconds: 1561.339, elapsedSeconds: 1561.339, activeCalories: 172, importedAt: "2026-09-28T08:00:00.000Z", status: "pending", targetId: null, decisionDate: null };
   await page.route("**/api/trpc/**", async (route) => {

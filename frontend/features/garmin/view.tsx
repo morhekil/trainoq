@@ -130,7 +130,10 @@ function GarminConnection({ onImported }: { onImported: () => Promise<void> }) {
       await onImported();
       await reload();
       setProgress(`Backfill complete: ${scanned} recordings checked, ${imported} imported.`);
-    } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to sync Garmin. Retry later."); }
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to sync Garmin. Retry later.");
+      await reload().catch(() => {});
+    }
     finally { setSyncing(false); }
   };
 
@@ -174,10 +177,10 @@ function GarminConnection({ onImported }: { onImported: () => Promise<void> }) {
 
   return <section className="card" aria-label="Garmin connection">
     <h2 className="card-title">Garmin connection</h2>
-    {connection?.status === "disconnected" && <>
-      <p className="hint">Connect once to import recordings automatically. Trainoq stores your Garmin password encrypted so it can reconnect.</p>
+    {(connection?.status === "disconnected" || connection?.status === "error") && <>
+      <p className="hint">{connection.status === "error" ? "Enter your Garmin credentials again to resume syncing." : "Connect once to import recordings automatically. Trainoq stores your Garmin password encrypted so it can reconnect."}</p>
       <form className="garmin-connect-form" onSubmit={(event) => void connect(event)}>
-        <label>Garmin email<input className="text" type="email" name="email" autoComplete="username" required /></label>
+        <label>Garmin email<input className="text" type="email" name="email" autoComplete="username" defaultValue={connection.email ?? ""} required /></label>
         <label>Garmin password<input className="text" type="password" name="password" autoComplete="current-password" required /></label>
         <button type="submit" className="btn primary" disabled={working}>Connect Garmin</button>
       </form>
@@ -196,6 +199,7 @@ function GarminConnection({ onImported }: { onImported: () => Promise<void> }) {
       </div>
     </>}
     <div role="status" aria-live="polite">{progress}</div>
+    {connection?.lastError && !error && <p role="alert">{connection.lastError}</p>}
     {error && <p role="alert">{error}</p>}
   </section>;
 }
