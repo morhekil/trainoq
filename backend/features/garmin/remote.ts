@@ -7,6 +7,7 @@ const maxFitBytes = 64 * 1024 * 1024;
 type Fetcher = typeof fetch;
 
 export class GarminUnauthorizedError extends Error {}
+export class GarminUnusableExportError extends Error {}
 
 function apiHeaders(tokens: GarminTokens, accept: string) {
   return { Authorization: `Bearer ${tokens.accessToken}`, Accept: accept, "User-Agent": "GCM-Android-5.23",
@@ -49,15 +50,16 @@ export async function listGarminActivityIds(tokens: GarminTokens, start: number,
 export async function downloadGarminFits(tokens: GarminTokens, activityId: string, fetcher: Fetcher = fetch): Promise<Uint8Array[]> {
   if (!/^[1-9]\d*$/.test(activityId)) throw new Error("Invalid Garmin activity ID.");
   const response = await fetcher(`${api}/download-service/files/activity/${activityId}`, { headers: apiHeaders(tokens, "*/*") });
+  if ([400, 404, 410].includes(response.status)) throw new GarminUnusableExportError("Garmin original export is unavailable.");
   checkResponse(response);
   const bytes = new Uint8Array(await response.arrayBuffer());
-  if (bytes.length > maxFitBytes) throw new Error("Garmin activity export exceeds 64 MiB.");
+  if (bytes.length > maxFitBytes) throw new GarminUnusableExportError("Garmin activity export exceeds 64 MiB.");
   if (bytes[8] === 46 && bytes[9] === 70 && bytes[10] === 73 && bytes[11] === 84) return [bytes];
   let files: Record<string, Uint8Array>;
   try {
     files = unzipSync(bytes, { filter: (file) => file.name.toLowerCase().endsWith(".fit") && file.originalSize <= maxFitBytes });
-  } catch { throw new Error("Garmin returned an invalid original export."); }
+  } catch { throw new GarminUnusableExportError("Garmin returned an invalid original export."); }
   const fits = Object.values(files);
-  if (!fits.length) throw new Error("Garmin original export has no FIT file.");
+  if (!fits.length) throw new GarminUnusableExportError("Garmin original export has no FIT file.");
   return fits;
 }

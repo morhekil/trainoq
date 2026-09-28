@@ -204,3 +204,21 @@ it("allows reconnecting when the Trainoq encryption secret changes", async () =>
   expect((await readGarminConnection(db, "new-secret"))?.state.password).toBe("new-password");
   sqlite.close();
 });
+
+it("continues past an activity whose original export is unavailable", async () => {
+  const { sqlite, db } = database();
+  await saveGarminConnection(db, "app-secret", { email: "me@example.com", password: "password", tokens: {
+    accessToken: "access", refreshToken: "refresh", clientId: "client",
+  } }, "connected");
+  const archive = zipSync({ "activity.fit": fit });
+  const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.includes("/activities/search/activities")) return new Response(JSON.stringify([{ activityId: 122 }, { activityId: 123 }]));
+    if (url.endsWith("/activity/122")) return new Response("", { status: 404 });
+    if (url.endsWith("/activity/123")) return new Response(archive as BodyInit);
+    throw new Error(`Unexpected Garmin URL ${url}`);
+  });
+  expect(await syncGarminPage(db, "app-secret", fetcher)).toMatchObject({ scanned: 2, inserted: 1, rejected: 1, complete: true });
+  expect(sqlite.prepare("SELECT activity_id FROM garmin_downloads").all()).toMatchObject([{ activity_id: "123" }]);
+  sqlite.close();
+});

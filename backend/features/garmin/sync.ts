@@ -1,7 +1,7 @@
 import { parseGarminFit } from "../../../shared/garmin/fit";
 import { readGarminConnection, updateGarminConnection } from "./connection";
 import { GarminSignInError, loginGarmin } from "./connect";
-import { downloadGarminFits, GarminUnauthorizedError, listGarminActivityIds, refreshGarminTokens } from "./remote";
+import { downloadGarminFits, GarminUnauthorizedError, GarminUnusableExportError, listGarminActivityIds, refreshGarminTokens } from "./remote";
 import { importGarminSummaries } from "./db";
 
 const pageSize = 20;
@@ -42,7 +42,13 @@ export async function syncGarminPage(db: D1Database, secret: string, fetcher: Fe
     for (const id of ids) {
       const existing = await db.prepare("SELECT activity_id FROM garmin_downloads WHERE activity_id = ?").bind(id).first();
       if (existing) { counts.unchanged++; continue; }
-      const fits = await withToken((current) => downloadGarminFits(current, id, fetcher));
+      let fits;
+      try { fits = await withToken((current) => downloadGarminFits(current, id, fetcher)); }
+      catch (error) {
+        if (!(error instanceof GarminUnusableExportError)) throw error;
+        counts.rejected++;
+        continue;
+      }
       let accepted = 0;
       for (const fit of fits) {
         let parsed;
