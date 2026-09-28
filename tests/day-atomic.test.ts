@@ -84,4 +84,16 @@ describe("atomic day saves", () => {
     expect(sqlite.prepare("SELECT * FROM garmin_links").all()).toEqual([]);
     sqlite.close();
   });
+
+  it("rejects a source linked on another day without writing a partial day", async () => {
+    const { db, sqlite } = testDb();
+    const key = "garmin:1:2026-09-28T00:00:00.000Z:0";
+    const first = { ...emptyDay("2026-09-28"), ignoredGarminSourceKeys: [key] };
+    expect((await putDay(db, first.date, first, null)).ok).toBe(true);
+    const second = { ...emptyDay("2026-09-29"), ignoredGarminSourceKeys: [key] };
+    await expect(putDay(db, second.date, second, null)).rejects.toMatchObject({ code: "BAD_REQUEST" });
+    expect(await getDay(db, second.date)).toBeNull();
+    expect(sqlite.prepare("SELECT date FROM garmin_links WHERE source_key = ?").get(key)).toEqual({ date: first.date });
+    sqlite.close();
+  });
 });

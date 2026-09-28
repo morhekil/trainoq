@@ -104,7 +104,13 @@ export async function putDay(db: D1Database, date: string, doc: DayDoc, base: st
         .bind(date, r.section, r.name, nameKey(r.name), r.detail, i, r.exerciseId, date, updatedAt),
     ),
   ];
-  const [saved] = await db.batch(stmts);
+  let saved: D1Result;
+  try { [saved] = await db.batch(stmts); }
+  catch (error) {
+    if (error instanceof Error && /UNIQUE constraint failed: garmin_links\.source_key/.test(error.message))
+      throw new TRPCError({ code: "BAD_REQUEST", message: "Garmin activity is already linked on another day. Refresh the Garmin review." });
+    throw error;
+  }
   if (!saved.meta.changes) return { ok: false, current: await getDay(db, date) };
   return { ok: true, updatedAt };
 }

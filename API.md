@@ -133,6 +133,8 @@ History is keyed by exercise ID; the Worker returns up to four recent entries pe
 
 `days.save` sends the **whole** `DayDoc`. The document's `date` must equal the input `date`. The server validates nested fields, unique member and round IDs, and the complete result-pair grid with Zod; it rejects a serialized document longer than 524,288 JavaScript string code units. Each referenced custom exercise ID, including an activity's, must exist in the catalog. Create local custom definitions before saving a day that uses them; the browser does this on reconnect. An empty document deletes that day and its exercise log. The server accepts v1 through v4 days, migrates names and results without dropping values or comments, and saves v5. Unknown legacy reps text is rejected. An old client receives `PRECONDITION_FAILED` if it tries to save an older version over an existing v5 day. Existing D1 days convert on read and on their next save; no bulk day rewrite is needed. Unsynced drafts and conflict copies convert locally without changing their revision base or conflict state. A v5 day can hold optional Garmin source keys on sessions and activities, an optional activity start time, and ignored Garmin source keys. An ignored decision keeps an otherwise empty day stored.
 
+A Garmin source key can have one decision across all days. A duplicate link or ignore returns `BAD_REQUEST` and leaves the attempted day and derived indexes untouched.
+
 `base` is the `updatedAt` value from the last server copy the client saw. Use `null` if the client has never seen a saved copy. The result is one of:
 
 ```ts
