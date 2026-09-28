@@ -6,6 +6,7 @@ import { dateSchema } from "../../../shared/days/schema";
 import { loginGarmin, verifyGarminMfa } from "./connect";
 import { readGarminConnection, saveGarminConnection } from "./connection";
 import { importGarminSummaries, listGarmin } from "./db";
+import { syncGarminPage } from "./sync";
 
 const importSchema = z.object({ activities: z.array(z.unknown()).max(100) })
   .refine((input) => JSON.stringify(input).length <= 256 * 1024, "Import batch is too large");
@@ -43,6 +44,7 @@ export const garminRouter = t.router({
     await ctx.env.DB.prepare("DELETE FROM garmin_connection WHERE id = 1").run();
     return { status: "disconnected" as const };
   }),
+  sync: authed.mutation(({ ctx }) => syncGarminPage(ctx.env.DB, ctx.env.APP_PASSWORD)),
   import: authed.input(importSchema).mutation(({ ctx, input }) => importGarminSummaries(ctx.env.DB, input.activities)),
   list: authed.input(z.object({ from: dateSchema, to: dateSchema }).refine(({ from, to }) => from <= to, "Invalid date range"))
     .query(({ ctx, input }) => listGarmin(ctx.env.DB, input.from, input.to)),

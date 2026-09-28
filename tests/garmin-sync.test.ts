@@ -1,8 +1,11 @@
 import { DatabaseSync } from "node:sqlite";
+import { createTRPCClient, httpLink } from "@trpc/client";
 import { zipSync } from "fflate";
 import { expect, it, vi } from "vitest";
 import { readGarminConnection, saveGarminConnection } from "../backend/features/garmin/connection";
 import { syncGarminPage } from "../backend/features/garmin/sync";
+import worker from "../backend/index";
+import type { AppRouter } from "../backend/router";
 
 const fit = Uint8Array.from(Buffer.from("DgLhUpUAAAAuRklURV5AAAAAAAUAAQIBAoQCAoQDBIwEBIYABAEAAQB7AAAAPXUcRUEAABIADP4ChAIEhv0EhgUBAgYBAm4EBwcEhggEhgsChMQChAABAgEBAgEAAD11HEVWexxFAQBSdW4A+9IXAPvSFwDPACMACAFCAAAiAAb9BIYFBIYBAoQABIYDAQIEAQICPXUcRd0BHUUBAPvSFwAaAVfl", "base64"));
 
@@ -84,5 +87,35 @@ it("continues after an unusable FIT and retries that Garmin ID on the next scan"
   firstExportIsBad = false;
   expect(await syncGarminPage(db, "app-secret", fetcher)).toMatchObject({ scanned: 2, unchanged: 2, rejected: 0 });
   expect(sqlite.prepare("SELECT activity_id FROM garmin_downloads ORDER BY activity_id").all()).toMatchObject([{ activity_id: "122" }, { activity_id: "123" }]);
+  sqlite.close();
+});
+
+it("syncs through the authenticated Worker API and its scheduled handler", async () => {
+  const { sqlite, db } = database();
+  await saveGarminConnection(db, "app-secret", { email: "me@example.com", password: "password", tokens: {
+    accessToken: "access", refreshToken: "refresh", clientId: "client",
+  } }, "connected");
+  const env = { APP_PASSWORD: "app-secret", DB: db } as Env;
+  let cookie = "";
+  const client = createTRPCClient<AppRouter>({ links: [httpLink({ url: "https://example.test/api/trpc", fetch: async (input, init) => {
+    const headers = new Headers(init?.headers);
+    if (cookie) headers.set("Cookie", cookie);
+    const response = await worker.fetch(new Request(input, { ...init, headers }) as never, env);
+    cookie = response.headers.get("Set-Cookie")?.split(";")[0] ?? cookie;
+    return response;
+  } })] });
+  const archive = zipSync({ "activity.fit": fit });
+  vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.includes("/activities/search/activities")) return new Response(JSON.stringify([{ activityId: 123 }]));
+    if (url.endsWith("/activity/123")) return new Response(archive as BodyInit);
+    throw new Error(`Unexpected Garmin URL ${url}`);
+  }));
+  await expect(client.garmin.sync.mutate()).rejects.toMatchObject({ data: { code: "UNAUTHORIZED" } });
+  await client.auth.login.mutate({ password: "app-secret" });
+  expect(await client.garmin.sync.mutate()).toMatchObject({ scanned: 1, inserted: 1, complete: true });
+  await worker.scheduled({ cron: "*/5 * * * *" } as ScheduledEvent, env);
+  expect(sqlite.prepare("SELECT COUNT(*) AS count FROM garmin_downloads").get()).toMatchObject({ count: 1 });
+  vi.unstubAllGlobals();
   sqlite.close();
 });

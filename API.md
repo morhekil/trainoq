@@ -35,6 +35,7 @@ const day = await api.days.get.query("2026-09-26");
 | `garmin.connect` | mutation | `{ email: string, password: string }` | `{ status: "connected" \| "mfa" }` |
 | `garmin.verifyMfa` | mutation | `{ code: string }` | `{ status: "connected" }` |
 | `garmin.disconnect` | mutation | none | `{ status: "disconnected" }` |
+| `garmin.sync` | mutation | none | One 20-ID page with counts, `nextOffset`, and `complete` |
 | `backup.export` | query | none | `{ exportedAt: string, days: StoredDay[], catalog, garminActivities }` |
 
 Every procedure except `auth.login` and `auth.logout` requires the signed `tq_session` cookie. It is HttpOnly, SameSite=Lax, and lasts one year. HTTPS adds the Secure flag. The server checks the cookie against `APP_PASSWORD`.
@@ -46,6 +47,7 @@ The browser parses original FIT files with `shared/garmin/fit.ts` and sends summ
 The recurring Garmin connection stores its account password and tokens in an AES-GCM encrypted record. The key is derived from the Worker's `APP_PASSWORD` secret. Changing that secret requires reconnecting Garmin. The connection record is excluded from `backup.export`.
 The connected client reads Garmin's activity list and original activity exports over HTTPS. It accepts FIT files directly or extracts FIT entries from a Garmin ZIP, with a 64 MiB export limit. It never writes to the Garmin account. These private Garmin endpoints can change independently of Trainoq.
 Each sync page reads up to 20 Garmin activity IDs. The Worker parses their original FIT sessions through the same `shared/garmin/fit.ts` parser as the browser, imports the summaries, and records the Garmin activity IDs it completed. It refreshes an expired access token and stores its replacement. An invalid FIT is counted as rejected and retried on a later scan without stopping other activities. The next page cursor and a short sync lease live in D1. A repeat scan skips completed IDs and keeps Trainoq day edits separate from source data.
+The Worker runs one sync page every five minutes while connected. The authenticated `garmin.sync` mutation runs a page on demand and supports a faster initial backfill from the browser.
 
 Accepting a Garmin record as an activity copies its start time, source UTC offset when present, timer duration rounded to minutes, and active calories into a new editable activity. The offset preserves the Garmin time of day when reviewing a trip from another time zone. Linking a strength recording to a completed session keeps its exercises, sets, time, notes, and any already entered calories; otherwise it fills active calories once. Strength suggestions require the same source local date and a completed session starting within an hour. Multiple matches need an explicit choice. Ignoring stores the source key on the day. Unlinking or restoring removes the decision key while leaving the Trainoq item and its edits intact.
 
