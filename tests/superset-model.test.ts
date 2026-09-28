@@ -43,6 +43,28 @@ describe("v3 session items", () => {
     expect(daySchema.safeParse({ ...doc, sessions: [{ ...doc.sessions[0], main: [{ ...item, rounds: [...item.rounds, ...item.rounds] }] }] }).success).toBe(false);
   });
 
+  it("copies each member's last round values when adding a round", () => {
+    const ss: Superset = {
+      kind: "superset", id: "ss",
+      members: [
+        { id: "a", exerciseId: exerciseIdForName("Squat"), comment: "" },
+        { id: "b", exerciseId: exerciseIdForName("Row"), comment: "" },
+      ],
+      rounds: [{ id: "r1", type: "warmup" }, { id: "r2", type: "working" }],
+      results: [
+        { memberId: "a", roundId: "r1", weight: 20, reps: 12 },
+        { memberId: "b", roundId: "r1", weight: 15, reps: 12 },
+        { memberId: "a", roundId: "r2", weight: 40, reps: 8 },
+        { memberId: "b", roundId: "r2", weight: 0, reps: null },
+      ],
+    };
+    addRound(ss, "r3", "working");
+    expect(ss.results.filter((result) => result.roundId === "r3")).toEqual([
+      { memberId: "a", roundId: "r3", weight: 40, reps: 8 },
+      { memberId: "b", roundId: "r3", weight: 0, reps: null },
+    ]);
+  });
+
   it("keeps superset identity with zero or one member, and preserves values across edits", () => {
     const items: SessionItem[] = [exercise("a", "Squat"), exercise("b", "Row", [{ id: "b-set", type: "working", weight: 20, reps: 9 }])];
     const ss = createSuperset(items, "a", "ss");

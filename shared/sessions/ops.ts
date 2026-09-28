@@ -34,10 +34,14 @@ export function moveMember(superset: Superset, memberId: string, to: number): vo
   move(superset.members, superset.members.findIndex((m) => m.id === memberId), to);
 }
 
-export function addRound(superset: Superset, roundId: string, type: SetType): void {
+export function addRound(superset: Superset, roundId: string, type: SetType, copyLast = true): void {
   if (superset.rounds.some((r) => r.id === roundId)) throw new Error("Duplicate round ID");
+  const previousRoundId = superset.rounds.at(-1)?.id;
   superset.rounds.push({ id: roundId, type });
-  for (const member of superset.members) superset.results.push({ memberId: member.id, roundId, weight: null, reps: null });
+  for (const member of superset.members) {
+    const previous = copyLast ? superset.results.find((r) => r.memberId === member.id && r.roundId === previousRoundId) : undefined;
+    superset.results.push({ memberId: member.id, roundId, weight: previous?.weight ?? null, reps: previous?.reps ?? null });
+  }
 }
 
 export function setRoundType(superset: Superset, roundId: string, type: SetType): void {
@@ -98,7 +102,7 @@ export function joinPerformance(items: SessionItem[], exerciseId: string, supers
   const matching = exercise.sets.length === superset.rounds.length && exercise.sets.every((set, i) => set.type === superset.rounds[i].type);
   if (!matching && alignment !== "append") throw new Error("Align set types before joining");
   addMember(superset, { id: exercise.id, exerciseId: exercise.exerciseId, comment: exercise.comment });
-  if (!matching) for (const set of exercise.sets) addRound(superset, superset.rounds.some((r) => r.id === set.id) ? `${set.id}:${exercise.id}` : set.id, set.type);
+  if (!matching) for (const set of exercise.sets) addRound(superset, superset.rounds.some((r) => r.id === set.id) ? `${set.id}:${exercise.id}` : set.id, set.type, false);
   exercise.sets.forEach((set, i) => {
     const roundId = matching ? superset.rounds[i].id : superset.rounds[superset.rounds.length - exercise.sets.length + i].id;
     const result = superset.results.find((r) => r.memberId === exercise.id && r.roundId === roundId)!;

@@ -434,7 +434,14 @@ test("warm-up and cool-down can edit supersets with numeric sets", async ({ page
     await expect(block.locator(".exercise")).toHaveCount(2);
     await block.getByRole("button", { name: "Round", exact: true }).click();
     await block.getByRole("textbox", { name: `${title} press W1 weight` }).fill("12");
+    await block.getByRole("textbox", { name: `${title} press W1 reps` }).fill("7");
+    await block.getByRole("textbox", { name: `${title} row W1 weight` }).fill("0");
+    await block.getByRole("textbox", { name: `${title} row W1 reps` }).fill("9");
     await block.getByRole("button", { name: "Round", exact: true }).click();
+    await expect(block.getByRole("textbox", { name: `${title} press W2 weight` })).toHaveValue("12");
+    await expect(block.getByRole("textbox", { name: `${title} press W2 reps` })).toHaveValue("7");
+    await expect(block.getByRole("textbox", { name: `${title} row W2 weight` })).toHaveValue("0");
+    await expect(block.getByRole("textbox", { name: `${title} row W2 reps` })).toHaveValue("9");
     await expect(block.locator(".exercise").first().locator(".set-row")).toHaveCount(2);
     await expect(block.locator(".exercise").last().locator(".set-row")).toHaveCount(2);
     await block.getByRole("button", { name: /Superset .* options/ }).click();
