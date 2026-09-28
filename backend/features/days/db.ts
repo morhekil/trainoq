@@ -40,6 +40,14 @@ function logRows(doc: DayDoc): LogRow[] {
   return rows;
 }
 
+function garminLinks(doc: DayDoc): { key: string; kind: string; id: string | null }[] {
+  return [
+    ...doc.sessions.filter((s) => s.garminSourceKey).map((s) => ({ key: s.garminSourceKey!, kind: "session", id: s.id })),
+    ...doc.activities.filter((a) => a.garminSourceKey).map((a) => ({ key: a.garminSourceKey!, kind: "activity", id: a.id })),
+    ...doc.ignoredGarminSourceKeys.map((key) => ({ key, kind: "ignored", id: null })),
+  ];
+}
+
 export async function getDay(db: D1Database, date: string): Promise<StoredDay | null> {
   const row = await db.prepare("SELECT date, doc, updated_at FROM days WHERE date = ?").bind(date).first<{ date: string; doc: string; updated_at: string }>();
   return row ? { date: row.date, doc: inputDaySchema.parse(JSON.parse(row.doc)), updatedAt: row.updated_at } : null;
@@ -52,6 +60,9 @@ export type PutResult = { ok: true; updatedAt: string | null } | { ok: false; cu
  * If the server copy has moved on since then, nothing is written and the current copy is returned.
  */
 export async function putDay(db: D1Database, date: string, doc: DayDoc, base: string | null, sourceVersion = 5, legacyNames: string[] = []): Promise<PutResult> {
+  const links = garminLinks(doc);
+  if (new Set(links.map((link) => link.key)).size !== links.length)
+    throw new TRPCError({ code: "BAD_REQUEST", message: "Garmin source is used more than once" });
   const existing = await db.prepare("SELECT updated_at, doc FROM days WHERE date = ?").bind(date).first<{ updated_at: string; doc: string }>();
   if (sourceVersion < 5 && existing && JSON.parse(existing.doc).v === 5)
     throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Refresh this client before saving a newer day" });
@@ -74,6 +85,7 @@ export async function putDay(db: D1Database, date: string, doc: DayDoc, base: st
     const [deleted] = await db.batch([
       db.prepare("DELETE FROM days WHERE date = ? AND updated_at = ?").bind(date, base),
       db.prepare("DELETE FROM exercise_log WHERE date = ? AND NOT EXISTS (SELECT 1 FROM days WHERE date = ?)").bind(date, date),
+      db.prepare("DELETE FROM garmin_links WHERE date = ? AND NOT EXISTS (SELECT 1 FROM days WHERE date = ?)").bind(date, date),
     ]);
     if (!deleted.meta.changes && (base || await getDay(db, date))) return { ok: false, current: await getDay(db, date) };
     return { ok: true, updatedAt: null };
@@ -84,6 +96,8 @@ export async function putDay(db: D1Database, date: string, doc: DayDoc, base: st
       .prepare("INSERT INTO days (date, doc, updated_at) VALUES (?1, ?2, ?3) ON CONFLICT(date) DO UPDATE SET doc = excluded.doc, updated_at = excluded.updated_at WHERE days.updated_at = ?4")
       .bind(date, JSON.stringify(doc), updatedAt, base),
     db.prepare("DELETE FROM exercise_log WHERE date = ? AND EXISTS (SELECT 1 FROM days WHERE date = ? AND updated_at = ?)").bind(date, date, updatedAt),
+    db.prepare("DELETE FROM garmin_links WHERE date = ? AND EXISTS (SELECT 1 FROM days WHERE date = ? AND updated_at = ?)").bind(date, date, updatedAt),
+    ...links.map((link) => db.prepare("INSERT INTO garmin_links (source_key, date, target_kind, target_id) SELECT ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM days WHERE date = ? AND updated_at = ?)").bind(link.key, date, link.kind, link.id, date, updatedAt)),
     ...rows.map((r, i) =>
       db
         .prepare("INSERT INTO exercise_log (date, section, name, name_key, detail, ord, exercise_id) SELECT ?, ?, ?, ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM days WHERE date = ? AND updated_at = ?)")

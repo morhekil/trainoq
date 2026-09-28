@@ -96,9 +96,11 @@ There is no `Block` in v5. V2 used `{ id, exercises: [...] }` blocks in all thre
 | D1 `days` | `date`, full `DayDoc` JSON, server `updated_at` | Source of truth, one row per saved day |
 | D1 `exercise_catalog` | Custom exercise `id`, `name`, normalized `name_key` | Definitions referenced by `exerciseId` |
 | D1 `exercise_log` | One row per session performance or activity, with date, context, ID, name, order, and set or activity result detail | Derived index rebuilt from the day on each save |
+| D1 `garmin_activities` | Imported summary JSON, hash, and import time keyed by Garmin source identity | Imported source values |
+| D1 `garmin_links` | Garmin source key, decision day, target kind and ID | Derived index rebuilt from the day on each save |
 | Browser `tq:day:<date>` | `Entry { doc, base, dirty, rev, conflict? }` | Local draft, sync revision, and optional conflict copy |
 
-The table definitions are in [`migrations/0001_init.sql`](migrations/0001_init.sql) and [`migrations/0002_exercise_catalog.sql`](migrations/0002_exercise_catalog.sql). [`migrations/0003_activity_catalog.sql`](migrations/0003_activity_catalog.sql) adds old activities to the catalog and log without rewriting day JSON. [`backend/features/days/db.ts`](backend/features/days/db.ts) rebuilds `exercise_log`; the full day JSON retains the superset structure. The browser's [`store.ts`](frontend/features/days/store.ts) writes drafts locally first and syncs whole days. Custom definitions sync before a day that references them.
+The table definitions are in [`migrations/0001_init.sql`](migrations/0001_init.sql), [`migrations/0002_exercise_catalog.sql`](migrations/0002_exercise_catalog.sql), and [`migrations/0004_garmin.sql`](migrations/0004_garmin.sql). [`migrations/0003_activity_catalog.sql`](migrations/0003_activity_catalog.sql) adds old activities to the catalog and log without rewriting day JSON. [`backend/features/days/db.ts`](backend/features/days/db.ts) rebuilds `exercise_log` and `garmin_links` in the same revision-checked batch; the full day JSON retains the superset structure and Garmin decisions. The browser's [`store.ts`](frontend/features/days/store.ts) writes drafts locally first and syncs whole days. Custom definitions sync before a day that references them.
 
 `exercises.library` returns the read model defined in [`shared/exercises/model.ts`](shared/exercises/model.ts):
 

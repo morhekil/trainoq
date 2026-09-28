@@ -9,6 +9,7 @@ function testDb() {
     CREATE TABLE days (date TEXT PRIMARY KEY, doc TEXT NOT NULL, updated_at TEXT NOT NULL);
     CREATE TABLE exercise_log (date TEXT, section TEXT, name TEXT, name_key TEXT, detail TEXT, ord INTEGER, exercise_id TEXT);
     CREATE TABLE exercise_catalog (id TEXT PRIMARY KEY, name TEXT, name_key TEXT);
+    CREATE TABLE garmin_links (source_key TEXT PRIMARY KEY, date TEXT NOT NULL, target_kind TEXT NOT NULL, target_id TEXT);
   `);
   type Bound = { sql: string; args: unknown[] };
   const prepare = (sql: string, args: unknown[] = []) => ({
@@ -61,6 +62,26 @@ describe("atomic day saves", () => {
     expect(await putDay(db, date, emptyDay(date), second.updatedAt)).toEqual({ ok: true, updatedAt: null });
     expect(await getDay(db, date)).toBeNull();
     expect(sqlite.prepare("SELECT count(*) AS count FROM exercise_log").get()).toEqual({ count: 0 });
+    sqlite.close();
+  });
+
+  it("keeps Garmin links and ignores in sync with accepted day revisions", async () => {
+    const { db, sqlite } = testDb();
+    const date = "2026-09-28";
+    const sourceKey = "garmin:1:2026-09-28T00:00:00.000Z:0";
+    const linked = { ...emptyDay(date), activities: [{ id: "run", exerciseId: "seed:0033", comment: "", garminSourceKey: sourceKey, result: { minutes: 20, calories: 172 } }] };
+    const first = await putDay(db, date, linked, null);
+    expect(first.ok).toBe(true);
+    expect(sqlite.prepare("SELECT * FROM garmin_links").all()).toEqual([{ source_key: sourceKey, date, target_kind: "activity", target_id: "run" }]);
+    const ignored = { ...emptyDay(date), ignoredGarminSourceKeys: [sourceKey] };
+    expect(await putDay(db, date, ignored, null)).toMatchObject({ ok: false });
+    expect(sqlite.prepare("SELECT target_kind FROM garmin_links").all()).toEqual([{ target_kind: "activity" }]);
+    const second = await putDay(db, date, ignored, first.ok ? first.updatedAt : null);
+    expect(second.ok).toBe(true);
+    expect(sqlite.prepare("SELECT * FROM garmin_links").all()).toEqual([{ source_key: sourceKey, date, target_kind: "ignored", target_id: null }]);
+    expect((await getDay(db, date))?.doc.ignoredGarminSourceKeys).toEqual([sourceKey]);
+    expect(await putDay(db, date, emptyDay(date), second.ok ? second.updatedAt : null)).toEqual({ ok: true, updatedAt: null });
+    expect(sqlite.prepare("SELECT * FROM garmin_links").all()).toEqual([]);
     sqlite.close();
   });
 });
