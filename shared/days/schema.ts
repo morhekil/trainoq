@@ -38,7 +38,7 @@ const dayFields = {
 };
 const activityResult = { minutes: z.number().finite().nullable(), calories: z.number().finite().nullable() };
 const activities = z.array(z.object({ ...performed, result: z.object(activityResult) }));
-const linkedActivities = z.array(z.object({ ...performed, result: z.object(activityResult), startedAt: z.iso.datetime().optional(), garminSourceKey: z.string().min(1).optional() }));
+const linkedActivities = z.array(z.object({ ...performed, result: z.object(activityResult), startedAt: z.iso.datetime().optional(), sourceOffsetMinutes: z.number().int().min(-720).max(840).optional(), garminSourceKey: z.string().min(1).optional() }));
 const legacyActivities = z.array(z.object({ id: z.string(), name: z.string(), ...activityResult, notes: z.string() }));
 export const daySchema = z.object({ v: z.literal(5), ...dayFields, sessions: z.array(linkedSession), activities: linkedActivities, ignoredGarminSourceKeys: z.array(z.string().min(1)) }) satisfies z.ZodType<DayDoc>;
 export const v4DaySchema = z.object({ v: z.literal(4), ...dayFields, sessions: z.array(session), activities }) satisfies z.ZodType<V4DayDoc>;

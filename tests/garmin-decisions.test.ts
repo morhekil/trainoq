@@ -23,7 +23,7 @@ it("suggests only one close completed strength session and preserves training de
 it("accepts activity values once, keeps corrections through re-import, and can ignore and restore", () => {
   const doc = emptyDay("2026-09-28");
   const activity = acceptActivity(doc, { ...source, sport: "running", title: "Run" }, "seed:0170");
-  expect(activity).toMatchObject({ garminSourceKey: source.sourceKey, startedAt: source.startUtc, result: { minutes: 60, calories: 362 } });
+  expect(activity).toMatchObject({ garminSourceKey: source.sourceKey, startedAt: source.startUtc, sourceOffsetMinutes: 600, result: { minutes: 60, calories: 362 } });
   activity.result.calories = 350;
   expect(() => acceptActivity(doc, { ...source, activeCalories: 400 }, "seed:0170")).toThrow();
   expect(activity.result.calories).toBe(350);

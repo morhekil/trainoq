@@ -16,6 +16,7 @@ export function acceptActivity(doc: DayDoc, source: GarminActivitySummary, exerc
   ensurePending(doc, source.sourceKey);
   const activity: Activity = {
     id: crypto.randomUUID(), exerciseId, comment: "", startedAt: source.startUtc,
+    ...(source.offsetMinutes == null ? {} : { sourceOffsetMinutes: source.offsetMinutes }),
     garminSourceKey: source.sourceKey,
     result: { minutes: source.timerSeconds == null ? null : Math.round(source.timerSeconds / 60), calories: source.activeCalories },
   };

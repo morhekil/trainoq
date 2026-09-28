@@ -3,7 +3,7 @@
 import type { Session } from "../sessions/model";
 import type { ActivityResult, PerformedExercise } from "../exercises/model";
 
-export type Activity = PerformedExercise & { result: ActivityResult; startedAt?: string; garminSourceKey?: string };
+export type Activity = PerformedExercise & { result: ActivityResult; startedAt?: string; sourceOffsetMinutes?: number; garminSourceKey?: string };
 
 export interface DayDoc {
   v: 5;
