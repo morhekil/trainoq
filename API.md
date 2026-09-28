@@ -29,11 +29,15 @@ const day = await api.days.get.query("2026-09-26");
 | `exercises.catalog` | query | none | catalog records with `id`, `name`, `section`, `aliases` |
 | `exercises.create` | mutation | `{ id: UUID, name: string }` | custom `{ id, name }`; legacy `legacy:<normalized name>` IDs are accepted for migration |
 | `exercises.library` | query | none | `{ catalog, stats: ExerciseStat[], history: Record<string, ExerciseHistoryEntry[]> }` |
-| `backup.export` | query | none | `{ exportedAt: string, days: StoredDay[], catalog }` |
+| `garmin.import` | mutation | `{ activities: GarminActivitySummary[] }` | `{ inserted, unchanged, updated, rejected }` counts |
+| `garmin.list` | query | `{ from: string, to: string }` | Imported summaries with `importedAt`, `status`, `targetId`, `decisionDate` |
+| `backup.export` | query | none | `{ exportedAt: string, days: StoredDay[], catalog, garminActivities }` |
 
 Every procedure except `auth.login` and `auth.logout` requires the signed `tq_session` cookie. It is HttpOnly, SameSite=Lax, and lasts one year. HTTPS adds the Secure flag. The server checks the cookie against `APP_PASSWORD`.
 
 `date` and `before` use `YYYY-MM-DD`. `days.list` defaults to 30 days, caps `limit` at 200, and includes every saved day unless `withSessions` is true. `before` is exclusive.
+
+The browser parses original FIT files with `shared/garmin/fit.ts` and sends summaries to `garmin.import` in batches of at most 100 and 256 KiB. Each session needs FIT total and metabolic calories; active calories are their difference, verified against Garmin Connect for the sampled run, walk, tennis, and strength recordings. A missing or inconsistent source field rejects that session. The API validates each summary and counts rejected records. Re-importing the same summary is unchanged; a changed summary updates the source row and leaves saved day edits alone. `garmin.list` includes records in the inclusive local date range, falling back to the UTC date when FIT has no local offset. `status` is `pending`, `activity`, `session`, or `ignored`. A decision is stored through `days.save`, with the usual revision conflict flow.
 
 ## Data model
 
@@ -121,7 +125,7 @@ interface ExerciseLibrary {
 }
 ```
 
-History is keyed by exercise ID; the Worker returns up to four recent entries per context. Activities contribute to recent usage and have minutes and calories in history. `backup.export` includes catalog records and stored days in ascending date order. `StoredDay` is `{ date, doc: DayDoc, updatedAt }`.
+History is keyed by exercise ID; the Worker returns up to four recent entries per context. Activities contribute to recent usage and have minutes and calories in history. `backup.export` includes catalog records, imported Garmin summaries, and stored days in ascending date order. `StoredDay` is `{ date, doc: DayDoc, updatedAt }`.
 
 ## Saving a day
 

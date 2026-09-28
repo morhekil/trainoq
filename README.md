@@ -66,11 +66,11 @@ Custom domain: Workers & Pages → trainoq → Settings → Domains & Routes, or
 
 ```
 frontend/              React app and its typed API client
-  features/             auth, days, exercises, sessions
+  features/             auth, days, exercises, sessions, garmin
 backend/               Worker entry point and composed tRPC router
-  features/             auth, days, exercises, backup (routers and data access)
+  features/             auth, days, exercises, garmin, backup (routers and data access)
 shared/                browser/server models, schemas, and formatters by feature
-  days/ sessions/ exercises/
+  days/ sessions/ exercises/ garmin/
 migrations/             D1 schema
 tests/                  unit and API tests (npm test)
 API.md                  procedure and wire contract
@@ -86,7 +86,7 @@ All app data traffic goes through `/api/trpc`. The browser imports only the `App
 
 The browser keeps its local draft for offline use, creates any custom exercise definitions through `exercises.create`, then syncs the day with `days.save`. The shared document schema is the transport boundary. Session edit rules live in shared pure functions; another client can reuse them without reproducing the UI. Agent intent-level mutations can extend the same router when those workflows are built. Keep the day document and revision check as the common persistence contract until then.
 
-`putDay` checks the revision in the same D1 batch that writes the day and exercise index. Of two saves from the same base, one wins and the other receives a conflict. Agent credentials and intent-level procedures remain future work on the same router.
+`putDay` checks the revision in the same D1 batch that writes the day, exercise index, and Garmin decision index. Of two saves from the same base, one wins and the other receives a conflict. Agent credentials and intent-level procedures remain future work on the same router.
 
 ## Next
 

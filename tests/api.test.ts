@@ -25,6 +25,7 @@ describe("Worker tRPC boundary", () => {
             return null;
           },
           async all() {
+            if (sql.includes("FROM garmin_activities")) return { results: [] };
             if (sql.includes("FROM exercise_catalog")) {
               const rows = [...catalog].map(([id, name]) => ({ id, name }));
               return { results: sql.includes("WHERE id IN") ? rows.filter((row) => args.includes(row.id)) : rows };
