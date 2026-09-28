@@ -1,4 +1,4 @@
-import { useEffect, useState, type ChangeEvent } from "react";
+import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
 import type { GarminActivitySummary } from "../../../shared/garmin/fit";
 import { emptyDay } from "../../../shared/days/model";
 import { acceptActivity, ignoreGarmin, linkStrengthSession, moveLinkedActivity, strengthMatches, unlinkGarmin } from "../../../shared/garmin/decisions";
@@ -86,6 +86,7 @@ export function GarminView() {
   };
 
   return <>
+    <GarminConnection onImported={() => load()} />
     <section className="card">
       <h2 className="card-title">Import original FIT files</h2>
       <label className="garmin-file">Choose FIT files<input type="file" accept=".fit" multiple onChange={(event) => void importFiles(event)} disabled={loading} /></label>
@@ -98,9 +99,105 @@ export function GarminView() {
       <div role="status" aria-live="polite">{message}</div>
     </section>
     {records.some((item) => item.status === "pending" && !isStrength(item)) && <button type="button" className="btn big secondary garmin-bulk" onClick={() => void acceptAll()} disabled={loading}>Add pending non-strength activities</button>}
-    {records.length === 0 && <section className="card"><p>No Garmin recordings in this date range. Choose original FIT files or change the dates.</p></section>}
+    {records.length === 0 && <section className="card"><p>No Garmin recordings in this date range. Sync Garmin, choose original FIT files, or change the dates.</p></section>}
     {records.map((source) => <GarminRecord key={source.sourceKey} source={source} />)}
   </>;
+}
+
+type Connection = { status: string; email: string | null; lastSyncAt: string | null; lastError: string | null; nextOffset: number };
+
+function GarminConnection({ onImported }: { onImported: () => Promise<void> }) {
+  const [connection, setConnection] = useState<Connection | null>(null);
+  const [working, setWorking] = useState(false);
+  const [syncing, setSyncing] = useState(false);
+  const [progress, setProgress] = useState("");
+  const [error, setError] = useState("");
+
+  const reload = async () => setConnection(await request(trpc.garmin.connection.query()));
+  useEffect(() => { void reload().catch(() => setError("Unable to load Garmin connection. Retry by reopening this page.")); }, []);
+
+  const syncAll = async () => {
+    setSyncing(true); setError("");
+    let scanned = 0, imported = 0;
+    try {
+      for (;;) {
+        const result = await request(trpc.garmin.sync.mutate());
+        scanned += result.scanned;
+        imported += result.inserted;
+        setProgress(`${scanned} recordings checked, ${imported} imported`);
+        if (result.complete) break;
+      }
+      await onImported();
+      await reload();
+      setProgress(`Backfill complete: ${scanned} recordings checked, ${imported} imported.`);
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to sync Garmin. Retry later."); }
+    finally { setSyncing(false); }
+  };
+
+  const connect = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    const email = String(data.get("email") ?? "");
+    const password = String(data.get("password") ?? "");
+    form.reset();
+    setWorking(true); setError("");
+    try {
+      const result = await request(trpc.garmin.connect.mutate({ email, password }));
+      await reload();
+      if (result.status === "connected") void syncAll();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to connect Garmin. Retry."); }
+    finally { setWorking(false); }
+  };
+
+  const verify = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const code = String(new FormData(form).get("code") ?? "");
+    form.reset();
+    setWorking(true); setError("");
+    try {
+      await request(trpc.garmin.verifyMfa.mutate({ code }));
+      await reload();
+      void syncAll();
+    } catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to verify Garmin sign-in. Retry."); }
+    finally { setWorking(false); }
+  };
+
+  const disconnect = async () => {
+    if (!window.confirm("Disconnect Garmin and remove its stored credentials? Imported recordings will stay in Trainoq.")) return;
+    setWorking(true); setError("");
+    try { await request(trpc.garmin.disconnect.mutate()); await reload(); setProgress(""); }
+    catch (cause) { setError(cause instanceof Error ? cause.message : "Unable to disconnect Garmin. Retry."); }
+    finally { setWorking(false); }
+  };
+
+  return <section className="card" aria-label="Garmin connection">
+    <h2 className="card-title">Garmin connection</h2>
+    {connection?.status === "disconnected" && <>
+      <p className="hint">Connect once to import recordings automatically. Trainoq stores your Garmin password encrypted so it can reconnect.</p>
+      <form className="garmin-connect-form" onSubmit={(event) => void connect(event)}>
+        <label>Garmin email<input className="text" type="email" name="email" autoComplete="username" required /></label>
+        <label>Garmin password<input className="text" type="password" name="password" autoComplete="current-password" required /></label>
+        <button type="submit" className="btn primary" disabled={working}>Connect Garmin</button>
+      </form>
+    </>}
+    {connection?.status === "mfa" && <form className="garmin-connect-form" onSubmit={(event) => void verify(event)}>
+      <p>Garmin requested a verification code for {connection.email}.</p>
+      <label>Verification code<input className="text" type="text" name="code" autoComplete="one-time-code" inputMode="numeric" required /></label>
+      <button type="submit" className="btn primary" disabled={working}>Verify Garmin sign-in</button>
+    </form>}
+    {connection?.status === "connected" && <>
+      <p>Connected as {connection.email}. New recordings sync every five minutes.</p>
+      {connection.lastSyncAt && <p className="hint">Last synced {new Date(connection.lastSyncAt).toLocaleString()}</p>}
+      <div className="garmin-actions">
+        <button type="button" className="btn secondary" onClick={() => void syncAll()} disabled={syncing || working}>{syncing ? "Syncing Garmin..." : "Sync all now"}</button>
+        <button type="button" className="btn ghost" onClick={() => void disconnect()} disabled={syncing || working}>Disconnect Garmin</button>
+      </div>
+    </>}
+    <div role="status" aria-live="polite">{progress}</div>
+    {error && <p role="alert">{error}</p>}
+  </section>;
 }
 
 function GarminRecord({ source }: { source: Listed }) {

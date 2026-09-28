@@ -761,6 +761,15 @@ textarea {
   white-space: normal;
   text-align: center;
 }
+.garmin-connect-form {
+  display: grid;
+  gap: 12px;
+}
+.garmin-connect-form label {
+  display: grid;
+  gap: 4px;
+  font-size: 14px;
+}
 .activity-name {
   color: var(--text);
   font: inherit;

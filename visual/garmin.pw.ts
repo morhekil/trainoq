@@ -1,10 +1,76 @@
 import { expect, test } from "@playwright/test";
 
+const disconnected = { status: "disconnected", email: null, nextOffset: 0, lastSyncAt: null, lastError: null };
+
+test("connects Garmin and backfills every page without another upload", async ({ page }) => {
+  const calls: string[] = [];
+  let status = "disconnected";
+  let pageCount = 0;
+  await page.route("**/api/trpc/**", async (route) => {
+    const procedure = new URL(route.request().url()).pathname.split("/").at(-1)!;
+    calls.push(procedure);
+    if (procedure === "garmin.connect") {
+      expect(route.request().postData()).toContain("garmin-password");
+      status = "connected";
+    }
+    if (procedure === "garmin.sync") pageCount++;
+    const data = procedure === "auth.me" ? { ok: true }
+      : procedure === "garmin.list" ? []
+      : procedure === "garmin.connection" ? { status, email: status === "connected" ? "me@example.com" : null, nextOffset: pageCount * 20, lastSyncAt: null, lastError: null }
+      : procedure === "garmin.connect" ? { status: "connected" }
+      : procedure === "garmin.sync" ? { scanned: pageCount === 1 ? 20 : 1, inserted: pageCount === 1 ? 20 : 1, unchanged: 0, updated: 0, rejected: 0, nextOffset: pageCount === 1 ? 20 : 0, complete: pageCount === 2 }
+      : null;
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify({ result: { data } }) });
+  });
+  await page.addInitScript(() => localStorage.setItem("tq:authed", "true"));
+  await page.goto("/#/garmin");
+  await page.getByLabel("Garmin email").fill("me@example.com");
+  await page.getByLabel("Garmin password").fill("garmin-password");
+  await page.getByLabel("Garmin password").press("Tab");
+  await expect(page.getByRole("button", { name: "Connect Garmin" })).toBeFocused();
+  await page.keyboard.press("Enter");
+  await expect(page.getByText("Backfill complete", { exact: false })).toBeVisible();
+  expect(calls.filter((call) => call === "garmin.sync")).toHaveLength(2);
+  await expect(page.getByLabel("Garmin password")).toHaveCount(0);
+  await expect(page.getByText("me@example.com")).toBeVisible();
+  await page.setViewportSize({ width: 320, height: 700 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+  await expect(page).toHaveScreenshot("garmin-connected-mobile.png", { fullPage: true });
+  await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
+  await expect(page).toHaveScreenshot("garmin-connected-dark.png", { fullPage: true });
+});
+
+test("shows a code field only when Garmin requests verification", async ({ page }) => {
+  let status = "disconnected";
+  await page.route("**/api/trpc/**", async (route) => {
+    const procedure = new URL(route.request().url()).pathname.split("/").at(-1);
+    if (procedure === "garmin.connect") status = "mfa";
+    if (procedure === "garmin.verifyMfa") status = "connected";
+    const data = procedure === "auth.me" ? { ok: true }
+      : procedure === "garmin.connection" ? { ...disconnected, status, email: "me@example.com" }
+      : procedure === "garmin.connect" ? { status: "mfa" }
+      : procedure === "garmin.verifyMfa" ? { status: "connected" }
+      : procedure === "garmin.sync" ? { scanned: 0, inserted: 0, unchanged: 0, updated: 0, rejected: 0, nextOffset: 0, complete: true }
+      : procedure === "garmin.list" ? [] : null;
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify({ result: { data } }) });
+  });
+  await page.addInitScript(() => localStorage.setItem("tq:authed", "true"));
+  await page.goto("/#/garmin");
+  await expect(page.getByLabel("Verification code")).toHaveCount(0);
+  await page.getByLabel("Garmin email").fill("me@example.com");
+  await page.getByLabel("Garmin password").fill("garmin-password");
+  await page.getByRole("button", { name: "Connect Garmin" }).click();
+  await page.getByLabel("Verification code").fill("123456");
+  await page.getByRole("button", { name: "Verify Garmin sign-in" }).click();
+  await expect(page.getByRole("button", { name: "Sync all now" })).toBeVisible();
+});
+
 test("Garmin review can ignore and restore a recording in the local day draft", async ({ page }) => {
   const source = { sourceKey: "garmin:123:2026-09-28T01:22:05.000Z:0", sport: "running", subSport: "generic", title: "Run", startUtc: "2026-09-28T01:22:05.000Z", localDate: "2026-09-28", offsetMinutes: 600, timerSeconds: 1561.339, elapsedSeconds: 1561.339, activeCalories: 172, importedAt: "2026-09-28T08:00:00.000Z", status: "pending", targetId: null, decisionDate: null };
   await page.route("**/api/trpc/**", async (route) => {
     const procedure = new URL(route.request().url()).pathname.split("/").at(-1);
     const data = procedure === "auth.me" ? { ok: true }
+      : procedure === "garmin.connection" ? disconnected
       : procedure === "garmin.list" ? [source]
       : procedure === "days.get" ? { date: "2026-09-28", doc: null, updatedAt: null }
       : procedure === "days.save" ? { ok: true, updatedAt: "2026-09-28T09:00:00.000Z" }
@@ -40,6 +106,7 @@ test("imports an original FIT in the browser and sends verified active calories"
     const procedure = new URL(route.request().url()).pathname.split("/").at(-1);
     if (procedure === "garmin.import") { const payload = route.request().postDataJSON(); imported = payload.json ?? payload; }
     const data = procedure === "auth.me" ? { ok: true }
+      : procedure === "garmin.connection" ? disconnected
       : procedure === "garmin.list" ? []
       : procedure === "garmin.import" ? { inserted: 1, unchanged: 0, updated: 0, rejected: 0 }
       : procedure === "exercises.library" ? { catalog: [], stats: [], history: {} }
@@ -58,6 +125,7 @@ test("edits an accepted activity's Garmin local start time", async ({ page }) =>
   await page.route("**/api/trpc/**", async (route) => {
     const procedure = new URL(route.request().url()).pathname.split("/").at(-1);
     const data = procedure === "auth.me" ? { ok: true }
+      : procedure === "garmin.connection" ? disconnected
       : procedure === "days.get" ? { date: doc.date, doc, updatedAt: "base" }
       : procedure === "exercises.library" ? { catalog: [], stats: [], history: {} }
       : procedure === "days.list" ? [] : null;
@@ -96,6 +164,7 @@ test("moves an accepted activity to a corrected Trainoq day", async ({ page }) =
       else if (!oldCompleted) newStartedBeforeOldComplete = true;
     }
     const data = procedure === "auth.me" ? { ok: true }
+      : procedure === "garmin.connection" ? disconnected
       : procedure === "garmin.list" ? [source]
       : procedure === "days.get" ? { date: requestedDate, doc: requestedDate === old.date ? old : null, updatedAt: requestedDate === old.date ? "base" : null }
       : procedure === "days.save" ? { ok: true, updatedAt: "new-base" }
@@ -130,6 +199,7 @@ test("requires an explicit session choice when strength matches are ambiguous", 
   await page.route("**/api/trpc/**", async (route) => {
     const procedure = new URL(route.request().url()).pathname.split("/").at(-1);
     const data = procedure === "auth.me" ? { ok: true }
+      : procedure === "garmin.connection" ? disconnected
       : procedure === "garmin.list" ? [source]
       : procedure === "days.get" ? { date: doc.date, doc, updatedAt: "base" }
       : procedure === "days.save" ? { ok: true, updatedAt: "new-base" }
