@@ -12,11 +12,12 @@ const loginHeaders = { "User-Agent": "GCM-iOS-5.23", Accept: "application/json, 
 
 export interface GarminTokens { accessToken: string; refreshToken: string; clientId: string }
 export interface PendingGarminMfa { email: string; password: string; cookie: string; method: string }
+export class GarminSignInError extends Error {}
 type Fetcher = typeof fetch;
 
 async function responseJson(response: Response): Promise<Record<string, unknown>> {
   if (response.status === 429) throw new Error("Garmin rate limited sign-in. Try again later.");
-  if (response.status === 403) throw new Error("Garmin blocked sign-in from this server.");
+  if (response.status === 403) throw new GarminSignInError("Garmin blocked sign-in from this server.");
   if (!response.ok) throw new Error(`Garmin sign-in returned HTTP ${response.status}.`);
   try {
     const data: unknown = await response.json();
@@ -65,8 +66,8 @@ export async function loginGarmin(email: string, password: string, fetcher: Fetc
     const cookie = response.headers.getSetCookie().map((value) => value.split(";", 1)[0]).join("; ");
     return { kind: "mfa", pending: { email, password, cookie, method } };
   }
-  if (type === "INVALID_USERNAME_PASSWORD") throw new Error("Garmin rejected the email or password.");
-  if (type === "CAPTCHA_REQUIRED") throw new Error("Garmin requires a browser challenge to sign in.");
+  if (type === "INVALID_USERNAME_PASSWORD") throw new GarminSignInError("Garmin rejected the email or password.");
+  if (type === "CAPTCHA_REQUIRED") throw new GarminSignInError("Garmin requires a browser challenge to sign in.");
   throw new Error("Garmin could not complete sign-in.");
 }
 

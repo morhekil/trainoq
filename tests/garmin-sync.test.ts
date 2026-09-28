@@ -163,3 +163,31 @@ it("asks for verification if a reconnect triggers Garmin's MFA challenge", async
   expect(connection?.row.next_offset).toBe(0);
   sqlite.close();
 });
+
+it("stops scheduled retries after Garmin rejects the stored password", async () => {
+  const { sqlite, db } = database();
+  await saveGarminConnection(db, "app-secret", { email: "me@example.com", password: "old-password", tokens: {
+    accessToken: "old", refreshToken: "expired", clientId: "client",
+  } }, "connected");
+  const fetcher = vi.fn(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    if (url.includes("/activities/search/activities")) return new Response("", { status: 401 });
+    if (url.includes("/di-oauth2-service/oauth/token")) return new Response("", { status: 400 });
+    if (url.includes("/mobile/api/login")) return new Response(JSON.stringify({ responseStatus: { type: "INVALID_USERNAME_PASSWORD" } }));
+    throw new Error(`Unexpected Garmin URL ${url}`);
+  });
+  await expect(syncGarminPage(db, "app-secret", fetcher)).rejects.toThrow("email or password");
+  expect((await readGarminConnection(db, "app-secret"))?.row).toMatchObject({ status: "error", last_error: "Garmin rejected the email or password." });
+  sqlite.close();
+});
+
+it("keeps a rate-limited connection eligible for the next scheduled retry", async () => {
+  const { sqlite, db } = database();
+  await saveGarminConnection(db, "app-secret", { email: "me@example.com", password: "password", tokens: {
+    accessToken: "access", refreshToken: "refresh", clientId: "client",
+  } }, "connected");
+  const fetcher = vi.fn(async () => new Response("", { status: 429 }));
+  await expect(syncGarminPage(db, "app-secret", fetcher)).rejects.toThrow("rate limited");
+  expect((await readGarminConnection(db, "app-secret"))?.row).toMatchObject({ status: "connected", last_error: "Garmin rate limited activity sync. Try again later." });
+  sqlite.close();
+});

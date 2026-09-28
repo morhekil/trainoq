@@ -1,6 +1,6 @@
 import { parseGarminFit } from "../../../shared/garmin/fit";
 import { readGarminConnection, updateGarminConnection } from "./connection";
-import { loginGarmin } from "./connect";
+import { GarminSignInError, loginGarmin } from "./connect";
 import { downloadGarminFits, GarminUnauthorizedError, listGarminActivityIds, refreshGarminTokens } from "./remote";
 import { importGarminSummaries } from "./db";
 
@@ -64,6 +64,13 @@ export async function syncGarminPage(db: D1Database, secret: string, fetcher: Fe
     await db.prepare(`UPDATE garmin_connection SET next_offset = ?, last_sync_at = ?, last_error = NULL,
       status = 'connected', updated_at = ? WHERE id = 1`).bind(nextOffset, new Date().toISOString(), new Date().toISOString()).run();
     return { ...counts, nextOffset, complete };
+  } catch (error) {
+    const message = error instanceof Error && error.message.startsWith("Garmin ")
+      ? error.message : "Unable to sync Garmin. Retry later.";
+    await db.prepare(`UPDATE garmin_connection SET last_error = ?,
+      status = CASE WHEN ? = 1 THEN 'error' ELSE status END, updated_at = ? WHERE id = 1`)
+      .bind(message, error instanceof GarminSignInError ? 1 : 0, new Date().toISOString()).run();
+    throw error;
   } finally {
     await db.prepare("UPDATE garmin_connection SET sync_lock_until = NULL WHERE id = 1").run();
   }
