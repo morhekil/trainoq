@@ -58,7 +58,7 @@ npx wrangler secret put APP_PASSWORD # pick a long password; this is the only th
 
 Open the `*.workers.dev` URL it prints, sign in (the cookie lasts a year), then Share → Add to Home Screen.
 
-After that, `npm run deploy` builds, deploys and applies any new migrations.
+After that, `npm run deploy` builds, applies any new migrations, then deploys.
 
 Custom domain: Workers & Pages → trainoq → Settings → Domains & Routes, or add a `routes` entry to `wrangler.jsonc`.
 
