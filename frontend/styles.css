@@ -683,6 +683,21 @@ textarea {
 
 /* activities */
 
+.activity-time {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.activity-time input {
+  min-height: 36px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 4px;
+  background: var(--surface);
+}
+
 .activity-row {
   display: flex;
   gap: 6px;

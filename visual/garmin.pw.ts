@@ -52,3 +52,27 @@ test("imports an original FIT in the browser and sends verified active calories"
   await expect(page.getByText("1 imported", { exact: false })).toBeVisible();
   expect(imported).toMatchObject({ activities: [{ activeCalories: 172, localDate: "2026-09-28", timerSeconds: 1561.339 }] });
 });
+
+test("edits an accepted activity's Garmin local start time", async ({ page }) => {
+  const doc = { v: 5, date: "2026-09-28", morning: "", sessions: [], activities: [{ id: "run", exerciseId: "seed:0170", comment: "", startedAt: "2026-09-28T06:00:00.000Z", sourceOffsetMinutes: 330, garminSourceKey: "garmin:123:2026-09-28T06:00:00.000Z:0", result: { minutes: 26, calories: 172 } }], ignoredGarminSourceKeys: [], totalCalories: null, notes: "" };
+  await page.route("**/api/trpc/**", async (route) => {
+    const procedure = new URL(route.request().url()).pathname.split("/").at(-1);
+    const data = procedure === "auth.me" ? { ok: true }
+      : procedure === "days.get" ? { date: doc.date, doc, updatedAt: "base" }
+      : procedure === "exercises.library" ? { catalog: [], stats: [], history: {} }
+      : procedure === "days.list" ? [] : null;
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify({ result: { data } }) });
+  });
+  await page.addInitScript(() => localStorage.setItem("tq:authed", "true"));
+  await page.goto("/#/d/2026-09-28");
+  const input = page.getByLabel("Start time for Run");
+  await expect(input).toHaveValue("11:30");
+  await page.setViewportSize({ width: 320, height: 700 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+  await expect(page).toHaveScreenshot("garmin-linked-day-mobile.png", { fullPage: true });
+  await page.emulateMedia({ colorScheme: "dark", reducedMotion: "reduce" });
+  await expect(page).toHaveScreenshot("garmin-linked-day-dark.png", { fullPage: true });
+  await input.fill("12:15");
+  const draft = await page.evaluate(() => JSON.parse(localStorage.getItem("tq:day:2026-09-28")!));
+  expect(draft.doc.activities[0].startedAt).toBe("2026-09-28T06:45:00.000Z");
+});

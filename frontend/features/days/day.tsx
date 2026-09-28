@@ -130,7 +130,7 @@ function MorningCard() {
 }
 
 function ActivitiesCard() {
-  const { doc, update, undoable } = useDayCtx();
+  const { date, doc, update, undoable } = useDayCtx();
   const { openPicker, openSheet } = useOverlays();
   const up = (id: string, fn: (a: Activity) => void) =>
     update((d) => {
@@ -143,6 +143,13 @@ function ActivitiesCard() {
       <div className="card-title">Other activity</div>
       {doc.activities.map((a, i) => (
         <div key={a.id} className="activity">
+          {a.startedAt && <label className="activity-time">Start time
+            <input type="time" aria-label={`Start time for ${exerciseName(a.exerciseId)}`}
+              value={a.sourceOffsetMinutes == null ? isoToHHMM(a.startedAt) : new Date(Date.parse(a.startedAt) + a.sourceOffsetMinutes * 60_000).toISOString().slice(11, 16)}
+              onChange={(event) => event.target.value && up(a.id, (item) => { item.startedAt = item.sourceOffsetMinutes == null
+                ? hhmmToIso(date, event.target.value)
+                : new Date(Date.parse(`${date}T${event.target.value}:00.000Z`) - item.sourceOffsetMinutes * 60_000).toISOString(); })} />
+          </label>}
           <div className="activity-row">
             <button type="button" className="text grow activity-name" aria-label={`Change ${exerciseName(a.exerciseId)}`}
               onClick={() => openPicker({ section: "activity", title: "Change activity", initial: exerciseName(a.exerciseId), onPick: (id) => up(a.id, (x) => (x.exerciseId = id)) })}>
