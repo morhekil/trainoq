@@ -27,10 +27,9 @@ export function parseGarminFit(bytes: Uint8Array): { activities: GarminActivityS
   const sessions = messages.sessionMesgs ?? [];
   if (!sessions.length) throw new Error("FIT file has no sessions");
 
-  const localTimestamp = messages.activityMesgs?.[0]?.localTimestamp;
-  const firstStart = sessions[0]?.startTime;
-  const offset = nonnegative(localTimestamp) && firstStart instanceof Date
-    ? Math.round((fitEpoch + localTimestamp * 1000 - firstStart.getTime()) / 60_000)
+  const activity = messages.activityMesgs?.[0];
+  const offset = nonnegative(activity?.localTimestamp) && activity.timestamp instanceof Date
+    ? Math.round((fitEpoch + activity.localTimestamp * 1000 - activity.timestamp.getTime()) / 60_000)
     : null;
   const offsetMinutes = offset != null && offset >= -720 && offset <= 840 ? offset : null;
   const activities: GarminActivitySummary[] = [];
