@@ -191,3 +191,16 @@ it("keeps a rate-limited connection eligible for the next scheduled retry", asyn
   expect((await readGarminConnection(db, "app-secret"))?.row).toMatchObject({ status: "connected", last_error: "Garmin rate limited activity sync. Try again later." });
   sqlite.close();
 });
+
+it("allows reconnecting when the Trainoq encryption secret changes", async () => {
+  const { sqlite, db } = database();
+  await saveGarminConnection(db, "old-secret", { email: "me@example.com", password: "password", tokens: {
+    accessToken: "access", refreshToken: "refresh", clientId: "client",
+  } }, "connected");
+  expect(await readGarminConnection(db, "new-secret")).toBeNull();
+  await saveGarminConnection(db, "new-secret", { email: "me@example.com", password: "new-password", tokens: {
+    accessToken: "new", refreshToken: "next", clientId: "client",
+  } }, "connected");
+  expect((await readGarminConnection(db, "new-secret"))?.state.password).toBe("new-password");
+  sqlite.close();
+});

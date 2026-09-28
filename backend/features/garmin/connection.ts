@@ -12,7 +12,9 @@ export interface GarminConnectionRow {
 export async function readGarminConnection(db: D1Database, secret: string): Promise<{ row: GarminConnectionRow; state: GarminStoredState } | null> {
   const row = await db.prepare("SELECT encrypted_state, status, next_offset, last_sync_at, last_error FROM garmin_connection WHERE id = 1")
     .first<GarminConnectionRow>();
-  return row ? { row, state: await decryptGarminState(row.encrypted_state, secret) } : null;
+  if (!row) return null;
+  try { return { row, state: await decryptGarminState(row.encrypted_state, secret) }; }
+  catch { return null; }
 }
 
 export async function saveGarminConnection(db: D1Database, secret: string, state: GarminStoredState, status: "connected" | "mfa"): Promise<void> {
