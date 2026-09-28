@@ -717,13 +717,13 @@ test("v1 conflict copies normalize before either version is chosen", async ({ pa
   }, { date: day, legacy });
   await page.goto(`/#/d/${day}`);
   const before = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!), day);
-  expect([before.doc.v, before.conflict.doc.v, before.base, before.dirty, before.rev, before.conflict.updatedAt]).toEqual([4, 4, "old-revision", true, 9, "new-revision"]);
+  expect([before.doc.v, before.conflict.doc.v, before.base, before.dirty, before.rev, before.conflict.updatedAt]).toEqual([5, 5, "old-revision", true, 9, "new-revision"]);
   await page.getByRole("button", { name: "Use other device's" }).click();
   const dialog = page.getByRole("dialog", { name: "Review day versions" });
   await expect(dialog).toContainText("Other device");
   await dialog.getByRole("button", { name: "Replace this device's edits" }).click();
   const after = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!), day);
-  expect([after.doc.v, after.doc.morning, after.base, after.dirty, after.rev]).toEqual([4, "Other device", "new-revision", false, 10]);
+  expect([after.doc.v, after.doc.morning, after.base, after.dirty, after.rev]).toEqual([5, "Other device", "new-revision", false, 10]);
 });
 
 test("repeat keeps grouping and set types across every section without recorded values", async ({ page }) => {

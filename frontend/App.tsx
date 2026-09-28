@@ -4,6 +4,7 @@ import { DayView } from "./features/days/day";
 import { DayHeader, SyncBadge } from "./features/days/header";
 import { HistoryView } from "./features/days/history";
 import { ShareSheet } from "./features/days/share";
+import { GarminView } from "./features/garmin/view";
 import { useToday } from "./features/days/dates";
 import { Icon } from "./icons";
 import { OverlayProvider, useOverlays } from "./overlays";
@@ -16,7 +17,7 @@ import { lsGet, lsSet } from "./storage";
 
 // ---------------------------------------------------------------- routing (hash based)
 
-type Route = { view: "day"; date: string | null } | { view: "history" };
+type Route = { view: "day"; date: string | null } | { view: "history" } | { view: "garmin" };
 
 function useOnline() {
   return useSyncExternalStore(
@@ -35,6 +36,7 @@ function useOnline() {
 function parseHash(): Route {
   const h = location.hash.replace(/^#\/?/, "");
   if (h === "history") return { view: "history" };
+  if (h === "garmin") return { view: "garmin" };
   const m = h.match(/^d\/(\d{4}-\d{2}-\d{2})$/);
   return { view: "day", date: m ? m[1] : null };
 }
@@ -121,6 +123,7 @@ function Main({ onSignedOut }: { onSignedOut: () => void }) {
     openSheet({
       actions: [
         { label: "History", icon: "history", onClick: () => (location.hash = "#/history") },
+        { label: "Garmin activities", icon: "download", onClick: () => (location.hash = "#/garmin") },
         { label: "Share this day", icon: "share", onClick: () => setSharing(date) },
         { label: "Download backup (JSON)", icon: "download", onClick: () => void downloadBackup() },
         {
@@ -147,12 +150,12 @@ function Main({ onSignedOut }: { onSignedOut: () => void }) {
 
   return (
     <div className="app">
-      {route.view === "history" ? (
+      {route.view !== "day" ? (
         <header className="topbar">
           <button type="button" className="icon-btn" aria-label="Back" onClick={() => (location.hash = "#/")}>
             <Icon name="back" />
           </button>
-          <h1 className="topbar-title">History</h1>
+          <h1 className="topbar-title">{route.view === "history" ? "History" : "Garmin activities"}</h1>
           <SyncBadge />
         </header>
       ) : (
@@ -160,9 +163,7 @@ function Main({ onSignedOut }: { onSignedOut: () => void }) {
       )}
       {!online && <div className="offline-bar">Offline – everything is saved on this phone and syncs when you're back online.</div>}
       <main className="content">
-        {route.view === "history" ? (
-          <HistoryView />
-        ) : (
+        {route.view === "history" ? <HistoryView /> : route.view === "garmin" ? <GarminView /> : (
           <>
             <DayView key={date} date={date} />
             <button type="button" className="btn big secondary share-btn" onClick={() => setSharing(date)}>

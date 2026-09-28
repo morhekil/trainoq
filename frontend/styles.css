@@ -692,6 +692,60 @@ textarea {
   flex: 1;
   min-width: 0;
 }
+
+.garmin-record-head,
+.garmin-actions,
+.garmin-filters,
+.garmin-fields {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.garmin-record-head {
+  justify-content: space-between;
+}
+.garmin-record-head h2 {
+  margin: 0;
+  font-size: 17px;
+}
+.garmin-record-head span {
+  font-size: 13px;
+  color: var(--muted);
+}
+.garmin-filters label,
+.garmin-fields label,
+.garmin-select {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--muted);
+}
+.garmin-filters input,
+.garmin-fields input,
+.garmin-select select {
+  min-height: 40px;
+  max-width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px;
+  background: var(--surface);
+  color: var(--text);
+}
+.garmin-file {
+  display: grid;
+  gap: 6px;
+  font-weight: 600;
+  min-width: 0;
+}
+.garmin-file input {
+  width: 100%;
+  min-width: 0;
+}
+.garmin-bulk {
+  white-space: normal;
+  text-align: center;
+}
 .activity-name {
   color: var(--text);
   font: inherit;

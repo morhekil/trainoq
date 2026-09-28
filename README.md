@@ -29,6 +29,7 @@ Runs on Cloudflare: a Worker serves the app and a tRPC API, data lives in D1.
 - **Sync retry** – when saving fails or the device is offline, the status badge has a keyboard-accessible retry action.
 - **Installable** – "Add to Home Screen" gives a full-screen app that opens offline.
 - **Backup** – menu → Download backup (JSON of every day and the exercise catalog).
+- **Garmin activities** – menu → Garmin activities. Export original FIT files from Garmin Connect, unzip the download, then choose one or more `.fit` files. Review the FIT start time, timer duration and active calories before adding an activity, linking a strength recording to a completed session, or ignoring it. Edit the proposed date and activity name before accepting. Later FIT imports update the source values without changing Trainoq edits. Unlink and restore decisions in the review screen; edit accepted activity names and calories on their day. The backup includes imported summaries.
 
 ## Run locally
 
@@ -42,7 +43,7 @@ Local password is whatever `APP_PASSWORD` is in `.dev.vars`.
 
 ## Frontend screenshots
 
-`npm run screenshots:check` compares login, full-page day, exercise picker, menu, share, and history screens at 320px, 390px, and 1280px, plus a dark conflict state, against the checked-in images in `visual/screenshots.pw.ts-snapshots/`. The test uses Chrome, a fixed Sydney time zone and locale, and a mocked tRPC response with fixed local day data, so it does not change your D1 database. Install Google Chrome before running it.
+`npm run screenshots:check` compares login, full-page day, exercise picker, menu, share, history, and Garmin review screens at narrow and desktop widths in light and dark themes against the checked-in images in `visual/*-snapshots/`. The test uses Chrome, a fixed Sydney time zone and locale, and mocked tRPC responses, so it does not change your D1 database. Install Google Chrome before running it.
 
 Run `npm run screenshots:baseline` only after reviewing an intentional visual change. It updates the reference images; inspect the changed PNGs before committing them.
 
@@ -88,9 +89,6 @@ The browser keeps its local draft for offline use, creates any custom exercise d
 
 `putDay` checks the revision in the same D1 batch that writes the day, exercise index, and Garmin decision index. Of two saves from the same base, one wins and the other receives a conflict. Agent credentials and intent-level procedures remain future work on the same router.
 
-## Next
-
-- Garmin: pull daily and activity calories instead of typing them.
 - Read-only share links for PT / physio (per-person token, pick a date range).
 - Progress view per exercise (top working set over time) from `exercise_log`.
 - Planning: build a session ahead of time and tick sets off at the gym.
