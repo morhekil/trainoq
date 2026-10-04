@@ -197,7 +197,7 @@ function ActivityCard({ a }: { a: Activity }) {
 }
 
 function AddActivityCard() {
-  const { doc, update } = useDayCtx();
+  const { date, doc, update } = useDayCtx();
   const { openPicker } = useOverlays();
   return (
     <section className="card">
@@ -206,7 +206,14 @@ function AddActivityCard() {
         <button
           type="button"
           className="btn ghost"
-          onClick={() => openPicker({ section: "activity", title: "Add activity", onPick: (exerciseId) => update((d) => d.activities.push({ id: uid(), exerciseId, comment: "", result: { minutes: null, calories: null } })) })}
+          onClick={() => openPicker({
+            section: "activity",
+            title: "Add activity",
+            onPick: (exerciseId) => {
+              const startedAt = hhmmToIso(date, isoToHHMM(new Date().toISOString()));
+              update((d) => d.activities.push({ id: uid(), exerciseId, startedAt, comment: "", result: { minutes: null, calories: null } }));
+            },
+          })}
         >
           <Icon name="plus" size={18} />
           Add activity

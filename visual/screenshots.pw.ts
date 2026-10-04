@@ -422,6 +422,17 @@ test("day records follow their displayed start times and reorder after edits", a
   await expect.poll(recordNames).toEqual(["Tennis", "Session 1", "Session 2", "Walk", "Run"]);
 });
 
+test("new manual activities use the selected day's current local time", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-10-05T13:45:00+11:00"));
+  await mockApi(page);
+  await page.addInitScript(() => localStorage.setItem("tq:authed", JSON.stringify(true)));
+  await page.goto(`/#/d/${day}`);
+  await addActivity(page);
+  await expect(page.getByLabel("Start time for Walk")).toHaveValue("13:45");
+  const draft = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!), day);
+  expect(draft.doc.activities[0].startedAt).toBe("2026-09-15T03:45:00.000Z");
+});
+
 test("failed sync can be retried with the keyboard", async ({ page }) => {
   await mockApi(page);
   let attempts = 0;
