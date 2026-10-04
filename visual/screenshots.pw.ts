@@ -390,6 +390,38 @@ test("activity uses the exercise picker at narrow width", async ({ page }) => {
   await checkWidth(page);
 });
 
+test("day records follow their displayed start times and reorder after edits", async ({ page }) => {
+  await mockApi(page);
+  const session = (id: string, startedAt: string) => ({ id, startedAt, endedAt: startedAt, warmup: [], main: [], cooldown: [], calories: null, notes: "" });
+  const activity = (id: string, exerciseId: string, startedAt?: string) => ({ id, exerciseId, comment: "", result: { minutes: 30, calories: null }, ...(startedAt ? { startedAt, sourceOffsetMinutes: 600 } : {}) });
+  const chronologicalDay = {
+    v: 5, date: day, morning: "", notes: "", totalCalories: null, ignoredGarminSourceKeys: [],
+    sessions: [session("late-session", "2026-09-15T01:00:00.000Z"), session("early-session", "2026-09-14T22:00:00.000Z")],
+    activities: [activity("late-walk", "seed:0033", "2026-09-15T02:00:00.000Z"), activity("early-run", "seed:0170", "2026-09-14T23:00:00.000Z"), activity("untimed-tennis", "seed:0171")],
+  };
+  await page.addInitScript(({ date, doc }) => {
+    localStorage.setItem("tq:authed", JSON.stringify(true));
+    localStorage.setItem(`tq:day:${date}`, JSON.stringify({ doc, base: null, dirty: false, rev: 1 }));
+  }, { date: day, doc: chronologicalDay });
+  await page.goto(`/#/d/${day}`);
+  const recordNames = () => page.locator(".card.session, .card.activity-card").evaluateAll((cards) => cards.map((card) =>
+    card.querySelector(".session-heading")?.textContent?.replace(/ ·.*/, "") ?? card.querySelector(".activity-name")?.textContent?.trim(),
+  ));
+  await expect.poll(recordNames).toEqual(["Session 1", "Run", "Session 2", "Walk", "Tennis"]);
+  for (const width of [320, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const colorScheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme });
+      await checkWidth(page);
+      await expect(page).toHaveScreenshot(`ordered-day-${width}-${colorScheme}.png`, { fullPage: true });
+    }
+  }
+  await page.getByLabel("Start time for Run").fill("13:00");
+  await expect.poll(recordNames).toEqual(["Session 1", "Session 2", "Walk", "Run", "Tennis"]);
+  await page.getByLabel("Start time for Tennis").fill("07:00");
+  await expect.poll(recordNames).toEqual(["Tennis", "Session 1", "Session 2", "Walk", "Run"]);
+});
+
 test("failed sync can be retried with the keyboard", async ({ page }) => {
   await mockApi(page);
   let attempts = 0;
@@ -727,6 +759,7 @@ test("v1 conflict copies normalize before either version is chosen", async ({ pa
 });
 
 test("repeat keeps grouping and set types across every section without recorded values", async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-10-05T19:00:00+11:00"));
   await mockApi(page);
   const previous = { ...doc, sessions: [{ ...doc.sessions[0], cooldown: [{ id: "cool", exercises: [{
     id: "cool-ex", name: "Stretch", comment: "done", sets: [{ id: "cool-set", type: "backoff", weight: 4, reps: 8 }],

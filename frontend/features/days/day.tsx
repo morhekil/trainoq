@@ -4,7 +4,7 @@ import { dayToText } from "../../../shared/days/format";
 import { useDay } from "./hooks";
 import { libraryVersion, refreshLibrary, subscribeLibrary } from "../exercises/library";
 import { exerciseName } from "../exercises/catalog";
-import { newSession, move } from "../sessions/ops";
+import { newSession } from "../sessions/ops";
 import { loadRecentSessions } from "../sessions/recent";
 import { getEntry, resolveConflict } from "./store";
 import { todayLocal } from "./dates";
@@ -39,6 +39,10 @@ export function DayView({ date }: { date: string }) {
 
   const ctx = useMemo<DayCtx>(() => ({ date, doc, update, undoable, recentVersion }), [date, doc, update, undoable, recentVersion]);
   const active = doc.sessions.some((s) => !s.endedAt);
+  const records = [
+    ...[...doc.sessions].sort((a, b) => isoToHHMM(a.startedAt).localeCompare(isoToHHMM(b.startedAt))).map((s, index) => ({ kind: "session" as const, s, index, time: isoToHHMM(s.startedAt) })),
+    ...doc.activities.map((a) => ({ kind: "activity" as const, a, time: activityTime(a) })),
+  ].sort((a, b) => (a.time ?? "99:99").localeCompare(b.time ?? "99:99"));
 
   const start = () =>
     update((d) => {
@@ -55,16 +59,16 @@ export function DayView({ date }: { date: string }) {
     <DayContext.Provider value={ctx}>
       {entry?.conflict && <ConflictBanner date={date} local={doc} other={entry.conflict.doc} />}
       <MorningCard />
-      {doc.sessions.map((s, i) => (
-        <SessionCard key={s.id} s={s} index={i} total={doc.sessions.length} />
-      ))}
+      {records.map((record) => record.kind === "session"
+        ? <SessionCard key={`session-${record.s.id}`} s={record.s} index={record.index} total={doc.sessions.length} />
+        : <ActivityCard key={`activity-${record.a.id}`} a={record.a} />)}
       {!active && (
         <button type="button" className="btn big primary start-btn" onClick={start}>
           <Icon name="play" size={18} />
           {doc.sessions.length ? "Start another session" : "Start training session"}
         </button>
       )}
-      <ActivitiesCard />
+      <AddActivityCard />
       <TotalsCard />
     </DayContext.Provider>
   );
@@ -129,8 +133,15 @@ function MorningCard() {
   );
 }
 
-function ActivitiesCard() {
-  const { date, doc, update, undoable } = useDayCtx();
+function activityTime(activity: Activity): string | null {
+  if (!activity.startedAt) return null;
+  return activity.sourceOffsetMinutes == null
+    ? isoToHHMM(activity.startedAt)
+    : new Date(Date.parse(activity.startedAt) + activity.sourceOffsetMinutes * 60_000).toISOString().slice(11, 16);
+}
+
+function ActivityCard({ a }: { a: Activity }) {
+  const { date, update, undoable } = useDayCtx();
   const { openPicker, openSheet } = useOverlays();
   const up = (id: string, fn: (a: Activity) => void) =>
     update((d) => {
@@ -139,53 +150,58 @@ function ActivitiesCard() {
     });
 
   return (
-    <section className="card">
+    <section className="card activity-card">
       <div className="card-title">Other activity</div>
-      {doc.activities.map((a, i) => (
-        <div key={a.id} className="activity">
-          {a.startedAt && <label className="activity-time">Start time
-            <input type="time" aria-label={`Start time for ${exerciseName(a.exerciseId)}`}
-              value={a.sourceOffsetMinutes == null ? isoToHHMM(a.startedAt) : new Date(Date.parse(a.startedAt) + a.sourceOffsetMinutes * 60_000).toISOString().slice(11, 16)}
-              onChange={(event) => event.target.value && up(a.id, (item) => { item.startedAt = item.sourceOffsetMinutes == null
-                ? hhmmToIso(date, event.target.value)
-                : new Date(Date.parse(`${date}T${event.target.value}:00.000Z`) - item.sourceOffsetMinutes * 60_000).toISOString(); })} />
-          </label>}
-          <div className="activity-row">
-            <button type="button" className="text grow activity-name" aria-label={`Change ${exerciseName(a.exerciseId)}`}
-              onClick={() => openPicker({ section: "activity", title: "Change activity", initial: exerciseName(a.exerciseId), onPick: (id) => up(a.id, (x) => (x.exerciseId = id)) })}>
-              {exerciseName(a.exerciseId)}
-            </button>
-            <label className="unit-field">
-              <NumberField value={a.result.minutes} decimal={false} placeholder="–" ariaLabel="Minutes" onChange={(v) => up(a.id, (x) => (x.result.minutes = v))} />
-              <span>min</span>
-            </label>
-            <label className="unit-field">
-              <NumberField value={a.result.calories} decimal={false} placeholder="–" ariaLabel="Active calories" onChange={(v) => up(a.id, (x) => (x.result.calories = v))} />
-              <span>cal</span>
-            </label>
-            <button
-              type="button"
-              className="icon-btn"
-              aria-label="Activity options"
-              onClick={() =>
-                openSheet({
-                  title: exerciseName(a.exerciseId),
-                  actions: [
-                    ...(i > 0 ? [{ label: "Move up", icon: "chevronUp" as const, onClick: () => update((d) => move(d.activities, i, -1)) }] : []),
-                    {
-                      label: "Delete",
-                      danger: true,
-                      onClick: () => undoable("Activity deleted", (d) => (d.activities = d.activities.filter((x) => x.id !== a.id))),
-                    },
-                  ],
-                })
-              }
-            >
-              <Icon name="more" />
-            </button>
-          </div>
+      <div className="activity">
+        <label className="activity-time">Start time
+          <input type="time" aria-label={`Start time for ${exerciseName(a.exerciseId)}`}
+            value={activityTime(a) ?? ""}
+            onChange={(event) => event.target.value && up(a.id, (item) => { item.startedAt = item.sourceOffsetMinutes == null
+              ? hhmmToIso(date, event.target.value)
+              : new Date(Date.parse(`${date}T${event.target.value}:00.000Z`) - item.sourceOffsetMinutes * 60_000).toISOString(); })} />
+        </label>
+        <div className="activity-row">
+          <button type="button" className="text grow activity-name" aria-label={`Change ${exerciseName(a.exerciseId)}`}
+            onClick={() => openPicker({ section: "activity", title: "Change activity", initial: exerciseName(a.exerciseId), onPick: (id) => up(a.id, (x) => (x.exerciseId = id)) })}>
+            {exerciseName(a.exerciseId)}
+          </button>
+          <label className="unit-field">
+            <NumberField value={a.result.minutes} decimal={false} placeholder="–" ariaLabel="Minutes" onChange={(v) => up(a.id, (x) => (x.result.minutes = v))} />
+            <span>min</span>
+          </label>
+          <label className="unit-field">
+            <NumberField value={a.result.calories} decimal={false} placeholder="–" ariaLabel="Active calories" onChange={(v) => up(a.id, (x) => (x.result.calories = v))} />
+            <span>cal</span>
+          </label>
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label="Activity options"
+            onClick={() =>
+              openSheet({
+                title: exerciseName(a.exerciseId),
+                actions: [{
+                  label: "Delete",
+                  danger: true,
+                  onClick: () => undoable("Activity deleted", (d) => (d.activities = d.activities.filter((x) => x.id !== a.id))),
+                }],
+              })
+            }
+          >
+            <Icon name="more" />
+          </button>
         </div>
-      ))}
+      </div>
+    </section>
+  );
+}
+
+function AddActivityCard() {
+  const { doc, update } = useDayCtx();
+  const { openPicker } = useOverlays();
+  return (
+    <section className="card">
+      {doc.activities.length === 0 && <div className="card-title">Other activity</div>}
       <div className="row-actions">
         <button
           type="button"

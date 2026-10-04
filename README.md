@@ -6,7 +6,7 @@ Runs on Cloudflare: a Worker serves the app and a tRPC API, data lives in D1.
 
 ## What it does
 
-- **Day view**, defaults to today. Arrows or tap the date to move around; "Today" jumps back.
+- **Day view**, defaults to today. Arrows or tap the date to move around; "Today" jumps back. Sessions and activities appear together in start-time order. Records without a start time appear after timed records; set their time to place them in the day.
 - **Keyboard date navigation** – the date picker shows its focus position, even though the native date input sits over the displayed date.
 - **Morning check-in** – free text.
 - **Start training session** – records the start time; "Finish" records the end. Both editable.
