@@ -2,6 +2,10 @@ import { expect, test } from "@playwright/test";
 
 const disconnected = { status: "disconnected", email: null, nextOffset: 0, lastSyncAt: null, lastError: null };
 
+test.beforeEach(async ({ page }) => {
+  await page.clock.setFixedTime(new Date("2026-09-29T12:00:00+10:00"));
+});
+
 test("connects Garmin and backfills every page without another upload", async ({ page }) => {
   const calls: string[] = [];
   let status = "disconnected";
