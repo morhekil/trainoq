@@ -1,8 +1,8 @@
 // Local-first day storage. Every edit is written to localStorage immediately and
 // synced to the server in the background, so a flaky gym connection never loses data.
 
-import { emptyDay, type DayDoc } from "../../../shared/days/model";
-import { legacyExerciseNames, normalizeDay, type LegacyDayDoc, type V2DayDoc, type V3DayDoc, type V4DayDoc, type V5DayDoc } from "../../../shared/days/migrate";
+import { dayActivities, emptyDay, type DayDoc } from "../../../shared/days/model";
+import { legacyExerciseNames, normalizeDay, type LegacyDayDoc, type V2DayDoc, type V3DayDoc, type V4DayDoc, type V5DayDoc, type V6DayDoc } from "../../../shared/days/migrate";
 import { exerciseIdForName } from "../../../shared/exercises/catalog";
 import { clearLocalCatalog, registerExercise, syncDefinitions } from "../exercises/catalog";
 import { trpc, request, NetworkError } from "../../api";
@@ -79,12 +79,12 @@ export function getEntry(date: string): Entry | null {
   if (!mem.has(date)) {
     const entry = lsGet<Entry>(PREFIX + date);
     if (entry) {
-      const raw = entry.doc as DayDoc | V5DayDoc | V4DayDoc | LegacyDayDoc | V2DayDoc | V3DayDoc;
+      const raw = entry.doc as DayDoc | V6DayDoc | V5DayDoc | V4DayDoc | LegacyDayDoc | V2DayDoc | V3DayDoc;
       if (raw.v === 1 || raw.v === 2 || raw.v === 3) legacyExerciseNames(raw).forEach((name) => registerExercise(exerciseIdForName(name), name));
       const doc = normalizeDay(raw);
       const conflict = entry.conflict?.doc
         ? (() => {
-          const rawConflict = entry.conflict!.doc as DayDoc | V5DayDoc | V4DayDoc | LegacyDayDoc | V2DayDoc | V3DayDoc;
+          const rawConflict = entry.conflict!.doc as DayDoc | V6DayDoc | V5DayDoc | V4DayDoc | LegacyDayDoc | V2DayDoc | V3DayDoc;
           if (rawConflict.v === 1 || rawConflict.v === 2 || rawConflict.v === 3) legacyExerciseNames(rawConflict).forEach((name) => registerExercise(exerciseIdForName(name), name));
           return { ...entry.conflict, doc: normalizeDay(rawConflict) };
         })()
@@ -160,7 +160,7 @@ function ingest(s: StoredDay) {
   const cur = getEntry(s.date);
   if (cur?.dirty || cur?.conflict) return;
   if (cur && cur.base === s.updatedAt) return;
-  persist(s.date, { doc: s.doc, base: s.updatedAt, dirty: false, rev: (cur?.rev ?? 0) + 1 });
+  persist(s.date, { doc: normalizeDay(s.doc), base: s.updatedAt, dirty: false, rev: (cur?.rev ?? 0) + 1 });
 }
 
 export function ingestServerDays(days: StoredDay[]): void {
@@ -193,7 +193,7 @@ export async function sync(date: string): Promise<void> {
   if (!e || !e.dirty || e.conflict) return;
   if (pendingMoves(date).some(({ fromDate, sourceKey }) => {
     const old = getEntry(fromDate);
-    return old?.dirty || old?.conflict || old?.doc.activities.some((activity) => activity.garminSourceKey === sourceKey);
+    return old?.dirty || old?.conflict || (old?.doc && dayActivities(old.doc).some((activity) => activity.garminSourceKey === sourceKey));
   })) return;
   if (inflight.has(date)) {
     schedule(date, 500);
@@ -221,7 +221,7 @@ export async function sync(date: string): Promise<void> {
       const cur = getEntry(date)!;
       persist(date, {
         ...cur,
-        conflict: result.current ? { doc: result.current.doc, updatedAt: result.current.updatedAt } : { doc: null, updatedAt: null },
+        conflict: result.current ? { doc: normalizeDay(result.current.doc), updatedAt: result.current.updatedAt } : { doc: null, updatedAt: null },
       });
     }
   } catch (err) {

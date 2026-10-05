@@ -1,15 +1,17 @@
 import { exerciseIdForName } from "../exercises/catalog";
 import type { SessionItem, WorkSet } from "../exercises/model";
-import type { DayDoc } from "./model";
+import type { Activity, DayDoc } from "./model";
+import type { Session } from "../sessions/model";
 
 export interface LegacyExercise { id: string; name: string; sets: WorkSet[]; comment: string }
 export interface LegacyBlock { id: string; exercises: LegacyExercise[] }
 export interface LegacyItem { id: string; name: string; reps: string; comment: string }
 export interface LegacyActivity { id: string; name: string; minutes: number | null; calories: number | null; notes: string }
-export type V5DayDoc = Omit<DayDoc, "v" | "comments"> & { v: 5; morning: string; notes: string };
+export type V6DayDoc = Omit<DayDoc, "v" | "events"> & { v: 6; sessions: Session[]; activities: Activity[] };
+export type V5DayDoc = Omit<V6DayDoc, "v" | "comments"> & { v: 5; morning: string; notes: string };
 export type V4DayDoc = Omit<V5DayDoc, "v" | "ignoredGarminSourceKeys"> & { v: 4 };
 export type V3DayDoc = Omit<V4DayDoc, "v" | "activities"> & { v: 3; activities: LegacyActivity[] };
-type LegacySession = Omit<DayDoc["sessions"][number], "warmup" | "main" | "cooldown"> & {
+type LegacySession = Omit<Session, "warmup" | "main" | "cooldown"> & {
   warmup: LegacyItem[];
   main: LegacyBlock[];
   cooldown: LegacyItem[];
@@ -59,7 +61,7 @@ function migrateBlock(block: LegacyBlock): SessionItem {
 }
 
 export function migrateDay(doc: LegacyDayDoc | V2DayDoc | V3DayDoc): DayDoc {
-  return migrateCheckins({
+  return normalizeDay(migrateCheckins({
     ...doc, v: 5, ignoredGarminSourceKeys: [],
     activities: doc.activities.map(({ id, name, notes, minutes, calories }) => ({
       id, exerciseId: exerciseIdForName(name.trim() || "Activity"), comment: notes,
@@ -71,10 +73,10 @@ export function migrateDay(doc: LegacyDayDoc | V2DayDoc | V3DayDoc): DayDoc {
       main: session.main.map(migrateBlock),
       cooldown: session.cooldown.map((item) => migrateBlock("exercises" in item ? item : migrateLegacyItem(item))),
     })),
-  });
+  }));
 }
 
-function migrateCheckins(doc: V5DayDoc): DayDoc {
+function migrateCheckins(doc: V5DayDoc): V6DayDoc {
   const { morning, notes, ...rest } = doc;
   return {
     ...rest, v: 6,
@@ -85,8 +87,18 @@ function migrateCheckins(doc: V5DayDoc): DayDoc {
   };
 }
 
-export function normalizeDay(doc: DayDoc | V5DayDoc | V4DayDoc | LegacyDayDoc | V2DayDoc | V3DayDoc): DayDoc {
-  return doc.v === 6 ? doc : doc.v === 5 ? migrateCheckins(doc) : doc.v === 4 ? migrateCheckins({ ...doc, v: 5, ignoredGarminSourceKeys: [] }) : migrateDay(doc);
+export function normalizeDay(doc: DayDoc | V6DayDoc | V5DayDoc | V4DayDoc | LegacyDayDoc | V2DayDoc | V3DayDoc): DayDoc {
+  if (doc.v === 7) return doc;
+  if (doc.v === 1 || doc.v === 2 || doc.v === 3) return migrateDay(doc);
+  const old = doc.v === 6 ? doc : doc.v === 5 ? migrateCheckins(doc) : migrateCheckins({ ...doc, v: 5, ignoredGarminSourceKeys: [] });
+  const { sessions, activities, ...rest } = old;
+  return {
+    ...rest, v: 7,
+    events: [
+      ...sessions.map((session) => ({ id: `migrated:session:${session.id}`, title: null, notes: "", entries: [{ kind: "session" as const, session }] })),
+      ...activities.map((activity) => ({ id: `migrated:activity:${activity.id}`, title: null, notes: "", entries: [{ kind: "activity" as const, activity }] })),
+    ],
+  };
 }
 
 export function legacyExerciseNames(doc: LegacyDayDoc | V2DayDoc | V3DayDoc): string[] {

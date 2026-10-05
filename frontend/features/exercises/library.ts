@@ -3,7 +3,7 @@
 import { nameKey, type ExerciseContext, type ExerciseHistoryEntry, type ExerciseLibrary, type Section, type WorkSet } from "../../../shared/exercises/model";
 import { itemSets } from "../../../shared/sessions/format";
 import { allCatalog, exerciseName, setRemoteCatalog } from "./catalog";
-import { type DayDoc } from "../../../shared/days/model";
+import { dayActivities, daySessions, type DayDoc } from "../../../shared/days/model";
 import { request, trpc } from "../../api";
 import { cachedDays, onSynced } from "../days/store";
 import { lsGet, lsRemove, lsSet } from "../../storage";
@@ -71,11 +71,11 @@ onSynced(() => {
 
 function namesInDoc(d: DayDoc): [string, ExerciseContext][] {
   const out: [string, ExerciseContext][] = [];
-  for (const s of d.sessions) {
+  for (const s of daySessions(d)) {
     for (const section of ["warmup", "main", "cooldown"] as const)
       s[section].forEach((item) => (item.kind === "exercise" ? [item] : item.members).forEach((e) => out.push([e.exerciseId, section])));
   }
-  for (const activity of d.activities) out.push([activity.exerciseId, "activity"]);
+  for (const activity of dayActivities(d)) out.push([activity.exerciseId, "activity"]);
   return out;
 }
 
@@ -174,7 +174,7 @@ export function lastTime(exerciseId: string, beforeDate: string, section: Sectio
   for (const e of cachedDays()) {
     const d = e.doc;
     if (d.date >= beforeDate || (best && d.date <= best.date)) continue;
-    for (const s of d.sessions)
+    for (const s of daySessions(d))
       for (const item of s[section])
         for (const ex of item.kind === "exercise" ? [item] : item.members)
           if (ex.exerciseId === exerciseId && itemSets(item, ex.id).length && (!best || d.date > best.date)) {

@@ -4,6 +4,7 @@ import { minutesBetween, itemSets } from "../../../shared/sessions/format";
 import { formatSets } from "../../../shared/exercises/format";
 import type { PerformedExercise, Section, SessionItem, SetType, Superset, WorkSet } from "../../../shared/exercises/model";
 import type { Session } from "../../../shared/sessions/model";
+import { removeEventEntry } from "../../../shared/days/model";
 import { addMember, addRound, addSet, createSuperset, deleteSuperset, dissolveSuperset, joinPerformance, moveMember, removeMember, removeRound, removeSet, reorderRound, setRoundType, takeOutMember } from "../../../shared/sessions/ops";
 import { exerciseName } from "../exercises/catalog";
 import { lastTime } from "../exercises/library";
@@ -38,7 +39,7 @@ export function SessionCard({ s, index, total }: { s: Session; index: number; to
   const up = (fn: (session: Session) => void) => update((d) => fn(findSession(d, s.id)));
   const menu = () => openSheet({ title: "Session", actions: [
     ...(s.endedAt ? [{ label: "Resume session", icon: "play" as const, onClick: () => up((x) => (x.endedAt = null)) }] : []),
-    { label: "Delete session", danger: true, onClick: () => undoable("Session deleted", (d) => (d.sessions = d.sessions.filter((x) => x.id !== s.id))) },
+    { label: "Delete session", danger: true, onClick: () => undoable("Session deleted", (d) => removeEventEntry(d, "session", s.id)) },
   ] });
 
   return (

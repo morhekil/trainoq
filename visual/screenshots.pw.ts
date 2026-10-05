@@ -30,6 +30,8 @@ const doc = {
   totalCalories: 415,
   notes: "",
 };
+const savedActivities = (doc: any) => doc.events.flatMap((event: any) => event.entries.filter((entry: any) => entry.kind === "activity").map((entry: any) => entry.activity));
+const savedSessions = (doc: any) => doc.events.flatMap((event: any) => event.entries.filter((entry: any) => entry.kind === "session").map((entry: any) => entry.session));
 
 async function mockApi(page: Page, signedIn = true) {
   await page.route("**/api/trpc/**", async (route) => {
@@ -478,7 +480,7 @@ test("new manual activities use the selected day's current local time", async ({
   await addActivity(page);
   await expect(page.getByLabel("Start time for Walk")).toHaveValue("13:45");
   const draft = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!), day);
-  expect(draft.doc.activities[0].startedAt).toBe("2026-09-15T03:45:00.000Z");
+  expect(savedActivities(draft.doc)[0].startedAt).toBe("2026-09-15T03:45:00.000Z");
 });
 
 test("failed sync can be retried with the keyboard", async ({ page }) => {
@@ -694,7 +696,7 @@ test("dragging an exercise creates a durable one-member superset and reorders it
   await page.keyboard.press("Escape");
   await expect(round).toBeFocused();
   const entry = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!), day);
-  const item = entry.doc.sessions[0].main[0];
+  const item = savedSessions(entry.doc)[0].main[0];
   expect(item.kind).toBe("superset");
   expect(item.members).toHaveLength(1);
   expect(item.rounds.map((r: { type: string }) => r.type)).toEqual(["working", "backoff", "warmup"]);
@@ -729,10 +731,10 @@ test("mismatched sets show an alignment preview before joining", async ({ page }
   await expect(preview).toContainText("Superset rounds: warmup, warmup");
   await expect(preview).toContainText("40kg ×8");
   const before = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!), day);
-  expect(before.doc.sessions[0].main).toHaveLength(2);
+  expect(savedSessions(before.doc)[0].main).toHaveLength(2);
   await preview.getByRole("button", { name: "Append sets as new rounds" }).click();
   const after = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!), day);
-  const superset = after.doc.sessions[0].main[0];
+  const superset = savedSessions(after.doc)[0].main[0];
   expect(superset.members).toHaveLength(2);
   expect(superset.rounds).toHaveLength(5);
   expect(superset.results.find((result: { memberId: string; roundId: string }) => result.memberId === "exercise-1" && result.roundId === "set-1")).toMatchObject({ weight: 40, reps: 8 });
@@ -765,7 +767,7 @@ test("touch drag scrolls to the superset target", async ({ page }) => {
   await expect(main.locator(".block.superset")).toHaveCount(1);
 });
 
-test("an offline v1 draft syncs as v6 and preserves its revision base", async ({ page }) => {
+test("an offline v1 draft syncs as v7 and preserves its revision base", async ({ page }) => {
   await mockApi(page);
   const requests: string[] = [];
   page.on("request", (request) => { if (request.url().includes("/api/trpc/")) requests.push(request.url().split("/").at(-1)!); });
@@ -783,14 +785,14 @@ test("an offline v1 draft syncs as v6 and preserves its revision base", async ({
   const payload = request.postDataJSON();
   const input = payload.json ?? payload;
   expect(input.base).toBe("previous-revision");
-  expect(input.doc.v).toBe(6);
+  expect(input.doc.v).toBe(7);
   expect(requests.indexOf("exercises.create")).toBeGreaterThanOrEqual(0);
   expect(requests.indexOf("exercises.create")).toBeLessThan(requests.indexOf("days.save"));
-  expect(input.doc.sessions[0].warmup[0].sets.map((set: { reps: number }) => set.reps)).toEqual([15, 15]);
+  expect(savedSessions(input.doc)[0].warmup[0].sets.map((set: { reps: number }) => set.reps)).toEqual([15, 15]);
   await expect(page.getByText("Band pull-apart", { exact: true })).toBeVisible();
   const entry = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!), day);
   expect(entry.rev).toBe(7);
-  expect(entry.doc.v).toBe(6);
+  expect(entry.doc.v).toBe(7);
 });
 
 test("v1 conflict copies normalize before either version is chosen", async ({ page }) => {
@@ -808,13 +810,13 @@ test("v1 conflict copies normalize before either version is chosen", async ({ pa
   }, { date: day, legacy });
   await page.goto(`/#/d/${day}`);
   const before = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!), day);
-  expect([before.doc.v, before.conflict.doc.v, before.base, before.dirty, before.rev, before.conflict.updatedAt]).toEqual([6, 6, "old-revision", true, 9, "new-revision"]);
+  expect([before.doc.v, before.conflict.doc.v, before.base, before.dirty, before.rev, before.conflict.updatedAt]).toEqual([7, 7, "old-revision", true, 9, "new-revision"]);
   await page.getByRole("button", { name: "Use other device's" }).click();
   const dialog = page.getByRole("dialog", { name: "Review day versions" });
   await expect(dialog).toContainText("Other device");
   await dialog.getByRole("button", { name: "Replace this device's edits" }).click();
   const after = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!), day);
-  expect([after.doc.v, after.doc.comments[0].text, after.base, after.dirty, after.rev]).toEqual([6, "Other device", "new-revision", false, 10]);
+  expect([after.doc.v, after.doc.comments[0].text, after.base, after.dirty, after.rev]).toEqual([7, "Other device", "new-revision", false, 10]);
 });
 
 test("repeat keeps grouping and set types across every section without recorded values", async ({ page }) => {
@@ -842,7 +844,7 @@ test("repeat keeps grouping and set types across every section without recorded 
     }
   }
   const entry = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!), day);
-  const repeated = entry.doc.sessions[1];
+  const repeated = savedSessions(entry.doc)[1];
   expect(repeated.warmup[0].sets.map((set: { type: string }) => set.type)).toEqual(["working", "working"]);
   expect(repeated.main[0].sets.map((set: { type: string }) => set.type)).toEqual(["warmup", "working", "backoff"]);
   expect(repeated.cooldown[0].sets[0].type).toBe("backoff");

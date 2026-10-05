@@ -79,7 +79,7 @@ API.md                  procedure and wire contract
 
 ### Data model
 
-One JSON document per day (`days` table) is the source of truth. On every save the Worker rebuilds `exercise_log`, one row per session performance or activity. See the [data model in API.md](API.md#data-model) for the v6 shapes, exercise IDs, supersets, activities, legacy blocks, D1 tables, and local drafts.
+One JSON document per day (`days` table) is the source of truth. Each saved session and activity belongs to a training event. On every save the Worker rebuilds `exercise_log`, one row per session performance or activity. See the [data model in API.md](API.md#data-model) for the v7 shapes, exercise IDs, supersets, activities, legacy blocks, D1 tables, and local drafts.
 
 ### API seam
 

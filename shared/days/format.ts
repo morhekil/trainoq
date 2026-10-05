@@ -1,4 +1,4 @@
-import type { DayDoc } from "./model";
+import { dayActivities, daySessions, type DayDoc } from "./model";
 import { countExercises, formatTime, sessionLines } from "../sessions/format";
 import { formatNum } from "../exercises/format";
 import { seedExercise } from "../exercises/catalog";
@@ -54,12 +54,12 @@ export function dayToText(d: DayDoc, timeZone?: string, resolveName?: (id: strin
 /** One-line summary for the history list. */
 export function daySummary(d: DayDoc, timeZone?: string, resolveName: (id: string) => string = (id) => seedExercise(id)?.name ?? id): string {
   const bits: string[] = [];
-  for (const s of d.sessions) {
+  for (const s of daySessions(d)) {
     let t = `Session ${formatTime(s.startedAt, timeZone)} · ${countExercises(s)} exercises`;
     if (s.calories != null) t += ` · ${formatNum(s.calories)} cal`;
     bits.push(t);
   }
-  for (const a of d.activities) bits.push(resolveName(a.exerciseId));
+  for (const a of dayActivities(d)) bits.push(resolveName(a.exerciseId));
   if (d.totalCalories != null) bits.push(`${formatNum(d.totalCalories)} cal total`);
   return bits.join(" · ");
 }

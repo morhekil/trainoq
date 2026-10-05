@@ -5,6 +5,7 @@ import { inputDaySchema, daySchema } from "../shared/days/schema";
 import { legacyExerciseNames } from "../shared/days/migrate";
 import type { V3DayDoc } from "../shared/days/migrate";
 import { searchExercises } from "../frontend/features/exercises/library";
+import { dayActivities } from "../shared/days/model";
 
 describe("catalog-backed activities", () => {
   it("migrates v3 names and notes into exercise performances without losing results", () => {
@@ -18,11 +19,12 @@ describe("catalog-backed activities", () => {
     };
 
     const migrated = inputDaySchema.parse(old);
-    expect(migrated).toMatchObject({ v: 6, activities: [
+    expect(migrated.v).toBe(7);
+    expect(dayActivities(migrated)).toMatchObject([
       { id: "walk", exerciseId: exerciseIdForName("Walk"), comment: "Hills", result: { minutes: 30, calories: 120 } },
       { id: "custom", exerciseId: exerciseIdForName("Trail run"), comment: "Easy", result: { minutes: null, calories: 20 } },
       { id: "blank", exerciseId: exerciseIdForName("Activity"), comment: "Unknown activity", result: { minutes: 5, calories: null } },
-    ] });
+    ]);
     expect(legacyExerciseNames(old)).toContain("Trail run");
     expect(daySchema.parse(migrated)).toEqual(migrated);
     expect(daySchema.safeParse(old).success).toBe(false);

@@ -24,12 +24,11 @@ describe("formatSets", () => {
 describe("dayToText", () => {
   it("renders a day the way it gets shared", () => {
     const doc: DayDoc = {
-      v: 6,
+      v: 7,
       date: "2026-09-22",
       ignoredGarminSourceKeys: [],
       comments: [{ id: "c", time: "08:00", text: "Morning stiffness: 4/10" }],
-      sessions: [
-        {
+      events: [{ id: "session-event", title: null, notes: "", entries: [{ kind: "session", session: {
           id: "s",
           startedAt: "2026-09-22T07:00:00.000Z",
           endedAt: "2026-09-22T08:10:00.000Z",
@@ -46,9 +45,7 @@ describe("dayToText", () => {
           cooldown: [{ kind: "exercise", id: "ce", exerciseId: exerciseIdForName("Jefferson curl"), sets: [{ id: "c1", ...set("working", 4, 4) }], comment: "4kg" }],
           calories: 317,
           notes: "",
-        },
-      ],
-      activities: [{ id: "w", exerciseId: exerciseIdForName("Walk"), comment: "", result: { minutes: 30, calories: 115 } }],
+        } }] }, { id: "walk-event", title: null, notes: "", entries: [{ kind: "activity", activity: { id: "w", exerciseId: exerciseIdForName("Walk"), comment: "", result: { minutes: 30, calories: 115 } } }] }],
       totalCalories: 710,
     };
     expect(dayToText(doc, "Australia/Sydney")).toBe(

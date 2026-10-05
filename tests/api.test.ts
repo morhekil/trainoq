@@ -1,13 +1,14 @@
 import { createTRPCClient, httpLink } from "@trpc/client";
 import { describe, expect, it, vi } from "vitest";
-import { emptyDay } from "../shared/days/model";
+import { addEventEntry, dayActivities, daySessions, emptyDay } from "../shared/days/model";
 import type { LegacyDayDoc } from "../shared/days/migrate";
 import { exerciseIdForName } from "../shared/exercises/catalog";
+import type { SessionItem } from "../shared/exercises/model";
 import worker from "../backend/index";
 import type { AppRouter } from "../backend/router";
 
 describe("Worker tRPC boundary", () => {
-  it("migrates old days, protects v6 writes, resolves catalog IDs and exports definitions", async () => {
+  it("migrates old days, protects v7 writes, resolves catalog IDs and exports definitions", async () => {
     const days = new Map<string, { date: string; doc: string; updated_at: string }>();
     const catalog = new Map<string, string>();
     let logRows: { sql: string; args: unknown[] }[] = [];
@@ -86,9 +87,9 @@ describe("Worker tRPC boundary", () => {
     const first = await client.days.save.mutate({ date: old.date, doc: old, base: null });
     expect(first.ok).toBe(true);
     const migrated = (await client.days.get.query(old.date)).doc!;
-    expect(migrated.v).toBe(6);
-    expect(migrated.sessions[0].warmup[0]).toMatchObject({ kind: "exercise", exerciseId: exerciseIdForName("Row"), comment: "Light band", sets: [{ reps: 10 }, { reps: 10 }] });
-    expect(migrated.activities).toEqual([{ id: "activity", exerciseId: exerciseIdForName("Trail run"), comment: "Steady", result: { minutes: 35, calories: 280 } }]);
+    expect(migrated.v).toBe(7);
+    expect(daySessions(migrated)[0].warmup[0]).toMatchObject({ kind: "exercise", exerciseId: exerciseIdForName("Row"), comment: "Light band", sets: [{ reps: 10 }, { reps: 10 }] });
+    expect(dayActivities(migrated)).toEqual([{ id: "activity", exerciseId: exerciseIdForName("Trail run"), comment: "Steady", result: { minutes: 35, calories: 280 } }]);
     expect((await client.days.list.query({ withSessions: true, limit: 10 }))[0].doc).toEqual(migrated);
     expect((await client.backup.export.query()).days[0].doc).toEqual(migrated);
     expect(logRows[0].args[6]).toBe(exerciseIdForName("Row"));
@@ -111,10 +112,10 @@ describe("Worker tRPC boundary", () => {
     const customId = "e164c8eb-a785-4c78-a854-f7a9f0787215";
     const custom = emptyDay("2026-09-24");
     const activityId = "d34437b6-06c3-4b89-a9ed-37825a68822e";
-    custom.activities = [{ id: "activity-2", exerciseId: activityId, comment: "Doubles", result: { minutes: 60, calories: 400 } }];
-    custom.sessions = [{ id: "custom", startedAt: "2026-09-24T07:00:00Z", endedAt: null, warmup: [], main: [
+    addEventEntry(custom, { kind: "activity", activity: { id: "activity-2", exerciseId: activityId, comment: "Doubles", result: { minutes: 60, calories: 400 } } });
+    addEventEntry(custom, { kind: "session", session: { id: "custom", startedAt: "2026-09-24T07:00:00Z", endedAt: null, warmup: [], main: [
       { kind: "superset", id: "ss", members: [{ id: "member", exerciseId: customId, comment: "" }], rounds: [{ id: "round", type: "working" }], results: [{ memberId: "member", roundId: "round", weight: 0, reps: 8 }] },
-    ], cooldown: [], calories: null, notes: "" }];
+    ], cooldown: [], calories: null, notes: "" } });
     await expect(client.days.save.mutate({ date: custom.date, doc: custom, base: null })).rejects.toMatchObject({ data: { code: "BAD_REQUEST" } });
     await client.exercises.create.mutate({ id: customId, name: "Custom raise" });
     await expect(client.days.save.mutate({ date: custom.date, doc: custom, base: null })).rejects.toMatchObject({ data: { code: "BAD_REQUEST" } });
@@ -127,12 +128,12 @@ describe("Worker tRPC boundary", () => {
     expect(await client.days.save.mutate({ date: custom.date, doc: custom, base: null })).toMatchObject({ ok: false, current: { doc: custom } });
     expect((await client.backup.export.query()).catalog).toContainEqual({ id: customId, name: "Custom raise", section: null, aliases: "" });
     const invalid = structuredClone(custom);
-    invalid.sessions[0].main[0] = { ...invalid.sessions[0].main[0], results: [] } as typeof invalid.sessions[0]["main"][number];
+    daySessions(invalid)[0].main[0] = { ...daySessions(invalid)[0].main[0], results: [] } as SessionItem;
     await expect(client.days.save.mutate({ date: custom.date, doc: invalid, base: saved.ok ? saved.updatedAt : null })).rejects.toMatchObject({ data: { code: "BAD_REQUEST" } });
     const emptied = structuredClone(custom);
-    emptied.sessions[0].main[0] = { ...emptied.sessions[0].main[0], members: [], results: [] } as typeof emptied.sessions[0]["main"][number];
+    daySessions(emptied)[0].main[0] = { ...daySessions(emptied)[0].main[0], members: [], results: [] } as SessionItem;
     const emptySave = await client.days.save.mutate({ date: custom.date, doc: emptied, base: saved.ok ? saved.updatedAt : null });
     expect(emptySave.ok).toBe(true);
-    expect((await client.days.get.query(custom.date)).doc?.sessions[0].main[0]).toMatchObject({ kind: "superset", rounds: [{ id: "round" }], members: [], results: [] });
+    expect(daySessions((await client.days.get.query(custom.date)).doc!)[0].main[0]).toMatchObject({ kind: "superset", rounds: [{ id: "round" }], members: [], results: [] });
   });
 });

@@ -1,12 +1,12 @@
 import type { Section, SessionItem, SetType, StandaloneExercise, Superset, WorkSet } from "../../../shared/exercises/model";
-import type { DayDoc } from "../../../shared/days/model";
+import { daySessions, type DayDoc } from "../../../shared/days/model";
 import type { Session } from "../../../shared/sessions/model";
 import { suggestedSet } from "../exercises/library";
 import { uid } from "../../id";
 export { move } from "../../../shared/sessions/ops";
 
 export function findSession(d: DayDoc, sid: string): Session {
-  const session = d.sessions.find((s) => s.id === sid);
+  const session = daySessions(d).find((s) => s.id === sid);
   if (!session) throw new Error("Session not found");
   return session;
 }

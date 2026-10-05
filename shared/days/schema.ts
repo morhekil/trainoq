@@ -1,6 +1,6 @@
 import { z } from "zod";
 import type { DayDoc } from "./model";
-import { normalizeDay, type LegacyDayDoc, type V2DayDoc, type V3DayDoc, type V4DayDoc, type V5DayDoc } from "./migrate";
+import { normalizeDay, type LegacyDayDoc, type V2DayDoc, type V3DayDoc, type V4DayDoc, type V5DayDoc, type V6DayDoc } from "./migrate";
 import { DATE_RE } from "./model";
 
 export const dateSchema = z.string().regex(DATE_RE);
@@ -43,7 +43,25 @@ const legacyActivities = z.array(z.object({ id: z.string(), name: z.string(), ..
 const comments = z.array(z.object({ id: z.string().min(1), time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/), text: z.string() })).superRefine((items, ctx) => {
   if (new Set(items.map((item) => item.id)).size !== items.length) ctx.addIssue({ code: "custom", message: "Duplicate comment ID" });
 });
-export const daySchema = z.object({ v: z.literal(6), ...dayFields, comments, sessions: z.array(linkedSession), activities: linkedActivities, ignoredGarminSourceKeys: z.array(z.string().min(1)) }) satisfies z.ZodType<DayDoc>;
+const event = z.object({
+  id: z.string().min(1), title: z.string().nullable(), notes: z.string(),
+  entries: z.array(z.discriminatedUnion("kind", [
+    z.object({ kind: z.literal("session"), session: linkedSession }),
+    z.object({ kind: z.literal("activity"), activity: linkedActivities.element }),
+  ])).min(1),
+  summaryOverrides: z.object({ elapsedSeconds: z.number().finite().nonnegative().nullable().optional(), timerSeconds: z.number().finite().nonnegative().nullable().optional(), activeCalories: z.number().finite().nonnegative().nullable().optional() }).optional(),
+});
+export const daySchema = z.object({ v: z.literal(7), ...dayFields, comments, events: z.array(event), ignoredGarminSourceKeys: z.array(z.string().min(1)) }).superRefine((day, ctx) => {
+  if (new Set(day.events.map((event) => event.id)).size !== day.events.length) ctx.addIssue({ code: "custom", message: "Duplicate event ID" });
+  const ids = new Set<string>();
+  for (const event of day.events) for (const entry of event.entries) {
+    const id = entry.kind === "session" ? entry.session.id : entry.activity.id;
+    const key = `${entry.kind}:${id}`;
+    if (ids.has(key)) ctx.addIssue({ code: "custom", message: "Duplicate event entry ID" });
+    ids.add(key);
+  }
+}) satisfies z.ZodType<DayDoc>;
+export const v6DaySchema = z.object({ v: z.literal(6), ...dayFields, comments, sessions: z.array(linkedSession), activities: linkedActivities, ignoredGarminSourceKeys: z.array(z.string().min(1)) }) satisfies z.ZodType<V6DayDoc>;
 export const v5DaySchema = z.object({ v: z.literal(5), ...legacyDayFields, sessions: z.array(linkedSession), activities: linkedActivities, ignoredGarminSourceKeys: z.array(z.string().min(1)) }) satisfies z.ZodType<V5DayDoc>;
 export const v4DaySchema = z.object({ v: z.literal(4), ...legacyDayFields, sessions: z.array(session), activities }) satisfies z.ZodType<V4DayDoc>;
 export const v3DaySchema = z.object({ v: z.literal(3), ...legacyDayFields, sessions: z.array(session), activities: legacyActivities }) satisfies z.ZodType<V3DayDoc>;
@@ -54,5 +72,5 @@ const legacyItem = z.object({ id: z.string(), name: z.string(), reps: z.string()
 const v2Session = z.object({ ...sessionFields, warmup: z.array(block), main: z.array(block), cooldown: z.array(block) });
 export const v2DaySchema = z.object({ v: z.literal(2), ...legacyDayFields, sessions: z.array(v2Session), activities: legacyActivities }) satisfies z.ZodType<V2DayDoc>;
 export const legacyDaySchema = z.object({ v: z.literal(1), ...legacyDayFields, sessions: z.array(v2Session.extend({ warmup: z.array(legacyItem), cooldown: z.array(legacyItem) })), activities: legacyActivities }) satisfies z.ZodType<LegacyDayDoc>;
-export const rawDaySchema = z.union([daySchema, v5DaySchema, v4DaySchema, v3DaySchema, v2DaySchema, legacyDaySchema]);
+export const rawDaySchema = z.union([daySchema, v6DaySchema, v5DaySchema, v4DaySchema, v3DaySchema, v2DaySchema, legacyDaySchema]);
 export const inputDaySchema = rawDaySchema.transform(normalizeDay);

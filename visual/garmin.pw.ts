@@ -1,6 +1,8 @@
 import { expect, test } from "@playwright/test";
 
 const disconnected = { status: "disconnected", email: null, nextOffset: 0, lastSyncAt: null, lastError: null };
+const savedActivities = (doc: any) => doc.events.flatMap((event: any) => event.entries.filter((entry: any) => entry.kind === "activity").map((entry: any) => entry.activity));
+const savedSessions = (doc: any) => doc.events.flatMap((event: any) => event.entries.filter((entry: any) => entry.kind === "session").map((entry: any) => entry.session));
 
 test.beforeEach(async ({ page }) => {
   await page.clock.setFixedTime(new Date("2026-09-29T12:00:00+10:00"));
@@ -217,7 +219,7 @@ test("edits an accepted activity's Garmin local start time", async ({ page }) =>
   await expect(page).toHaveScreenshot("garmin-linked-day-dark.png", { fullPage: true });
   await input.fill("12:15");
   const draft = await page.evaluate(() => JSON.parse(localStorage.getItem("tq:day:2026-09-28")!));
-  expect(draft.doc.activities[0].startedAt).toBe("2026-09-28T06:45:00.000Z");
+  expect(savedActivities(draft.doc)[0].startedAt).toBe("2026-09-28T06:45:00.000Z");
 });
 
 test("moves an accepted activity to a corrected Trainoq day", async ({ page }) => {
@@ -261,8 +263,8 @@ test("moves an accepted activity to a corrected Trainoq day", async ({ page }) =
   await expect.poll(() => page.evaluate(() => !!localStorage.getItem("tq:day:2026-09-29"))).toBe(true);
   const drafts = await page.evaluate(() => ["2026-09-28", "2026-09-29"].map((date) => localStorage.getItem(`tq:day:${date}`)));
   const days = drafts.map((value) => JSON.parse(value!).doc);
-  expect(days[0].activities).toEqual([]);
-  expect(days[1].activities).toMatchObject([{ id: "run", comment: "Corrected", startedAt: "2026-09-29T01:22:05.000Z", result: { minutes: 30, calories: 160 } }]);
+  expect(savedActivities(days[0])).toEqual([]);
+  expect(savedActivities(days[1])).toMatchObject([{ id: "run", comment: "Corrected", startedAt: "2026-09-29T01:22:05.000Z", result: { minutes: 30, calories: 160 } }]);
   await expect.poll(() => saves.length).toBe(2);
   expect(saves).toEqual(["2026-09-28", "2026-09-29"]);
   expect(newStartedBeforeOldComplete).toBe(false);
@@ -293,8 +295,8 @@ test("requires an explicit session choice when strength matches are ambiguous", 
   await expect(page.getByRole("button", { name: "Link to session" })).toHaveCount(0);
   await chooser.selectOption("second");
   await page.getByRole("button", { name: "Link to session" }).click();
-  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("tq:day:2026-09-28") ?? "null")?.doc?.sessions?.[1]?.garminSourceKey)).toBe(source.sourceKey);
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("tq:day:2026-09-28") ?? "null")?.doc?.events?.[1]?.entries?.[0]?.session?.garminSourceKey)).toBe(source.sourceKey);
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("tq:day:2026-09-28")!).doc);
-  expect(saved.sessions[0].garminSourceKey).toBeUndefined();
-  expect(saved.sessions[1]).toMatchObject({ id: "second", calories: 362, notes: "Keep sets" });
+  expect(savedSessions(saved)[0].garminSourceKey).toBeUndefined();
+  expect(savedSessions(saved)[1]).toMatchObject({ id: "second", calories: 362, notes: "Keep sets" });
 });

@@ -1,6 +1,6 @@
 import { SEED_EXERCISES, seedExercise } from "../../../shared/exercises/catalog";
 import { nameKey, type ExerciseLibrary } from "../../../shared/exercises/model";
-import type { DayDoc } from "../../../shared/days/model";
+import { dayActivities, daySessions, type DayDoc } from "../../../shared/days/model";
 import { request, trpc } from "../../api";
 import { lsGet, lsSet } from "../../storage";
 
@@ -37,11 +37,11 @@ export function createLocalExercise(name: string): CatalogEntry {
 }
 export async function syncDefinitions(doc: DayDoc): Promise<void> {
   const ids = new Set<string>();
-  for (const session of doc.sessions)
+  for (const session of daySessions(doc))
     for (const section of ["warmup", "main", "cooldown"] as const)
       for (const item of session[section])
         for (const exercise of item.kind === "exercise" ? [item] : item.members) ids.add(exercise.exerciseId);
-  for (const activity of doc.activities) ids.add(activity.exerciseId);
+  for (const activity of dayActivities(doc)) ids.add(activity.exerciseId);
   for (const id of ids) {
     if (seedExercise(id)) continue;
     const entry = allCatalog().find((candidate) => candidate.id === id);

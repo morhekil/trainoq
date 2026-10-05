@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { GarminActivitySummary } from "../../../shared/garmin/fit";
-import { emptyDay } from "../../../shared/days/model";
+import { dayActivities, daySessions, emptyDay } from "../../../shared/days/model";
 import { acceptActivity, ignoreGarmin, linkStrengthSession, moveLinkedActivity, strengthMatches, unlinkGarmin } from "../../../shared/garmin/decisions";
 import { request, trpc } from "../../api";
 import { addDays, goToDate, todayLocal } from "../days/dates";
@@ -53,7 +53,7 @@ export function GarminView() {
         const date = sourceDate(source);
         await loadFromServer(date);
         const doc = structuredClone(getEntry(date)?.doc ?? emptyDay(date));
-        if (doc.activities.some((item) => item.garminSourceKey === source.sourceKey) || doc.ignoredGarminSourceKeys.includes(source.sourceKey)) continue;
+        if (dayActivities(doc).some((item) => item.garminSourceKey === source.sourceKey) || doc.ignoredGarminSourceKeys.includes(source.sourceKey)) continue;
         acceptActivity(doc, source, createLocalExercise(source.title).id);
         setDoc(date, doc);
         accepted++;
@@ -189,13 +189,13 @@ function GarminRecord({ source }: { source: Listed }) {
   const [choice, setChoice] = useState("");
   const [error, setError] = useState("");
   const { doc, entry, update } = useDay(date);
-  const localActivity = doc.activities.find((item) => item.garminSourceKey === source.sourceKey);
-  const localSession = doc.sessions.find((item) => item.garminSourceKey === source.sourceKey);
+  const localActivity = dayActivities(doc).find((item) => item.garminSourceKey === source.sourceKey);
+  const localSession = daySessions(doc).find((item) => item.garminSourceKey === source.sourceKey);
   const localStatus = localActivity ? "activity" : localSession ? "session" : doc.ignoredGarminSourceKeys.includes(source.sourceKey) ? "ignored" : null;
   const status = entry?.dirty ? localStatus ?? "pending" : localStatus ?? source.status;
   const matches = strengthMatches(doc, source);
   const selected = choice || (matches.length === 1 ? matches[0] : "");
-  const completed = doc.sessions.filter((session) => session.endedAt && !session.garminSourceKey);
+  const completed = daySessions(doc).filter((session) => session.endedAt && !session.garminSourceKey);
 
   const decide = async (action: (day: typeof doc) => void) => {
     try {

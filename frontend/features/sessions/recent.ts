@@ -1,7 +1,7 @@
 // Finds the most recent earlier session with a given section filled in, for "Repeat" buttons.
 
 import type { SessionItem, Section } from "../../../shared/exercises/model";
-import type { DayDoc } from "../../../shared/days/model";
+import { daySessions, type DayDoc } from "../../../shared/days/model";
 import { request, trpc } from "../../api";
 import { cachedDays, ingestServerDays } from "../days/store";
 
@@ -24,7 +24,7 @@ export async function loadRecentSessions(beforeDate: string): Promise<boolean> {
 export type RepeatSource = { date: string; sameDay: boolean; items: SessionItem[] };
 
 function pickFrom(doc: DayDoc, section: Section, beforeSessionId?: string): RepeatSource | null {
-  let sessions = doc.sessions;
+  let sessions = daySessions(doc);
   if (beforeSessionId) {
     const idx = sessions.findIndex((s) => s.id === beforeSessionId);
     sessions = idx >= 0 ? sessions.slice(0, idx) : [];
@@ -41,7 +41,7 @@ export function findRepeatSource(section: Section, current: DayDoc, sessionId: s
   if (same) return same;
   const earlier = cachedDays()
     .map((e) => e.doc)
-    .filter((d) => d.date < current.date && d.sessions.length)
+    .filter((d) => d.date < current.date && daySessions(d).length)
     .sort((a, b) => b.date.localeCompare(a.date));
   for (const d of earlier) {
     const hit = pickFrom(d, section);

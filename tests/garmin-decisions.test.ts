@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { emptyDay } from "../shared/days/model";
+import { addEventEntry, dayActivities, daySessions, emptyDay } from "../shared/days/model";
 import type { GarminActivitySummary } from "../shared/garmin/fit";
 import type { Session } from "../shared/sessions/model";
 import { acceptActivity, ignoreGarmin, linkStrengthSession, moveLinkedActivity, strengthMatches, unlinkGarmin } from "../shared/garmin/decisions";
@@ -8,16 +8,18 @@ const source: GarminActivitySummary = { sourceKey: "garmin:1:2026-09-28T05:00:00
 const session = (id: string, start: string): Session => ({ id, startedAt: start, endedAt: "2026-09-28T07:00:00.000Z", warmup: [], main: [], cooldown: [], calories: null, notes: "sets stay here" });
 
 it("suggests only one close completed strength session and preserves training details on link", () => {
-  const doc = { ...emptyDay("2026-09-28"), sessions: [session("near", "2026-09-28T05:45:00.000Z"), session("far", "2026-09-28T01:00:00.000Z")] };
+  const doc = emptyDay("2026-09-28");
+  addEventEntry(doc, { kind: "session", session: session("near", "2026-09-28T05:45:00.000Z") });
+  addEventEntry(doc, { kind: "session", session: session("far", "2026-09-28T01:00:00.000Z") });
   expect(strengthMatches(doc, source)).toEqual(["near"]);
-  doc.sessions.push(session("also-near", "2026-09-28T06:20:00.000Z"));
+  addEventEntry(doc, { kind: "session", session: session("also-near", "2026-09-28T06:20:00.000Z") });
   expect(strengthMatches(doc, source)).toEqual(["near", "also-near"]);
-  doc.sessions.pop();
+  doc.events.pop();
   linkStrengthSession(doc, source, "near");
-  expect(doc.sessions[0]).toMatchObject({ id: "near", notes: "sets stay here", calories: 362, garminSourceKey: source.sourceKey });
+  expect(daySessions(doc)[0]).toMatchObject({ id: "near", notes: "sets stay here", calories: 362, garminSourceKey: source.sourceKey });
   unlinkGarmin(doc, source.sourceKey);
-  expect(doc.sessions[0]).toMatchObject({ id: "near", calories: 362 });
-  expect(doc.sessions[0].garminSourceKey).toBeUndefined();
+  expect(daySessions(doc)[0]).toMatchObject({ id: "near", calories: 362 });
+  expect(daySessions(doc)[0].garminSourceKey).toBeUndefined();
 });
 
 it("accepts activity values once, keeps corrections through re-import, and can ignore and restore", () => {
@@ -33,7 +35,7 @@ it("accepts activity values once, keeps corrections through re-import, and can i
   expect(doc.ignoredGarminSourceKeys).toEqual([source.sourceKey]);
   unlinkGarmin(doc, source.sourceKey);
   expect(doc.ignoredGarminSourceKeys).toEqual([]);
-  expect(doc.activities).toHaveLength(1);
+  expect(dayActivities(doc)).toHaveLength(1);
 });
 
 it("moves an accepted activity to another day without replacing corrected values or its local time", () => {
@@ -43,6 +45,6 @@ it("moves an accepted activity to another day without replacing corrected values
   activity.result.calories = 350;
   const newDay = emptyDay("2026-09-29");
   moveLinkedActivity(oldDay, newDay, source.sourceKey);
-  expect(oldDay.activities).toEqual([]);
-  expect(newDay.activities).toMatchObject([{ id: activity.id, comment: "Corrected name and notes", garminSourceKey: source.sourceKey, sourceOffsetMinutes: 600, startedAt: "2026-09-29T06:00:00.000Z", result: { minutes: 60, calories: 350 } }]);
+  expect(dayActivities(oldDay)).toEqual([]);
+  expect(dayActivities(newDay)).toMatchObject([{ id: activity.id, comment: "Corrected name and notes", garminSourceKey: source.sourceKey, sourceOffsetMinutes: 600, startedAt: "2026-09-29T06:00:00.000Z", result: { minutes: 60, calories: 350 } }]);
 });

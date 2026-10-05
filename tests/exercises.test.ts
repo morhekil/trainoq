@@ -3,7 +3,7 @@ import { SEED_EXERCISES } from "../shared/exercises/catalog";
 import { nameKey, type Section } from "../shared/exercises/model";
 import { searchExercises, suggestedSet } from "../frontend/features/exercises/library";
 import { exerciseLibrary } from "../backend/features/exercises/db";
-import { emptyDay } from "../shared/days/model";
+import { addEventEntry, emptyDay } from "../shared/days/model";
 import { exerciseIdForName } from "../shared/exercises/catalog";
 import { allCatalog, clearLocalCatalog, setRemoteCatalog } from "../frontend/features/exercises/catalog";
 
@@ -49,11 +49,11 @@ describe("exercise history", () => {
       removeItem: (k: string) => { map.delete(k); },
     });
     const doc = emptyDay("2026-08-19");
-    doc.sessions = [{ id: "s", startedAt: "2026-08-19T07:00:00Z", endedAt: null, calories: null, notes: "",
+    addEventEntry(doc, { kind: "session", session: { id: "s", startedAt: "2026-08-19T07:00:00Z", endedAt: null, calories: null, notes: "",
       warmup: [{ kind: "exercise", id: "we", exerciseId: exerciseIdForName("Squat"), comment: "", sets: [{ id: "ws", type: "working", weight: 20, reps: 10 }] }],
       main: [{ kind: "exercise", id: "me", exerciseId: exerciseIdForName("Squat"), comment: "", sets: [{ id: "ms", type: "working", weight: 100, reps: 5 }] }],
       cooldown: [],
-    }];
+    } });
     map.set(`tq:day:${doc.date}`, JSON.stringify({ doc, dirty: true, base: null, rev: 1 }));
     expect(suggestedSet(exerciseIdForName("Squat"), "2026-08-20", "warmup")?.weight).toBe(20);
     expect(suggestedSet(exerciseIdForName("Squat"), "2026-08-20", "main")?.weight).toBe(100);

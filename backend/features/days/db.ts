@@ -1,4 +1,4 @@
-import type { DayDoc } from "../../../shared/days/model";
+import { dayActivities, daySessions, type DayDoc } from "../../../shared/days/model";
 import type { ExerciseContext } from "../../../shared/exercises/model";
 import { isDayEmpty } from "../../../shared/days/model";
 import { nameKey } from "../../../shared/exercises/model";
@@ -23,7 +23,7 @@ interface LogRow {
 
 function logRows(doc: DayDoc): LogRow[] {
   const rows: LogRow[] = [];
-  for (const s of doc.sessions) {
+  for (const s of daySessions(doc)) {
     for (const section of ["warmup", "main", "cooldown"] as const)
       for (const item of s[section])
         for (const e of item.kind === "exercise" ? [item] : item.members)
@@ -32,7 +32,7 @@ function logRows(doc: DayDoc): LogRow[] {
             detail: JSON.stringify({ sets: itemSets(item, e.id).map(({ type, weight, reps }) => ({ type, weight, reps })), superset: item.kind === "superset" }),
           });
   }
-  for (const activity of doc.activities)
+  for (const activity of dayActivities(doc))
     rows.push({
       section: "activity", exerciseId: activity.exerciseId, name: seedExercise(activity.exerciseId)?.name ?? "",
       detail: JSON.stringify(activity.result),
@@ -42,8 +42,8 @@ function logRows(doc: DayDoc): LogRow[] {
 
 function garminLinks(doc: DayDoc): { key: string; kind: string; id: string | null }[] {
   return [
-    ...doc.sessions.filter((s) => s.garminSourceKey).map((s) => ({ key: s.garminSourceKey!, kind: "session", id: s.id })),
-    ...doc.activities.filter((a) => a.garminSourceKey).map((a) => ({ key: a.garminSourceKey!, kind: "activity", id: a.id })),
+    ...daySessions(doc).filter((s) => s.garminSourceKey).map((s) => ({ key: s.garminSourceKey!, kind: "session", id: s.id })),
+    ...dayActivities(doc).filter((a) => a.garminSourceKey).map((a) => ({ key: a.garminSourceKey!, kind: "activity", id: a.id })),
     ...doc.ignoredGarminSourceKeys.map((key) => ({ key, kind: "ignored", id: null })),
   ];
 }
@@ -59,12 +59,12 @@ export type PutResult = { ok: true; updatedAt: string | null } | { ok: false; cu
  * Save a day. `base` is the updatedAt the client last saw from the server (null if it never saw one).
  * If the server copy has moved on since then, nothing is written and the current copy is returned.
  */
-export async function putDay(db: D1Database, date: string, doc: DayDoc, base: string | null, sourceVersion = 6, legacyNames: string[] = []): Promise<PutResult> {
+export async function putDay(db: D1Database, date: string, doc: DayDoc, base: string | null, sourceVersion = 7, legacyNames: string[] = []): Promise<PutResult> {
   const links = garminLinks(doc);
   if (new Set(links.map((link) => link.key)).size !== links.length)
     throw new TRPCError({ code: "BAD_REQUEST", message: "Garmin source is used more than once" });
   const existing = await db.prepare("SELECT updated_at, doc FROM days WHERE date = ?").bind(date).first<{ updated_at: string; doc: string }>();
-  if (sourceVersion < 6 && existing && JSON.parse(existing.doc).v === 6)
+  if (sourceVersion < 7 && existing && JSON.parse(existing.doc).v === 7)
     throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Refresh this client before saving a newer day" });
   if (existing && existing.updated_at !== base) {
     return { ok: false, current: await getDay(db, date) };
@@ -122,7 +122,7 @@ export async function listDays(db: D1Database, opts: { before?: string; limit: n
     where.push("date < ?");
     binds.push(opts.before);
   }
-  if (opts.withSessions) where.push("json_array_length(doc, '$.sessions') > 0");
+  if (opts.withSessions) where.push("(json_array_length(doc, '$.sessions') > 0 OR EXISTS (SELECT 1 FROM json_each(days.doc, '$.events') AS event, json_each(event.value, '$.entries') AS entry WHERE json_extract(entry.value, '$.kind') = 'session'))");
   const sql = `SELECT date, doc, updated_at FROM days ${where.length ? "WHERE " + where.join(" AND ") : ""} ORDER BY date DESC LIMIT ?`;
   const { results } = await db
     .prepare(sql)

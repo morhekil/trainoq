@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { emptyDay, type Activity, type DayComment, type DayDoc } from "../../../shared/days/model";
+import { addEventEntry, dayActivities, daySessions, emptyDay, removeEventEntry, type Activity, type DayComment, type DayDoc } from "../../../shared/days/model";
 import { dayToText } from "../../../shared/days/format";
 import { activityTime, orderedDayRecords } from "../../../shared/days/timeline";
 import { useDay } from "./hooks";
@@ -39,7 +39,7 @@ export function DayView({ date }: { date: string }) {
   );
 
   const ctx = useMemo<DayCtx>(() => ({ date, doc, update, undoable, recentVersion }), [date, doc, update, undoable, recentVersion]);
-  const active = doc.sessions.some((s) => !s.endedAt);
+  const active = daySessions(doc).some((s) => !s.endedAt);
   const records = orderedDayRecords(doc);
 
   const start = () =>
@@ -50,21 +50,21 @@ export function DayView({ date }: { date: string }) {
         s.startedAt = hhmmToIso(date, isoToHHMM(s.startedAt));
         s.endedAt = s.startedAt;
       }
-      d.sessions.push(s);
+      addEventEntry(d, { kind: "session", session: s });
     });
 
   return (
     <DayContext.Provider value={ctx}>
       {entry?.conflict && <ConflictBanner date={date} local={doc} other={entry.conflict.doc} />}
       {records.map((record) => record.kind === "session"
-        ? <SessionCard key={`session-${record.s.id}`} s={record.s} index={record.index} total={doc.sessions.length} />
+        ? <SessionCard key={`session-${record.s.id}`} s={record.s} index={record.index} total={daySessions(doc).length} />
         : record.kind === "activity"
           ? <ActivityCard key={`activity-${record.a.id}`} a={record.a} />
           : <CommentCard key={`comment-${record.comment.id}`} comment={record.comment} />)}
       {!active && (
         <button type="button" className="btn big primary start-btn" onClick={start}>
           <Icon name="play" size={18} />
-          {doc.sessions.length ? "Start another session" : "Start training session"}
+          {daySessions(doc).length ? "Start another session" : "Start training session"}
         </button>
       )}
       <AddCommentCard />
@@ -174,7 +174,7 @@ function ActivityCard({ a }: { a: Activity }) {
   const { openPicker, openSheet } = useOverlays();
   const up = (id: string, fn: (a: Activity) => void) =>
     update((d) => {
-      const a = d.activities.find((x) => x.id === id);
+      const a = dayActivities(d).find((x) => x.id === id);
       if (a) fn(a);
     });
 
@@ -212,7 +212,7 @@ function ActivityCard({ a }: { a: Activity }) {
                 actions: [{
                   label: "Delete",
                   danger: true,
-                  onClick: () => undoable("Activity deleted", (d) => (d.activities = d.activities.filter((x) => x.id !== a.id))),
+                  onClick: () => undoable("Activity deleted", (d) => removeEventEntry(d, "activity", a.id)),
                 }],
               })
             }
@@ -230,7 +230,7 @@ function AddActivityCard() {
   const { openPicker } = useOverlays();
   return (
     <section className="card">
-      {doc.activities.length === 0 && <div className="card-title">Other activity</div>}
+      {dayActivities(doc).length === 0 && <div className="card-title">Other activity</div>}
       <div className="row-actions">
         <button
           type="button"
@@ -240,7 +240,7 @@ function AddActivityCard() {
             title: "Add activity",
             onPick: (exerciseId) => {
               const startedAt = hhmmToIso(date, isoToHHMM(new Date().toISOString()));
-              update((d) => d.activities.push({ id: uid(), exerciseId, startedAt, comment: "", result: { minutes: null, calories: null } }));
+              update((d) => addEventEntry(d, { kind: "activity", activity: { id: uid(), exerciseId, startedAt, comment: "", result: { minutes: null, calories: null } } }));
             },
           })}
         >
@@ -254,7 +254,7 @@ function AddActivityCard() {
 
 function TotalsCard() {
   const { doc, update } = useDayCtx();
-  const logged = doc.sessions.reduce((n, s) => n + (s.calories ?? 0), 0) + doc.activities.reduce((n, a) => n + (a.result.calories ?? 0), 0);
+  const logged = daySessions(doc).reduce((n, s) => n + (s.calories ?? 0), 0) + dayActivities(doc).reduce((n, a) => n + (a.result.calories ?? 0), 0);
   return (
     <section className="card">
       <label className="inline-field">
