@@ -2,6 +2,7 @@ import type { DayDoc } from "./model";
 import { countExercises, formatTime, sessionLines } from "../sessions/format";
 import { formatNum } from "../exercises/format";
 import { seedExercise } from "../exercises/catalog";
+import { orderedDayRecords } from "./timeline";
 
 const WEEKDAYS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -29,17 +30,21 @@ export function formatDateShort(date: string): string {
 export function dayToText(d: DayDoc, timeZone?: string, resolveName?: (id: string) => string): string {
   const name = resolveName ?? ((id: string) => seedExercise(id)?.name ?? id);
   const out: string[] = [formatDateLong(d.date)];
-  for (const comment of d.comments) out.push("", `Comment ${comment.time}`, comment.text.trim());
-  for (const s of d.sessions) out.push("", "----", ...sessionLines(s, timeZone, resolveName));
-  const acts = d.activities;
-  if (acts.length) {
-    out.push("", "----", "Activities");
-    for (const a of acts) {
+  let inActivities = false;
+  for (const record of orderedDayRecords(d, timeZone)) {
+    if (record.kind === "comment") {
+      out.push("", `Comment ${record.time}`, record.comment.text.trim());
+    } else if (record.kind === "session") {
+      out.push("", "----", ...sessionLines(record.s, timeZone, resolveName));
+    } else {
+      const a = record.a;
+      if (!inActivities) out.push("", "----", "Activities");
       const bits = [name(a.exerciseId)];
       if (a.result.minutes != null) bits.push(`${formatNum(a.result.minutes)} min`);
       if (a.result.calories != null) bits.push(`${formatNum(a.result.calories)} cal`);
-      out.push(`- ${bits.join(" · ")}${a.comment.trim() ? ` – ${a.comment.trim()}` : ""}`);
+      out.push(`- ${record.time ? `${record.time} ` : ""}${bits.join(" · ")}${a.comment.trim() ? ` – ${a.comment.trim()}` : ""}`);
     }
+    inActivities = record.kind === "activity";
   }
   if (d.totalCalories != null) out.push("", "----");
   if (d.totalCalories != null) out.push(`Total daily active calories: ${formatNum(d.totalCalories)}`);

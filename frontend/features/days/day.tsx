@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
 import { emptyDay, type Activity, type DayComment, type DayDoc } from "../../../shared/days/model";
 import { dayToText } from "../../../shared/days/format";
+import { activityTime, orderedDayRecords } from "../../../shared/days/timeline";
 import { useDay } from "./hooks";
 import { libraryVersion, refreshLibrary, subscribeLibrary } from "../exercises/library";
 import { exerciseName } from "../exercises/catalog";
@@ -39,11 +40,7 @@ export function DayView({ date }: { date: string }) {
 
   const ctx = useMemo<DayCtx>(() => ({ date, doc, update, undoable, recentVersion }), [date, doc, update, undoable, recentVersion]);
   const active = doc.sessions.some((s) => !s.endedAt);
-  const records = [
-    ...[...doc.sessions].sort((a, b) => isoToHHMM(a.startedAt).localeCompare(isoToHHMM(b.startedAt))).map((s, index) => ({ kind: "session" as const, s, index, time: isoToHHMM(s.startedAt) })),
-    ...doc.activities.map((a) => ({ kind: "activity" as const, a, time: activityTime(a) })),
-    ...doc.comments.map((comment) => ({ kind: "comment" as const, comment, time: comment.time })),
-  ].sort((a, b) => (a.time ?? "99:99").localeCompare(b.time ?? "99:99"));
+  const records = orderedDayRecords(doc);
 
   const start = () =>
     update((d) => {
@@ -170,13 +167,6 @@ function AddCommentCard() {
       </button>}
     </section>
   );
-}
-
-function activityTime(activity: Activity): string | null {
-  if (!activity.startedAt) return null;
-  return activity.sourceOffsetMinutes == null
-    ? isoToHHMM(activity.startedAt)
-    : new Date(Date.parse(activity.startedAt) + activity.sourceOffsetMinutes * 60_000).toISOString().slice(11, 16);
 }
 
 function ActivityCard({ a }: { a: Activity }) {
