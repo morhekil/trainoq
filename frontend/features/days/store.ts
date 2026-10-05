@@ -2,7 +2,7 @@
 // synced to the server in the background, so a flaky gym connection never loses data.
 
 import { emptyDay, type DayDoc } from "../../../shared/days/model";
-import { legacyExerciseNames, normalizeDay, type LegacyDayDoc, type V2DayDoc, type V3DayDoc, type V4DayDoc } from "../../../shared/days/migrate";
+import { legacyExerciseNames, normalizeDay, type LegacyDayDoc, type V2DayDoc, type V3DayDoc, type V4DayDoc, type V5DayDoc } from "../../../shared/days/migrate";
 import { exerciseIdForName } from "../../../shared/exercises/catalog";
 import { clearLocalCatalog, registerExercise, syncDefinitions } from "../exercises/catalog";
 import { trpc, request, NetworkError } from "../../api";
@@ -79,12 +79,12 @@ export function getEntry(date: string): Entry | null {
   if (!mem.has(date)) {
     const entry = lsGet<Entry>(PREFIX + date);
     if (entry) {
-      const raw = entry.doc as DayDoc | V4DayDoc | LegacyDayDoc | V2DayDoc | V3DayDoc;
+      const raw = entry.doc as DayDoc | V5DayDoc | V4DayDoc | LegacyDayDoc | V2DayDoc | V3DayDoc;
       if (raw.v === 1 || raw.v === 2 || raw.v === 3) legacyExerciseNames(raw).forEach((name) => registerExercise(exerciseIdForName(name), name));
       const doc = normalizeDay(raw);
       const conflict = entry.conflict?.doc
         ? (() => {
-          const rawConflict = entry.conflict!.doc as DayDoc | V4DayDoc | LegacyDayDoc | V2DayDoc | V3DayDoc;
+          const rawConflict = entry.conflict!.doc as DayDoc | V5DayDoc | V4DayDoc | LegacyDayDoc | V2DayDoc | V3DayDoc;
           if (rawConflict.v === 1 || rawConflict.v === 2 || rawConflict.v === 3) legacyExerciseNames(rawConflict).forEach((name) => registerExercise(exerciseIdForName(name), name));
           return { ...entry.conflict, doc: normalizeDay(rawConflict) };
         })()

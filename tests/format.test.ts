@@ -24,10 +24,10 @@ describe("formatSets", () => {
 describe("dayToText", () => {
   it("renders a day the way it gets shared", () => {
     const doc: DayDoc = {
-      v: 5,
+      v: 6,
       date: "2026-09-22",
       ignoredGarminSourceKeys: [],
-      morning: "Morning stiffness: 4/10",
+      comments: [{ id: "c", time: "08:00", text: "Morning stiffness: 4/10" }],
       sessions: [
         {
           id: "s",
@@ -50,13 +50,12 @@ describe("dayToText", () => {
       ],
       activities: [{ id: "w", exerciseId: exerciseIdForName("Walk"), comment: "", result: { minutes: 30, calories: 115 } }],
       totalCalories: 710,
-      notes: "",
     };
     expect(dayToText(doc, "Australia/Sydney")).toBe(
       [
         "Tue 22 Sep 2026",
         "",
-        "Morning",
+        "Comment 08:00",
         "Morning stiffness: 4/10",
         "",
         "----",

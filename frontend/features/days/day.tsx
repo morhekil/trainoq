@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { emptyDay, type Activity, type DayDoc } from "../../../shared/days/model";
+import { emptyDay, type Activity, type DayComment, type DayDoc } from "../../../shared/days/model";
 import { dayToText } from "../../../shared/days/format";
 import { useDay } from "./hooks";
 import { libraryVersion, refreshLibrary, subscribeLibrary } from "../exercises/library";
@@ -42,6 +42,7 @@ export function DayView({ date }: { date: string }) {
   const records = [
     ...[...doc.sessions].sort((a, b) => isoToHHMM(a.startedAt).localeCompare(isoToHHMM(b.startedAt))).map((s, index) => ({ kind: "session" as const, s, index, time: isoToHHMM(s.startedAt) })),
     ...doc.activities.map((a) => ({ kind: "activity" as const, a, time: activityTime(a) })),
+    ...doc.comments.map((comment) => ({ kind: "comment" as const, comment, time: comment.time })),
   ].sort((a, b) => (a.time ?? "99:99").localeCompare(b.time ?? "99:99"));
 
   const start = () =>
@@ -58,16 +59,18 @@ export function DayView({ date }: { date: string }) {
   return (
     <DayContext.Provider value={ctx}>
       {entry?.conflict && <ConflictBanner date={date} local={doc} other={entry.conflict.doc} />}
-      <MorningCard />
       {records.map((record) => record.kind === "session"
         ? <SessionCard key={`session-${record.s.id}`} s={record.s} index={record.index} total={doc.sessions.length} />
-        : <ActivityCard key={`activity-${record.a.id}`} a={record.a} />)}
+        : record.kind === "activity"
+          ? <ActivityCard key={`activity-${record.a.id}`} a={record.a} />
+          : <CommentCard key={`comment-${record.comment.id}`} comment={record.comment} />)}
       {!active && (
         <button type="button" className="btn big primary start-btn" onClick={start}>
           <Icon name="play" size={18} />
           {doc.sessions.length ? "Start another session" : "Start training session"}
         </button>
       )}
+      <AddCommentCard />
       <AddActivityCard />
       <TotalsCard />
     </DayContext.Provider>
@@ -115,20 +118,56 @@ function ConflictBanner({ date, local, other }: { date: string; local: DayDoc; o
   );
 }
 
-function MorningCard() {
-  const { doc, update } = useDayCtx();
+function CommentCard({ comment }: { comment: DayComment }) {
+  const { update, undoable } = useDayCtx();
+  const { openSheet } = useOverlays();
+  const change = (fn: (item: DayComment) => void) => update((day) => {
+    const item = day.comments.find((entry) => entry.id === comment.id);
+    if (item) fn(item);
+  });
+  return (
+    <section className="card comment-card" data-comment-time={comment.time}>
+      <label className="activity-time">Time
+        <input type="time" aria-label="Comment time" value={comment.time} onChange={(event) => event.target.value && change((item) => (item.time = event.target.value))} />
+      </label>
+      <div className="activity-row">
+        <label className="card-title" htmlFor={`comment-${comment.id}`}>Comment</label>
+        <button type="button" className="icon-btn" aria-label="Comment options" onClick={() => openSheet({
+          title: "Comment", actions: [{ label: "Delete", danger: true,
+            onClick: () => undoable("Comment deleted", (day) => (day.comments = day.comments.filter((item) => item.id !== comment.id))) }],
+        })}><Icon name="more" /></button>
+      </div>
+      <AutoTextarea id={`comment-${comment.id}`} minRows={2} value={comment.text} onChange={(event) => change((item) => (item.text = event.target.value))} />
+    </section>
+  );
+}
+
+function AddCommentCard() {
+  const { update } = useDayCtx();
+  const [open, setOpen] = useState(false);
+  const [time, setTime] = useState(() => isoToHHMM(new Date().toISOString()));
+  const [text, setText] = useState("");
+  const add = () => {
+    if (!text.trim()) return;
+    update((day) => day.comments.push({ id: uid(), time, text }));
+    setText("");
+    setOpen(false);
+  };
   return (
     <section className="card">
-      <label className="card-title" htmlFor="morning">
-        Morning check-in
-      </label>
-      <AutoTextarea
-        id="morning"
-        minRows={2}
-        placeholder="Stiffness, sleep, pain, energy, meds…"
-        value={doc.morning}
-        onChange={(e) => update((d) => (d.morning = e.target.value))}
-      />
+      {open ? <>
+        <label className="activity-time">Time
+          <input type="time" aria-label="New comment time" value={time} onChange={(event) => setTime(event.target.value)} />
+        </label>
+        <label className="card-title" htmlFor="new-day-comment">Comment</label>
+        <AutoTextarea id="new-day-comment" minRows={2} placeholder="What happened?" autoFocus value={text} onChange={(event) => setText(event.target.value)} />
+        <div className="row-actions">
+          <button type="button" className="btn ghost" onClick={() => { setOpen(false); setText(""); }}>Cancel</button>
+          <button type="button" className="btn primary" disabled={!text.trim() || !time} onClick={add}>Save comment</button>
+        </div>
+      </> : <button type="button" className="btn ghost" onClick={() => { setTime(isoToHHMM(new Date().toISOString())); setOpen(true); }}>
+        <Icon name="plus" size={18} /> Add comment
+      </button>}
     </section>
   );
 }
@@ -239,8 +278,6 @@ function TotalsCard() {
         />
       </label>
       {logged > 0 && <div className="hint">Logged above: {logged} cal</div>}
-      <label className="card-title" htmlFor="day-notes">Day notes</label>
-      <AutoTextarea id="day-notes" minRows={1} value={doc.notes} onChange={(e) => update((d) => (d.notes = e.target.value))} />
     </section>
   );
 }

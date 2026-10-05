@@ -53,8 +53,8 @@ export function HistoryView() {
               {formatDateLong(d.date)}
               {e?.dirty && <span className="pill">not synced</span>}
             </div>
-            {d.morning.trim() && <div className="history-morning">{d.morning.trim().split("\n")[0]}</div>}
-            <div className="history-summary muted">{daySummary(d, undefined, exerciseName) || "Notes only"}</div>
+            {d.comments[0]?.text.trim() && <div className="history-morning">{d.comments[0].text.trim().split("\n")[0]}</div>}
+            <div className="history-summary muted">{daySummary(d, undefined, exerciseName) || "Comments only"}</div>
           </button>
         );
       })}

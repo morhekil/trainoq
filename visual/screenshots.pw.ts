@@ -88,11 +88,35 @@ test("password keeps a visible label after entry", async ({ page }) => {
   await expect(page.getByText("Password", { exact: true })).toBeVisible();
 });
 
+test("old day check-ins appear as timed comments in the record timeline", async ({ page }) => {
+  await mockApi(page);
+  await page.addInitScript(({ date }) => {
+    localStorage.setItem("tq:authed", JSON.stringify(true));
+    localStorage.setItem(`tq:day:${date}`, JSON.stringify({
+      doc: {
+        v: 5, date, morning: "Morning reflection", notes: "Night reflection",
+        sessions: [], activities: [{ id: "walk", exerciseId: "seed:0033", comment: "", startedAt: "2026-09-15T02:00:00.000Z", result: { minutes: 20, calories: null } }],
+        ignoredGarminSourceKeys: [], totalCalories: null,
+      },
+      base: null, dirty: false, rev: 1,
+    }));
+  }, { date: day });
+  await page.goto(`/#/d/${day}`);
+
+  const morning = page.locator("[data-comment-time='08:00'] textarea");
+  const night = page.locator("[data-comment-time='23:30'] textarea");
+  await expect(morning).toHaveValue("Morning reflection");
+  await expect(night).toHaveValue("Night reflection");
+  expect(await morning.evaluate((element, other) => !!(element.compareDocumentPosition(document.querySelector(other)!) & Node.DOCUMENT_POSITION_FOLLOWING), ".activity-card")).toBe(true);
+  expect(await page.locator(".activity-card").evaluate((element, other) => !!(element.compareDocumentPosition(document.querySelector(other)!) & Node.DOCUMENT_POSITION_FOLLOWING), "[data-comment-time='23:30']")).toBe(true);
+});
+
 test("visible placeholder remains readable in both themes", async ({ page }) => {
   await mockApi(page);
   await page.addInitScript(() => localStorage.setItem("tq:authed", JSON.stringify(true)));
   await page.goto(`/#/d/${emptyDay}`);
-  const field = page.getByLabel("Morning check-in");
+  await page.getByRole("button", { name: "Add comment" }).click();
+  const field = page.getByRole("textbox", { name: "Comment", exact: true });
   expect(await field.getAttribute("placeholder")).toBeTruthy();
   for (const colorScheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme });
@@ -247,16 +271,17 @@ test("exercise search keeps its context after typing", async ({ page }) => {
   await expect(page.getByRole("dialog", { name: "Warm-up exercise" }).getByText("Warm-up exercise", { exact: true })).toBeVisible();
 });
 
-test("day and session notes keep visible labels after entry", async ({ page }) => {
+test("day comments and session notes keep visible labels after entry", async ({ page }) => {
   await mockApi(page);
   await page.addInitScript(({ date, doc }) => {
     localStorage.setItem("tq:authed", JSON.stringify(true));
     localStorage.setItem(`tq:day:${date}`, JSON.stringify({ doc, base: null, dirty: false, rev: 1 }));
   }, { date: day, doc });
   await page.goto(`/#/d/${day}`);
-  await page.getByRole("textbox", { name: "Day notes" }).fill("Evening update");
+  await page.getByRole("button", { name: "Add comment" }).click();
+  await page.locator("#new-day-comment").fill("Evening update");
   await page.getByRole("textbox", { name: "Session notes" }).fill("Form improved");
-  await expect(page.getByText("Day notes", { exact: true })).toBeVisible();
+  await expect(page.locator('label[for="new-day-comment"]')).toBeVisible();
   await expect(page.getByText("Session notes", { exact: true })).toBeVisible();
 });
 
@@ -330,9 +355,9 @@ test("conflict choice previews both versions before replacing local edits", asyn
   await expect(dialog).toContainText(other.morning);
   await expect(dialog.getByRole("heading", { name: "Other device" })).toBeInViewport();
   await expect(page).toHaveScreenshot("conflict-review-320.png");
-  expect(await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!).doc.morning, day)).toBe(doc.morning);
+  expect(await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!).doc.comments[0].text, day)).toBe(doc.morning);
   await dialog.getByRole("button", { name: "Replace this device's edits" }).click();
-  expect(await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!).doc.morning, day)).toBe(other.morning);
+  expect(await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!).doc.comments[0].text, day)).toBe(other.morning);
 });
 
 test("conflict review can be cancelled before replacing the server version", async ({ page }) => {
@@ -717,7 +742,7 @@ test("touch drag scrolls to the superset target", async ({ page }) => {
   await expect(main.locator(".block.superset")).toHaveCount(1);
 });
 
-test("an offline v1 draft syncs as v5 and preserves its revision base", async ({ page }) => {
+test("an offline v1 draft syncs as v6 and preserves its revision base", async ({ page }) => {
   await mockApi(page);
   const requests: string[] = [];
   page.on("request", (request) => { if (request.url().includes("/api/trpc/")) requests.push(request.url().split("/").at(-1)!); });
@@ -735,14 +760,14 @@ test("an offline v1 draft syncs as v5 and preserves its revision base", async ({
   const payload = request.postDataJSON();
   const input = payload.json ?? payload;
   expect(input.base).toBe("previous-revision");
-  expect(input.doc.v).toBe(5);
+  expect(input.doc.v).toBe(6);
   expect(requests.indexOf("exercises.create")).toBeGreaterThanOrEqual(0);
   expect(requests.indexOf("exercises.create")).toBeLessThan(requests.indexOf("days.save"));
   expect(input.doc.sessions[0].warmup[0].sets.map((set: { reps: number }) => set.reps)).toEqual([15, 15]);
   await expect(page.getByText("Band pull-apart", { exact: true })).toBeVisible();
   const entry = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!), day);
   expect(entry.rev).toBe(7);
-  expect(entry.doc.v).toBe(5);
+  expect(entry.doc.v).toBe(6);
 });
 
 test("v1 conflict copies normalize before either version is chosen", async ({ page }) => {
@@ -760,13 +785,13 @@ test("v1 conflict copies normalize before either version is chosen", async ({ pa
   }, { date: day, legacy });
   await page.goto(`/#/d/${day}`);
   const before = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!), day);
-  expect([before.doc.v, before.conflict.doc.v, before.base, before.dirty, before.rev, before.conflict.updatedAt]).toEqual([5, 5, "old-revision", true, 9, "new-revision"]);
+  expect([before.doc.v, before.conflict.doc.v, before.base, before.dirty, before.rev, before.conflict.updatedAt]).toEqual([6, 6, "old-revision", true, 9, "new-revision"]);
   await page.getByRole("button", { name: "Use other device's" }).click();
   const dialog = page.getByRole("dialog", { name: "Review day versions" });
   await expect(dialog).toContainText("Other device");
   await dialog.getByRole("button", { name: "Replace this device's edits" }).click();
   const after = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!), day);
-  expect([after.doc.v, after.doc.morning, after.base, after.dirty, after.rev]).toEqual([5, "Other device", "new-revision", false, 10]);
+  expect([after.doc.v, after.doc.comments[0].text, after.base, after.dirty, after.rev]).toEqual([6, "Other device", "new-revision", false, 10]);
 });
 
 test("repeat keeps grouping and set types across every section without recorded values", async ({ page }) => {
@@ -827,7 +852,7 @@ for (const width of [320, 390, 1280]) {
       localStorage.setItem(`tq:day:${date}`, JSON.stringify({ doc, base: null, dirty: false, rev: 1 }));
     }, { date: day, doc });
     await page.goto(`/#/d/${emptyDay}`);
-    await expect(page.getByText("Morning check-in")).toBeVisible();
+    await expect(page.getByRole("button", { name: "Add comment" })).toBeVisible();
     await checkWidth(page);
     await expect(page).toHaveScreenshot(`empty-day-${width}.png`, { fullPage: true });
 

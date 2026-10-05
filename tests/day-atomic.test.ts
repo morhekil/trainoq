@@ -41,7 +41,7 @@ describe("atomic day saves", () => {
     const { db, sqlite } = testDb();
     const date = "2026-09-28";
     const day = (name: string, calories: number) => ({
-      ...emptyDay(date), morning: name,
+      ...emptyDay(date), comments: [{ id: name, time: "08:00", text: name }],
       activities: [{ id: name, exerciseId: "seed:0033", comment: "", result: { minutes: 20, calories } }],
     });
     const writePair = async (base: string | null) => {

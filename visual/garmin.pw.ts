@@ -146,7 +146,7 @@ test("imports an original FIT in the browser and sends verified active calories"
 });
 
 test("edits an accepted activity's Garmin local start time", async ({ page }) => {
-  const doc = { v: 5, date: "2026-09-28", morning: "", sessions: [], activities: [{ id: "run", exerciseId: "seed:0170", comment: "", startedAt: "2026-09-28T06:00:00.000Z", sourceOffsetMinutes: 330, garminSourceKey: "garmin:123:2026-09-28T06:00:00.000Z:0", result: { minutes: 26, calories: 172 } }], ignoredGarminSourceKeys: [], totalCalories: null, notes: "" };
+  const doc = { v: 6, date: "2026-09-28", comments: [], sessions: [], activities: [{ id: "run", exerciseId: "seed:0170", comment: "", startedAt: "2026-09-28T06:00:00.000Z", sourceOffsetMinutes: 330, garminSourceKey: "garmin:123:2026-09-28T06:00:00.000Z:0", result: { minutes: 26, calories: 172 } }], ignoredGarminSourceKeys: [], totalCalories: null };
   await page.route("**/api/trpc/**", async (route) => {
     const procedure = new URL(route.request().url()).pathname.split("/").at(-1);
     const data = procedure === "auth.me" ? { ok: true }
@@ -173,7 +173,7 @@ test("edits an accepted activity's Garmin local start time", async ({ page }) =>
 test("moves an accepted activity to a corrected Trainoq day", async ({ page }) => {
   const key = "garmin:123:2026-09-28T01:22:05.000Z:0";
   const source = { sourceKey: key, sport: "running", subSport: "generic", title: "Run", startUtc: "2026-09-28T01:22:05.000Z", localDate: "2026-09-28", offsetMinutes: 600, timerSeconds: 1561.339, elapsedSeconds: 1561.339, activeCalories: 172, importedAt: "2026-09-28T08:00:00.000Z", status: "activity", targetId: "run", decisionDate: "2026-09-28" };
-  const old = { v: 5, date: "2026-09-28", morning: "", sessions: [], activities: [{ id: "run", exerciseId: "seed:0170", comment: "Corrected", startedAt: source.startUtc, sourceOffsetMinutes: 600, garminSourceKey: key, result: { minutes: 30, calories: 160 } }], ignoredGarminSourceKeys: [], totalCalories: null, notes: "" };
+  const old = { v: 6, date: "2026-09-28", comments: [], sessions: [], activities: [{ id: "run", exerciseId: "seed:0170", comment: "Corrected", startedAt: source.startUtc, sourceOffsetMinutes: 600, garminSourceKey: key, result: { minutes: 30, calories: 160 } }], ignoredGarminSourceKeys: [], totalCalories: null };
   const saves: string[] = [];
   let oldCompleted = false;
   let newStartedBeforeOldComplete = false;
@@ -220,7 +220,7 @@ test("moves an accepted activity to a corrected Trainoq day", async ({ page }) =
 test("requires an explicit session choice when strength matches are ambiguous", async ({ page }) => {
   const source = { sourceKey: "garmin:123:2026-09-28T06:00:00.000Z:0", sport: "training", subSport: "strengthTraining", title: "Strength", startUtc: "2026-09-28T06:00:00.000Z", localDate: "2026-09-28", offsetMinutes: 600, timerSeconds: 3600, elapsedSeconds: 3700, activeCalories: 362, importedAt: "2026-09-28T08:00:00.000Z", status: "pending", targetId: null, decisionDate: null };
   const session = (id: string, startedAt: string) => ({ id, startedAt, endedAt: "2026-09-28T07:00:00.000Z", warmup: [], main: [], cooldown: [], calories: null, notes: "Keep sets" });
-  const doc = { v: 5, date: "2026-09-28", morning: "", sessions: [session("first", "2026-09-28T05:45:00.000Z"), session("second", "2026-09-28T06:10:00.000Z")], activities: [], ignoredGarminSourceKeys: [], totalCalories: null, notes: "" };
+  const doc = { v: 6, date: "2026-09-28", comments: [], sessions: [session("first", "2026-09-28T05:45:00.000Z"), session("second", "2026-09-28T06:10:00.000Z")], activities: [], ignoredGarminSourceKeys: [], totalCalories: null };
   await page.route("**/api/trpc/**", async (route) => {
     const procedure = new URL(route.request().url()).pathname.split("/").at(-1);
     const data = procedure === "auth.me" ? { ok: true }

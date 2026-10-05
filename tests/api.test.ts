@@ -7,7 +7,7 @@ import worker from "../backend/index";
 import type { AppRouter } from "../backend/router";
 
 describe("Worker tRPC boundary", () => {
-  it("migrates old days, protects v5 writes, resolves catalog IDs and exports definitions", async () => {
+  it("migrates old days, protects v6 writes, resolves catalog IDs and exports definitions", async () => {
     const days = new Map<string, { date: string; doc: string; updated_at: string }>();
     const catalog = new Map<string, string>();
     let logRows: { sql: string; args: unknown[] }[] = [];
@@ -76,7 +76,7 @@ describe("Worker tRPC boundary", () => {
     finally { log.mockRestore(); }
     await client.auth.login.mutate({ password: "test-password" });
 
-    const old: LegacyDayDoc = { ...emptyDay("2026-09-23"), v: 1, activities: [
+    const old: LegacyDayDoc = { ...emptyDay("2026-09-23"), v: 1, morning: "", notes: "", activities: [
       { id: "activity", name: "Trail run", minutes: 35, calories: 280, notes: "Steady" },
     ], sessions: [{
       id: "s", startedAt: "2026-09-23T07:00:00Z", endedAt: null,
@@ -86,7 +86,7 @@ describe("Worker tRPC boundary", () => {
     const first = await client.days.save.mutate({ date: old.date, doc: old, base: null });
     expect(first.ok).toBe(true);
     const migrated = (await client.days.get.query(old.date)).doc!;
-    expect(migrated.v).toBe(5);
+    expect(migrated.v).toBe(6);
     expect(migrated.sessions[0].warmup[0]).toMatchObject({ kind: "exercise", exerciseId: exerciseIdForName("Row"), comment: "Light band", sets: [{ reps: 10 }, { reps: 10 }] });
     expect(migrated.activities).toEqual([{ id: "activity", exerciseId: exerciseIdForName("Trail run"), comment: "Steady", result: { minutes: 35, calories: 280 } }]);
     expect((await client.days.list.query({ withSessions: true, limit: 10 }))[0].doc).toEqual(migrated);

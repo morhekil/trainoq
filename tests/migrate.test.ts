@@ -7,6 +7,8 @@ import type { StandaloneExercise } from "../shared/exercises/model";
 const doc: LegacyDayDoc = {
   ...emptyDay("2026-09-25"),
   v: 1,
+  morning: "",
+  notes: "",
   activities: [],
   sessions: [{
     id: "session",
@@ -35,7 +37,7 @@ describe("v1 day migration", () => {
     const curl = s.cooldown[0] as StandaloneExercise;
     const values = (sets: typeof rows.sets) => sets.map(({ type, weight, reps }) => ({ type, weight, reps }));
 
-    expect(migrated.v).toBe(5);
+    expect(migrated.v).toBe(6);
     expect(s.warmup.map((item) => item.id)).toEqual(["a", "b", "c", "d", "e", "f"]);
     expect(values(rows.sets)).toEqual([{ type: "working", weight: null, reps: 10 }, { type: "working", weight: null, reps: 10 }]);
     expect(values(hold.sets)).toEqual([{ type: "working", weight: null, reps: null }]);
@@ -60,7 +62,7 @@ describe("v1 day migration", () => {
     expect(() => migrateDay(unknown)).toThrow(/tenish/);
   });
 
-  it("normalizes v1 once and validates the canonical v5 day", () => {
+  it("normalizes v1 once and validates the canonical v6 day", () => {
     const migrated = normalizeDay(doc);
     expect(migrated).toEqual(migrateDay(doc));
     expect(normalizeDay(migrated)).toBe(migrated);
@@ -69,12 +71,12 @@ describe("v1 day migration", () => {
   });
 });
 
-it("migrates v4 decisions to v5 and keeps ignored Garmin records on an otherwise empty day", () => {
-  const v4 = { ...emptyDay("2026-09-25"), v: 4 as const };
+it("migrates v4 decisions to v6 and keeps ignored Garmin records on an otherwise empty day", () => {
+  const v4 = { ...emptyDay("2026-09-25"), v: 4 as const, morning: "", notes: "" };
   delete (v4 as Partial<typeof v4>).ignoredGarminSourceKeys;
   const migrated = inputDaySchema.parse(v4);
-  expect(migrated).toEqual({ ...v4, v: 5, ignoredGarminSourceKeys: [] });
-  expect(emptyDay("2026-09-25").v).toBe(5);
+  expect(migrated).toEqual({ ...emptyDay("2026-09-25"), v: 6 });
+  expect(emptyDay("2026-09-25").v).toBe(6);
   expect(isDayEmpty({ ...migrated, ignoredGarminSourceKeys: ["garmin:source"] })).toBe(false);
   expect(daySchema.parse({ ...migrated, activities: [{ id: "a", exerciseId: "x", comment: "", startedAt: "2026-09-25T09:00:00.000Z", garminSourceKey: "garmin:source", result: { minutes: 25, calories: 172 } }] }).activities[0].garminSourceKey).toBe("garmin:source");
 });

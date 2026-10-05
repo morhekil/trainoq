@@ -57,7 +57,7 @@ Moving a linked activity to a corrected date preserves its ID, exercise, notes, 
 
 ## Data model
 
-The saved document is `DayDoc` v5. These shapes are a map for readers; the current types live in [`shared/days/model.ts`](shared/days/model.ts), [`shared/sessions/model.ts`](shared/sessions/model.ts), and [`shared/exercises/model.ts`](shared/exercises/model.ts).
+The saved document is `DayDoc` v6. These shapes are a map for readers; the current types live in [`shared/days/model.ts`](shared/days/model.ts), [`shared/sessions/model.ts`](shared/sessions/model.ts), and [`shared/exercises/model.ts`](shared/exercises/model.ts).
 
 ```ts
 type SetType = "warmup" | "working" | "backoff";
@@ -91,15 +91,15 @@ interface Session {
   garminSourceKey?: string;
 }
 type Activity = PerformedExercise & { result: ActivityResult; startedAt?: string; sourceOffsetMinutes?: number; garminSourceKey?: string };
+interface DayComment { id: string; time: string; text: string }
 interface DayDoc {
-  v: 5;
+  v: 6;
   date: string; // YYYY-MM-DD
-  morning: string;
+  comments: DayComment[]; // local HH:mm on this date
   sessions: Session[];
   activities: Activity[];
   ignoredGarminSourceKeys: string[];
   totalCalories: number | null;
-  notes: string;
 }
 ```
 
@@ -107,7 +107,7 @@ interface DayDoc {
 
 A standalone item owns its ordered `sets`. A superset owns ordered `members` and `rounds`, with one `results` row for every `(memberId, roundId)` pair. For two members and three rounds, there are six results. Validation rejects duplicate member or round IDs, unknown or repeated result pairs, and missing pairs. The explicit `kind` keeps a superset a superset with zero or one member; an empty superset can retain rounds. `null` is an unentered weight or rep count, and weight `0` means bodyweight. See [`shared/days/schema.ts`](shared/days/schema.ts) for validation and [`shared/sessions/ops.ts`](shared/sessions/ops.ts) for shared editing operations.
 
-There is no `Block` in v5. V2 used `{ id, exercises: [...] }` blocks in all three session sections; v1 used them in `main` and individual legacy items in `warmup` and `cooldown`. [`shared/days/migrate.ts`](shared/days/migrate.ts) converts v1/v2 session data and v1/v2/v3 name-based activities. Old activity `notes` become the performance `comment`; minutes and calories keep their values. The UI still uses `block` as a CSS class. Get, list, and export return v5 even when an untouched D1 row contains an older version; saving writes v5.
+There is no `Block` in v6. V2 used `{ id, exercises: [...] }` blocks in all three session sections; v1 used them in `main` and individual legacy items in `warmup` and `cooldown`. [`shared/days/migrate.ts`](shared/days/migrate.ts) converts v1/v2 session data and v1/v2/v3 name-based activities. Old activity `notes` become the performance `comment`; minutes and calories keep their values. V1 through v5 day-level `morning` and `notes` become comments at 08:00 and 23:30 when no more specific audit applies. The UI still uses `block` as a CSS class. Get, list, and export return v6 even when an untouched D1 row contains an older version; saving writes v6.
 
 ### Storage and read models
 
@@ -147,7 +147,7 @@ History is keyed by exercise ID; the Worker returns up to four recent entries pe
 
 ## Saving a day
 
-`days.save` sends the **whole** `DayDoc`. The document's `date` must equal the input `date`. The server validates nested fields, unique member and round IDs, and the complete result-pair grid with Zod; it rejects a serialized document longer than 524,288 JavaScript string code units. Each referenced custom exercise ID, including an activity's, must exist in the catalog. Create local custom definitions before saving a day that uses them; the browser does this on reconnect. An empty document deletes that day and its exercise log. The server accepts v1 through v4 days, migrates names and results without dropping values or comments, and saves v5. Unknown legacy reps text is rejected. An old client receives `PRECONDITION_FAILED` if it tries to save an older version over an existing v5 day. Existing D1 days convert on read and on their next save; no bulk day rewrite is needed. Unsynced drafts and conflict copies convert locally without changing their revision base or conflict state. A v5 day can hold optional Garmin source keys on sessions and activities, an optional activity start time, and ignored Garmin source keys. An ignored decision keeps an otherwise empty day stored.
+`days.save` sends the **whole** `DayDoc`. The document's `date` must equal the input `date`. The server validates nested fields, unique member and round IDs, and the complete result-pair grid with Zod; it rejects a serialized document longer than 524,288 JavaScript string code units. Each referenced custom exercise ID, including an activity's, must exist in the catalog. Create local custom definitions before saving a day that uses them; the browser does this on reconnect. An empty document deletes that day and its exercise log. The server accepts v1 through v5 days, migrates names, results and day notes without dropping values, and saves v6. Unknown legacy reps text is rejected. An old client receives `PRECONDITION_FAILED` if it tries to save an older version over an existing v6 day. Existing D1 days convert on read and on their next save. Unsynced drafts and conflict copies convert locally without changing their revision base or conflict state. A v6 day can hold optional Garmin source keys on sessions and activities, an optional activity start time, and ignored Garmin source keys. An ignored decision or comment keeps an otherwise empty day stored.
 
 A Garmin source key can have one decision across all days. A duplicate link or ignore returns `BAD_REQUEST` and leaves the attempted day and derived indexes untouched.
 
@@ -165,6 +165,6 @@ The revision comparison, day write and exercise-index update run in one D1 batch
 
 ## Errors
 
-tRPC returns `UNAUTHORIZED` for a missing or invalid session or a wrong password. Invalid input, including a malformed day or unresolved exercise ID, returns `BAD_REQUEST`. An old client write over v5 returns `PRECONDITION_FAILED`. Other server failures use the usual tRPC error envelope. The browser wrapper in `frontend/api.ts` turns `UNAUTHORIZED` into `AuthError` and transport failures into `NetworkError`; these wrapper classes are not wire responses. A revision conflict is a successful `days.save` response with `ok: false`.
+tRPC returns `UNAUTHORIZED` for a missing or invalid session or a wrong password. Invalid input, including a malformed day or unresolved exercise ID, returns `BAD_REQUEST`. An old client write over v6 returns `PRECONDITION_FAILED`. Other server failures use the usual tRPC error envelope. The browser wrapper in `frontend/api.ts` turns `UNAUTHORIZED` into `AuthError` and transport failures into `NetworkError`; these wrapper classes are not wire responses. A revision conflict is a successful `days.save` response with `ok: false`.
 
 The API does not yet provide agent-specific credentials or intent-level mutations. Those are tracked in `.tasks/`. Pure session edit rules in `shared/sessions/ops.ts` can be reused by those future mutations. Clients that need to write today must send a validated whole-day document through `days.save`.

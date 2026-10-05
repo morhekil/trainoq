@@ -29,7 +29,7 @@ export function formatDateShort(date: string): string {
 export function dayToText(d: DayDoc, timeZone?: string, resolveName?: (id: string) => string): string {
   const name = resolveName ?? ((id: string) => seedExercise(id)?.name ?? id);
   const out: string[] = [formatDateLong(d.date)];
-  if (d.morning.trim()) out.push("", "Morning", d.morning.trim());
+  for (const comment of d.comments) out.push("", `Comment ${comment.time}`, comment.text.trim());
   for (const s of d.sessions) out.push("", "----", ...sessionLines(s, timeZone, resolveName));
   const acts = d.activities;
   if (acts.length) {
@@ -41,9 +41,8 @@ export function dayToText(d: DayDoc, timeZone?: string, resolveName?: (id: strin
       out.push(`- ${bits.join(" · ")}${a.comment.trim() ? ` – ${a.comment.trim()}` : ""}`);
     }
   }
-  if (d.totalCalories != null || d.notes.trim()) out.push("", "----");
+  if (d.totalCalories != null) out.push("", "----");
   if (d.totalCalories != null) out.push(`Total daily active calories: ${formatNum(d.totalCalories)}`);
-  if (d.notes.trim()) out.push(`Notes: ${d.notes.trim()}`);
   return out.join("\n");
 }
 
