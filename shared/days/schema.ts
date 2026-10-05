@@ -40,7 +40,10 @@ const activityResult = { minutes: z.number().finite().nullable(), calories: z.nu
 const activities = z.array(z.object({ ...performed, result: z.object(activityResult) }));
 const linkedActivities = z.array(z.object({ ...performed, result: z.object(activityResult), startedAt: z.iso.datetime().optional(), sourceOffsetMinutes: z.number().int().min(-720).max(840).optional(), garminSourceKey: z.string().min(1).optional() }));
 const legacyActivities = z.array(z.object({ id: z.string(), name: z.string(), ...activityResult, notes: z.string() }));
-export const daySchema = z.object({ v: z.literal(6), ...dayFields, comments: z.array(z.object({ id: z.string().min(1), time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/), text: z.string() })), sessions: z.array(linkedSession), activities: linkedActivities, ignoredGarminSourceKeys: z.array(z.string().min(1)) }) satisfies z.ZodType<DayDoc>;
+const comments = z.array(z.object({ id: z.string().min(1), time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/), text: z.string() })).superRefine((items, ctx) => {
+  if (new Set(items.map((item) => item.id)).size !== items.length) ctx.addIssue({ code: "custom", message: "Duplicate comment ID" });
+});
+export const daySchema = z.object({ v: z.literal(6), ...dayFields, comments, sessions: z.array(linkedSession), activities: linkedActivities, ignoredGarminSourceKeys: z.array(z.string().min(1)) }) satisfies z.ZodType<DayDoc>;
 export const v5DaySchema = z.object({ v: z.literal(5), ...legacyDayFields, sessions: z.array(linkedSession), activities: linkedActivities, ignoredGarminSourceKeys: z.array(z.string().min(1)) }) satisfies z.ZodType<V5DayDoc>;
 export const v4DaySchema = z.object({ v: z.literal(4), ...legacyDayFields, sessions: z.array(session), activities }) satisfies z.ZodType<V4DayDoc>;
 export const v3DaySchema = z.object({ v: z.literal(3), ...legacyDayFields, sessions: z.array(session), activities: legacyActivities }) satisfies z.ZodType<V3DayDoc>;

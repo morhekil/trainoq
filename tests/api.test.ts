@@ -97,6 +97,17 @@ describe("Worker tRPC boundary", () => {
     expect((await client.exercises.library.query()).history[exerciseIdForName("Row")][0]).toMatchObject({ sets: [{ reps: 10 }] });
     await expect(client.days.save.mutate({ date: old.date, doc: old, base: first.ok ? first.updatedAt : null })).rejects.toMatchObject({ data: { code: "PRECONDITION_FAILED" } });
 
+    const commentsOnly = emptyDay("2026-09-25");
+    commentsOnly.comments = [{ id: "comment-1", time: "14:30", text: "A note between sessions" }];
+    const commentsSaved = await client.days.save.mutate({ date: commentsOnly.date, doc: commentsOnly, base: null });
+    expect(commentsSaved.ok).toBe(true);
+    expect((await client.days.get.query(commentsOnly.date)).doc).toEqual(commentsOnly);
+    expect((await client.days.list.query({ limit: 10 })).find((entry) => entry.date === commentsOnly.date)?.doc).toEqual(commentsOnly);
+    expect((await client.backup.export.query()).days.find((entry) => entry.date === commentsOnly.date)?.doc).toEqual(commentsOnly);
+    const duplicateComments = structuredClone(commentsOnly);
+    duplicateComments.comments.push({ id: "comment-1", time: "15:00", text: "Another note" });
+    await expect(client.days.save.mutate({ date: commentsOnly.date, doc: duplicateComments, base: commentsSaved.ok ? commentsSaved.updatedAt : null })).rejects.toMatchObject({ data: { code: "BAD_REQUEST" } });
+
     const customId = "e164c8eb-a785-4c78-a854-f7a9f0787215";
     const custom = emptyDay("2026-09-24");
     const activityId = "d34437b6-06c3-4b89-a9ed-37825a68822e";
