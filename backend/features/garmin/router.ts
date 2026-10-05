@@ -5,11 +5,8 @@ import { authed } from "../auth/router";
 import { dateSchema } from "../../../shared/days/schema";
 import { loginGarmin, verifyGarminMfa } from "./connect";
 import { readGarminConnection, saveGarminConnection, updateGarminConnection } from "./connection";
-import { importGarminSummaries, listGarmin } from "./db";
+import { listGarmin } from "./db";
 import { syncGarminPage } from "./sync";
-
-const importSchema = z.object({ activities: z.array(z.unknown()).max(100) })
-  .refine((input) => JSON.stringify(input).length <= 256 * 1024, "Import batch is too large");
 
 export const garminRouter = t.router({
   connection: authed.query(async ({ ctx }) => {
@@ -45,7 +42,6 @@ export const garminRouter = t.router({
     return { status: "disconnected" as const };
   }),
   sync: authed.mutation(({ ctx }) => syncGarminPage(ctx.env.DB, ctx.env.APP_PASSWORD)),
-  import: authed.input(importSchema).mutation(({ ctx, input }) => importGarminSummaries(ctx.env.DB, input.activities)),
   list: authed.input(z.object({ from: dateSchema, to: dateSchema, includeLinked: z.boolean().optional(),
     cursor: z.object({ importedAt: z.iso.datetime(), sourceKey: z.string().min(1) }).optional(),
   }).refine(({ from, to }) => from <= to, "Invalid date range"))

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
 import type { GarminActivitySummary } from "../../../shared/garmin/fit";
 import { emptyDay } from "../../../shared/days/model";
 import { acceptActivity, ignoreGarmin, linkStrengthSession, moveLinkedActivity, strengthMatches, unlinkGarmin } from "../../../shared/garmin/decisions";
@@ -45,38 +45,6 @@ export function GarminView() {
   };
   useEffect(() => { void load(); }, [from, to, showAll]);
 
-  const importFiles = async (event: ChangeEvent<HTMLInputElement>) => {
-    const files = [...(event.target.files ?? [])];
-    if (!files.length) return;
-    setLoading(true);
-    try {
-      const { parseGarminFit } = await import("../../../shared/garmin/fit");
-      const summaries: GarminActivitySummary[] = [];
-      const errors: string[] = [];
-      for (const file of files) {
-        try {
-          const parsed = parseGarminFit(new Uint8Array(await file.arrayBuffer()));
-          summaries.push(...parsed.activities);
-          errors.push(...parsed.rejected.map((error) => `${file.name}: ${error}`));
-        } catch (error) { errors.push(`${file.name}: ${error instanceof Error ? error.message : "Unable to read FIT file"}`); }
-      }
-      let inserted = 0, unchanged = 0, updated = 0, rejected = errors.length;
-      for (let i = 0; i < summaries.length; i += 100) {
-        const result = await request(trpc.garmin.import.mutate({ activities: summaries.slice(i, i + 100) }));
-        inserted += result.inserted; unchanged += result.unchanged; updated += result.updated; rejected += result.rejected;
-      }
-      if (summaries.length) {
-        const dates = summaries.map(sourceDate).sort();
-        const first = dates[0] < from ? dates[0] : from;
-        const last = dates.at(-1)! > to ? dates.at(-1)! : to;
-        setFrom(first); setTo(last);
-        await load(first, last);
-      }
-      setMessage(`${inserted} imported, ${unchanged} unchanged, ${updated} updated, ${rejected} rejected.${errors.length ? ` ${errors.join(" ")}` : ""}`);
-    } catch { setMessage("Unable to import FIT files. Check your connection and retry."); }
-    finally { setLoading(false); event.target.value = ""; }
-  };
-
   const acceptAll = async () => {
     setLoading(true);
     let accepted = 0;
@@ -98,9 +66,7 @@ export function GarminView() {
   return <>
     <GarminConnection onImported={() => load()} />
     <section className="card">
-      <h2 className="card-title">Import original FIT files</h2>
-      <label className="garmin-file">Choose FIT files<input type="file" accept=".fit" multiple onChange={(event) => void importFiles(event)} disabled={loading} /></label>
-      <p className="hint">Export File in Garmin Connect gives a ZIP. Unzip it, then choose the .fit files. Active calories use the FIT session's total and metabolic calories.</p>
+      <h2 className="card-title">Review recordings</h2>
       <div className="garmin-filters">
         <label>From<input type="date" value={from} onChange={(event) => setFrom(event.target.value)} /></label>
         <label>To<input type="date" value={to} onChange={(event) => setTo(event.target.value)} /></label>
@@ -110,7 +76,7 @@ export function GarminView() {
       <div role="status" aria-live="polite">{message}</div>
     </section>
     {records.some((item) => item.status === "pending" && !isStrength(item)) && <button type="button" className="btn big secondary garmin-bulk" onClick={() => void acceptAll()} disabled={loading}>Add loaded pending non-strength activities</button>}
-    {!listLoading && records.length === 0 && <section className="card"><p>{showAll ? "No Garmin recordings in this date range. Sync Garmin, choose original FIT files, or change the dates." : "No pending Garmin recordings in this date range. Show all to review linked or ignored recordings, or change the dates."}</p></section>}
+    {!listLoading && records.length === 0 && <section className="card"><p>{showAll ? "No Garmin recordings in this date range. Sync Garmin or change the dates." : "No pending Garmin recordings in this date range. Show all to review linked or ignored recordings, or change the dates."}</p></section>}
     {records.map((source) => <GarminRecord key={source.sourceKey} source={source} />)}
     {nextCursor && <button type="button" className="btn big secondary garmin-bulk" onClick={() => void load(from, to, showAll, nextCursor)} disabled={listLoading}>{listLoading ? "Loading..." : "Load more"}</button>}
   </>;

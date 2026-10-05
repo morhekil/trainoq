@@ -2,10 +2,11 @@ import { DatabaseSync } from "node:sqlite";
 import { createTRPCClient, httpLink } from "@trpc/client";
 import { expect, it } from "vitest";
 import worker from "../backend/index";
+import { importGarminSummaries } from "../backend/features/garmin/db";
 import type { AppRouter } from "../backend/router";
 import type { GarminActivitySummary } from "../shared/garmin/fit";
 
-it("imports bounded Garmin summaries through the authenticated Worker and keeps revisions separate", async () => {
+it("lists automatically imported Garmin summaries through the authenticated Worker and keeps revisions separate", async () => {
   const sqlite = new DatabaseSync(":memory:");
   sqlite.exec(`CREATE TABLE days (date TEXT PRIMARY KEY, doc TEXT NOT NULL, updated_at TEXT NOT NULL);
     CREATE TABLE exercise_catalog (id TEXT PRIMARY KEY, name TEXT, name_key TEXT, section TEXT, aliases TEXT);
@@ -43,16 +44,21 @@ it("imports bounded Garmin summaries through the authenticated Worker and keeps 
   };
   await expect(client.garmin.list.query({ from: "2026-09-28", to: "2026-09-28" })).rejects.toMatchObject({ data: { code: "UNAUTHORIZED" } });
   await client.auth.login.mutate({ password: "test-password" });
-  expect(await client.garmin.import.mutate({ activities: [source] })).toEqual({ inserted: 1, unchanged: 0, updated: 0, rejected: 0 });
-  expect(await client.garmin.import.mutate({ activities: [source] })).toEqual({ inserted: 0, unchanged: 1, updated: 0, rejected: 0 });
+  const manualImport = await worker.fetch(new Request("https://example.test/api/trpc/garmin.import", {
+    method: "POST", headers: { Cookie: cookie, "Content-Type": "application/json" },
+    body: JSON.stringify({ json: { activities: [source] } }),
+  }) as Parameters<typeof worker.fetch>[0], env);
+  expect(manualImport.status).toBe(404);
+  expect(await importGarminSummaries(db, [source])).toEqual({ inserted: 1, unchanged: 0, updated: 0, rejected: 0 });
+  expect(await importGarminSummaries(db, [source])).toEqual({ inserted: 0, unchanged: 1, updated: 0, rejected: 0 });
   const corrected = { ...source, activeCalories: 173 };
-  expect(await client.garmin.import.mutate({ activities: [corrected, { ...source, sourceKey: "bad" }] })).toEqual({ inserted: 0, unchanged: 0, updated: 1, rejected: 1 });
+  expect(await importGarminSummaries(db, [corrected, { ...source, sourceKey: "bad" }])).toEqual({ inserted: 0, unchanged: 0, updated: 1, rejected: 1 });
   expect(await client.garmin.list.query({ from: "2026-09-28", to: "2026-09-28" })).toMatchObject({ items: [{ ...corrected, status: "pending" }], nextCursor: null });
   sqlite.prepare("INSERT INTO garmin_links VALUES (?, ?, ?, ?)").run(source.sourceKey, "2026-09-28", "activity", "run");
   expect(await client.garmin.list.query({ from: "2026-09-28", to: "2026-09-28" })).toEqual({ items: [], nextCursor: null });
   expect(await client.garmin.list.query({ from: "2026-09-28", to: "2026-09-28", includeLinked: true })).toMatchObject({ items: [{ status: "activity", targetId: "run" }], nextCursor: null });
   const later = Array.from({ length: 22 }, (_, i) => ({ ...source, sourceKey: `garmin:${200 + i}:2026-09-28T07:00:00.000Z:0`, title: `Run ${i}` }));
-  expect(await client.garmin.import.mutate({ activities: later })).toMatchObject({ inserted: 22 });
+  expect(await importGarminSummaries(db, later)).toMatchObject({ inserted: 22 });
   for (let i = 0; i < later.length; i++) {
     sqlite.prepare("UPDATE garmin_activities SET imported_at = ? WHERE source_key = ?").run(`2026-09-29T${String(i === 1 ? 2 : i).padStart(2, "0")}:00:00.000Z`, later[i].sourceKey);
   }
@@ -63,6 +69,5 @@ it("imports bounded Garmin summaries through the authenticated Worker and keeps 
   expect(secondPage.items.map((item) => item.title)).toEqual(["Run 1", "Run 0"]);
   expect(secondPage.nextCursor).toBeNull();
   expect((await client.backup.export.query()).garminActivities).toContainEqual(expect.objectContaining(corrected));
-  await expect(client.garmin.import.mutate({ activities: Array.from({ length: 101 }, () => source) })).rejects.toMatchObject({ data: { code: "BAD_REQUEST" } });
   sqlite.close();
 });

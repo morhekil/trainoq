@@ -59,7 +59,7 @@ test("reviews pending Garmin recordings in pages and keeps a newly added row unt
   await expect(page.getByLabel("Run 21 Garmin recording")).toHaveCount(0);
 });
 
-test("connects Garmin and backfills every page without another upload", async ({ page }) => {
+test("connects Garmin and backfills every page", async ({ page }) => {
   const calls: string[] = [];
   let status = "disconnected";
   let pageCount = 0;
@@ -177,25 +177,22 @@ test("Garmin review can ignore and restore a recording in the local day draft", 
   expect(restored.doc.ignoredGarminSourceKeys).toEqual([]);
 });
 
-test("imports an original FIT in the browser and sends verified active calories", async ({ page }) => {
-  const fit = "DgLhUpUAAAAuRklURV5AAAAAAAUAAQIBAoQCAoQDBIwEBIYABAEAAQB7AAAAPXUcRUEAABIADP4ChAIEhv0EhgUBAgYBAm4EBwcEhggEhgsChMQChAABAgEBAgEAAD11HEVWexxFAQBSdW4A+9IXAPvSFwDPACMACAFCAAAiAAb9BIYFBIYBAoQABIYDAQIEAQICPXUcRd0BHUUBAPvSFwAaAVfl";
-  let imported: unknown = null;
+test("shows only Garmin connection and review controls", async ({ page }) => {
   await page.route("**/api/trpc/**", async (route) => {
     const procedure = new URL(route.request().url()).pathname.split("/").at(-1);
-    if (procedure === "garmin.import") { const payload = route.request().postDataJSON(); imported = payload.json ?? payload; }
     const data = procedure === "auth.me" ? { ok: true }
       : procedure === "garmin.connection" ? disconnected
       : procedure === "garmin.list" ? { items: [], nextCursor: null }
-      : procedure === "garmin.import" ? { inserted: 1, unchanged: 0, updated: 0, rejected: 0 }
       : procedure === "exercises.library" ? { catalog: [], stats: [], history: {} }
       : null;
     await route.fulfill({ contentType: "application/json", body: JSON.stringify({ result: { data } }) });
   });
   await page.addInitScript(() => localStorage.setItem("tq:authed", "true"));
   await page.goto("/#/garmin");
-  await page.getByLabel("Choose FIT files").setInputFiles({ name: "run.fit", mimeType: "application/octet-stream", buffer: Buffer.from(fit, "base64") });
-  await expect(page.getByText("1 imported", { exact: false })).toBeVisible();
-  expect(imported).toMatchObject({ activities: [{ activeCalories: 172, localDate: "2026-09-28", timerSeconds: 1561.339 }] });
+  await expect(page.getByLabel("Garmin email")).toBeVisible();
+  await expect(page.getByLabel("Choose FIT files")).toHaveCount(0);
+  await expect(page.locator('input[type="file"]')).toHaveCount(0);
+  await expect(page.getByText("Sync Garmin, choose original FIT files", { exact: false })).toHaveCount(0);
 });
 
 test("edits an accepted activity's Garmin local start time", async ({ page }) => {

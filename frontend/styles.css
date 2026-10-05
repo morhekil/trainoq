@@ -747,16 +747,6 @@ textarea {
   background: var(--surface);
   color: var(--text);
 }
-.garmin-file {
-  display: grid;
-  gap: 6px;
-  font-weight: 600;
-  min-width: 0;
-}
-.garmin-file input {
-  width: 100%;
-  min-width: 0;
-}
 .garmin-bulk {
   white-space: normal;
   text-align: center;
