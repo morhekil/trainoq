@@ -54,6 +54,20 @@ export function addEventEntry(d: DayDoc, entry: EventEntry): TrainingEvent {
   return event;
 }
 
+export function mergeEvents(d: DayDoc, ids: string[]): TrainingEvent {
+  const selected = ids.map((id) => d.events.find((event) => event.id === id));
+  if (ids.length < 2 || new Set(ids).size !== ids.length || selected.some((event) => !event)) throw new Error("Choose distinct events on this day");
+  const [target, ...others] = selected as TrainingEvent[];
+  if (selected.some((event) => event!.summaryOverrides) || others.some((event) => event.title || event.notes))
+    throw new Error("Review event notes and totals before combining");
+  target.entries = selected.flatMap((event) => event!.entries).sort((a, b) => {
+    const time = (entry: EventEntry) => entry.kind === "session" ? entry.session.startedAt : entry.activity.startedAt ?? "9999";
+    return time(a).localeCompare(time(b));
+  });
+  d.events = d.events.filter((event) => event === target || !ids.includes(event.id));
+  return target;
+}
+
 export function removeEventEntry(d: DayDoc, kind: EventEntry["kind"], id: string): void {
   for (const event of d.events) event.entries = event.entries.filter((entry) => entry.kind !== kind || (entry.kind === "session" ? entry.session.id : entry.activity.id) !== id);
   d.events = d.events.filter((event) => event.entries.length);
