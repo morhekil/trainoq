@@ -47,13 +47,14 @@ export function HistoryView() {
       {days.length === 0 && !loading && <div className="empty">Nothing logged yet.</div>}
       {days.map((d) => {
         const e = getEntry(d.date);
+        const firstComment = [...d.comments].sort((a, b) => a.time.localeCompare(b.time)).find((comment) => comment.text.trim());
         return (
           <button key={d.date} type="button" className="card history-item" onClick={() => goToDate(d.date)}>
             <div className="history-date">
               {formatDateLong(d.date)}
               {e?.dirty && <span className="pill">not synced</span>}
             </div>
-            {d.comments[0]?.text.trim() && <div className="history-morning">{d.comments[0].text.trim().split("\n")[0]}</div>}
+            {firstComment && <div className="history-morning">{firstComment.text.trim().split("\n")[0]}</div>}
             <div className="history-summary muted">{daySummary(d, undefined, exerciseName) || "Comments only"}</div>
           </button>
         );

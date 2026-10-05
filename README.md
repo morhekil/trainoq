@@ -8,7 +8,7 @@ Runs on Cloudflare: a Worker serves the app and a tRPC API, data lives in D1.
 
 - **Day view**, defaults to today. Arrows or tap the date to move around; "Today" jumps back. Sessions and activities appear together in start-time order. New manual activities use the current local time on the selected day. Older records without a start time appear after timed records; set their time to place them in the day.
 - **Keyboard date navigation** – the date picker shows its focus position, even though the native date input sits over the displayed date.
-- **Day comments** – notes with an editable local time appear beside sessions and activities in time order. Older morning and day notes convert to timed comments.
+- **Day comments** – notes with an editable local time appear beside sessions and activities in time order. Add, edit, delete, or undo them at any time. History previews the earliest nonempty comment. Older morning and day notes convert to timed comments.
 - **Start training session** – records the start time; "Finish" records the end. Both editable.
 - **Warm-up / main / cool-down** – each section supports single exercises and supersets (A, B1/B2/B3…). Every exercise has a comment and numeric weight and reps for each set. Set type is independent of section:
   - `W1 W2` warm-up (dashed), `1 2 3` working (solid), `B1` back-off (tinted). Tap the label to change type.

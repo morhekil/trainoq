@@ -111,6 +111,29 @@ test("old day check-ins appear as timed comments in the record timeline", async 
   expect(await page.locator(".activity-card").evaluate((element, other) => !!(element.compareDocumentPosition(document.querySelector(other)!) & Node.DOCUMENT_POSITION_FOLLOWING), "[data-comment-time='23:30']")).toBe(true);
 });
 
+test("comments can be added, retimed, deleted and restored, with the earliest shown in history", async ({ page }) => {
+  await mockApi(page);
+  await page.addInitScript(() => localStorage.setItem("tq:authed", JSON.stringify(true)));
+  await page.goto(`/#/d/${emptyDay}`);
+
+  for (const [time, message] of [["21:00", "Evening note"], ["09:00", "Morning note"]]) {
+    await page.getByRole("button", { name: "Add comment" }).click();
+    await page.getByLabel("New comment time").fill(time);
+    await page.locator("#new-day-comment").fill(message);
+    await page.getByRole("button", { name: "Save comment" }).click();
+  }
+  await page.locator("[data-comment-time='09:00']").getByLabel("Comment time").fill("07:30");
+  await expect(page.locator(".comment-card").first().locator("textarea")).toHaveValue("Morning note");
+  await page.locator("[data-comment-time='21:00']").getByRole("button", { name: "Comment options" }).click();
+  await page.getByRole("button", { name: "Delete", exact: true }).click();
+  await expect(page.locator(".comment-card")).toHaveCount(1);
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(page.locator(".comment-card")).toHaveCount(2);
+
+  await page.goto("/#/history");
+  await expect(page.locator(".history-item .history-morning")).toHaveText("Morning note");
+});
+
 test("visible placeholder remains readable in both themes", async ({ page }) => {
   await mockApi(page);
   await page.addInitScript(() => localStorage.setItem("tq:authed", JSON.stringify(true)));
