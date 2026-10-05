@@ -47,10 +47,22 @@ it("imports bounded Garmin summaries through the authenticated Worker and keeps 
   expect(await client.garmin.import.mutate({ activities: [source] })).toEqual({ inserted: 0, unchanged: 1, updated: 0, rejected: 0 });
   const corrected = { ...source, activeCalories: 173 };
   expect(await client.garmin.import.mutate({ activities: [corrected, { ...source, sourceKey: "bad" }] })).toEqual({ inserted: 0, unchanged: 0, updated: 1, rejected: 1 });
-  expect(await client.garmin.list.query({ from: "2026-09-28", to: "2026-09-28" })).toMatchObject([{ ...corrected, status: "pending" }]);
+  expect(await client.garmin.list.query({ from: "2026-09-28", to: "2026-09-28" })).toMatchObject({ items: [{ ...corrected, status: "pending" }], nextCursor: null });
   sqlite.prepare("INSERT INTO garmin_links VALUES (?, ?, ?, ?)").run(source.sourceKey, "2026-09-28", "activity", "run");
-  expect(await client.garmin.list.query({ from: "2026-09-28", to: "2026-09-28" })).toMatchObject([{ status: "activity", targetId: "run" }]);
-  expect((await client.backup.export.query()).garminActivities).toMatchObject([corrected]);
+  expect(await client.garmin.list.query({ from: "2026-09-28", to: "2026-09-28" })).toEqual({ items: [], nextCursor: null });
+  expect(await client.garmin.list.query({ from: "2026-09-28", to: "2026-09-28", includeLinked: true })).toMatchObject({ items: [{ status: "activity", targetId: "run" }], nextCursor: null });
+  const later = Array.from({ length: 22 }, (_, i) => ({ ...source, sourceKey: `garmin:${200 + i}:2026-09-28T07:00:00.000Z:0`, title: `Run ${i}` }));
+  expect(await client.garmin.import.mutate({ activities: later })).toMatchObject({ inserted: 22 });
+  for (let i = 0; i < later.length; i++) {
+    sqlite.prepare("UPDATE garmin_activities SET imported_at = ? WHERE source_key = ?").run(`2026-09-29T${String(i === 1 ? 2 : i).padStart(2, "0")}:00:00.000Z`, later[i].sourceKey);
+  }
+  const firstPage = await client.garmin.list.query({ from: "2026-09-28", to: "2026-09-28" });
+  expect(firstPage.items.map((item) => item.title)).toEqual(later.slice(2).reverse().map((item) => item.title));
+  expect(firstPage.nextCursor).not.toBeNull();
+  const secondPage = await client.garmin.list.query({ from: "2026-09-28", to: "2026-09-28", cursor: firstPage.nextCursor! });
+  expect(secondPage.items.map((item) => item.title)).toEqual(["Run 1", "Run 0"]);
+  expect(secondPage.nextCursor).toBeNull();
+  expect((await client.backup.export.query()).garminActivities).toContainEqual(expect.objectContaining(corrected));
   await expect(client.garmin.import.mutate({ activities: Array.from({ length: 101 }, () => source) })).rejects.toMatchObject({ data: { code: "BAD_REQUEST" } });
   sqlite.close();
 });

@@ -16,14 +16,20 @@ const summarySchema = z.object({
 }) satisfies z.ZodType<GarminActivitySummary>;
 
 interface GarminRow { summary: string; imported_at: string; target_kind: string | null; target_id: string | null; decision_date: string | null }
+export interface GarminCursor { importedAt: string; sourceKey: string }
 
-export async function listGarmin(db: D1Database, from: string, to: string) {
+export async function listGarmin(db: D1Database, from: string, to: string, includeLinked = false, cursor?: GarminCursor) {
+  const cursorClause = cursor ? "AND (g.imported_at < ? OR (g.imported_at = ? AND g.source_key < ?))" : "";
   const { results } = await db.prepare(`SELECT g.summary, g.imported_at, l.target_kind, l.target_id, l.date AS decision_date
     FROM garmin_activities g LEFT JOIN garmin_links l ON l.source_key = g.source_key
     WHERE COALESCE(json_extract(g.summary, '$.localDate'), substr(json_extract(g.summary, '$.startUtc'), 1, 10)) BETWEEN ? AND ?
-    ORDER BY json_extract(g.summary, '$.startUtc'), g.source_key`).bind(from, to).all<GarminRow>();
-  return results.map((row) => ({ ...summarySchema.parse(JSON.parse(row.summary)), importedAt: row.imported_at,
+    ${includeLinked ? "" : "AND l.source_key IS NULL"} ${cursorClause}
+    ORDER BY g.imported_at DESC, g.source_key DESC LIMIT 21`)
+    .bind(from, to, ...(cursor ? [cursor.importedAt, cursor.importedAt, cursor.sourceKey] : [])).all<GarminRow>();
+  const items = results.slice(0, 20).map((row) => ({ ...summarySchema.parse(JSON.parse(row.summary)), importedAt: row.imported_at,
     status: row.target_kind ?? "pending", targetId: row.target_id, decisionDate: row.decision_date }));
+  const last = items.at(-1);
+  return { items, nextCursor: results.length > 20 && last ? { importedAt: last.importedAt, sourceKey: last.sourceKey } : null };
 }
 
 export async function allGarmin(db: D1Database): Promise<GarminActivitySummary[]> {

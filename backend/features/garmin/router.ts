@@ -46,6 +46,8 @@ export const garminRouter = t.router({
   }),
   sync: authed.mutation(({ ctx }) => syncGarminPage(ctx.env.DB, ctx.env.APP_PASSWORD)),
   import: authed.input(importSchema).mutation(({ ctx, input }) => importGarminSummaries(ctx.env.DB, input.activities)),
-  list: authed.input(z.object({ from: dateSchema, to: dateSchema }).refine(({ from, to }) => from <= to, "Invalid date range"))
-    .query(({ ctx, input }) => listGarmin(ctx.env.DB, input.from, input.to)),
+  list: authed.input(z.object({ from: dateSchema, to: dateSchema, includeLinked: z.boolean().optional(),
+    cursor: z.object({ importedAt: z.iso.datetime(), sourceKey: z.string().min(1) }).optional(),
+  }).refine(({ from, to }) => from <= to, "Invalid date range"))
+    .query(({ ctx, input }) => listGarmin(ctx.env.DB, input.from, input.to, input.includeLinked, input.cursor)),
 });

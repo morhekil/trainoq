@@ -1,14 +1,15 @@
-import { useEffect, useState, type ChangeEvent, type FormEvent } from "react";
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from "react";
 import type { GarminActivitySummary } from "../../../shared/garmin/fit";
 import { emptyDay } from "../../../shared/days/model";
 import { acceptActivity, ignoreGarmin, linkStrengthSession, moveLinkedActivity, strengthMatches, unlinkGarmin } from "../../../shared/garmin/decisions";
 import { request, trpc } from "../../api";
 import { addDays, goToDate, todayLocal } from "../days/dates";
 import { useDay } from "../days/hooks";
-import { getEntry, loadFromServer, onSynced, registerGarminMove, setDoc, sync } from "../days/store";
+import { getEntry, loadFromServer, registerGarminMove, setDoc, sync } from "../days/store";
 import { createLocalExercise } from "../exercises/catalog";
 
 type Listed = GarminActivitySummary & { importedAt: string; status: string; targetId: string | null; decisionDate: string | null };
+type Cursor = { importedAt: string; sourceKey: string };
 const sourceDate = (source: GarminActivitySummary) => source.localDate ?? source.startUtc.slice(0, 10);
 const isStrength = (source: GarminActivitySummary) => source.subSport === "strengthTraining";
 
@@ -23,17 +24,26 @@ export function GarminView() {
   const [from, setFrom] = useState(() => addDays(todayLocal(), -365));
   const [to, setTo] = useState(todayLocal);
   const [records, setRecords] = useState<Listed[]>([]);
+  const [showAll, setShowAll] = useState(false);
+  const [nextCursor, setNextCursor] = useState<Cursor | null>(null);
+  const [listLoading, setListLoading] = useState(false);
+  const requestVersion = useRef(0);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(false);
 
-  const load = async (first = from, last = to) => {
+  const load = async (first = from, last = to, includeLinked = showAll, cursor?: Cursor) => {
+    const version = cursor ? requestVersion.current : ++requestVersion.current;
+    setListLoading(true);
     try {
-      setRecords(await request(trpc.garmin.list.query({ from: first, to: last })));
+      const page = await request(trpc.garmin.list.query({ from: first, to: last, includeLinked, cursor }));
+      if (version !== requestVersion.current) return;
+      setRecords((current) => cursor ? [...current, ...page.items] : page.items);
+      setNextCursor(page.nextCursor);
       setMessage("");
-    } catch { setMessage("Unable to load Garmin activities. Check your connection and retry."); }
+    } catch { if (version === requestVersion.current) setMessage("Unable to load Garmin activities. Check your connection and retry."); }
+    finally { if (version === requestVersion.current) setListLoading(false); }
   };
-  useEffect(() => { void load(); }, [from, to]);
-  useEffect(() => onSynced(() => { void load(); }), [from, to]);
+  useEffect(() => { void load(); }, [from, to, showAll]);
 
   const importFiles = async (event: ChangeEvent<HTMLInputElement>) => {
     const files = [...(event.target.files ?? [])];
@@ -94,13 +104,15 @@ export function GarminView() {
       <div className="garmin-filters">
         <label>From<input type="date" value={from} onChange={(event) => setFrom(event.target.value)} /></label>
         <label>To<input type="date" value={to} onChange={(event) => setTo(event.target.value)} /></label>
-        <button type="button" className="btn small secondary" onClick={() => void load()} disabled={loading}>Refresh</button>
+        <button type="button" className="btn small secondary" onClick={() => void load()} disabled={loading || listLoading}>Refresh</button>
+        <button type="button" className="btn small secondary" onClick={() => setShowAll((current) => !current)} disabled={listLoading}>{showAll ? "Show pending only" : "Show all"}</button>
       </div>
       <div role="status" aria-live="polite">{message}</div>
     </section>
-    {records.some((item) => item.status === "pending" && !isStrength(item)) && <button type="button" className="btn big secondary garmin-bulk" onClick={() => void acceptAll()} disabled={loading}>Add pending non-strength activities</button>}
-    {records.length === 0 && <section className="card"><p>No Garmin recordings in this date range. Sync Garmin, choose original FIT files, or change the dates.</p></section>}
+    {records.some((item) => item.status === "pending" && !isStrength(item)) && <button type="button" className="btn big secondary garmin-bulk" onClick={() => void acceptAll()} disabled={loading}>Add loaded pending non-strength activities</button>}
+    {!listLoading && records.length === 0 && <section className="card"><p>{showAll ? "No Garmin recordings in this date range. Sync Garmin, choose original FIT files, or change the dates." : "No pending Garmin recordings in this date range. Show all to review linked or ignored recordings, or change the dates."}</p></section>}
     {records.map((source) => <GarminRecord key={source.sourceKey} source={source} />)}
+    {nextCursor && <button type="button" className="btn big secondary garmin-bulk" onClick={() => void load(from, to, showAll, nextCursor)} disabled={listLoading}>{listLoading ? "Loading..." : "Load more"}</button>}
   </>;
 }
 
