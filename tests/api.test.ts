@@ -11,6 +11,7 @@ describe("Worker tRPC boundary", () => {
   it("migrates old days, protects v7 writes, resolves catalog IDs and exports definitions", async () => {
     const days = new Map<string, { date: string; doc: string; updated_at: string }>();
     const catalog = new Map<string, string>();
+    const paramsRows = new Map<string, { params: string; updated_at: string }>();
     let logRows: { sql: string; args: unknown[] }[] = [];
     const db = {
       prepare(sql: string) {
@@ -23,10 +24,13 @@ describe("Worker tRPC boundary", () => {
               return sql.startsWith("SELECT updated_at") ? row && { updated_at: row.updated_at, doc: row.doc } : row ?? null;
             }
             if (sql.includes("FROM exercise_catalog")) return catalog.has(args[0] as string) ? { id: args[0], name: catalog.get(args[0] as string) } : null;
+            if (sql.includes("FROM exercise_params")) return paramsRows.get(args[0] as string) ?? null;
             return null;
           },
           async all() {
             if (sql.includes("FROM garmin_activities")) return { results: [] };
+            if (sql.includes("FROM exercise_params")) return { results: [...paramsRows].map(([exercise_id, row]) => ({ exercise_id, ...row })) };
+            if (sql.includes("FROM exercise_log")) return { results: [] };
             if (sql.includes("FROM exercise_catalog")) {
               const rows = [...catalog].map(([id, name]) => ({ id, name }));
               return { results: sql.includes("WHERE id IN") ? rows.filter((row) => args.includes(row.id)) : rows };
@@ -35,6 +39,10 @@ describe("Worker tRPC boundary", () => {
           },
           async run() {
             if (sql.startsWith("INSERT OR IGNORE INTO exercise_catalog")) catalog.set(args[0] as string, args[1] as string);
+            if (sql.startsWith("INSERT INTO exercise_params")) {
+              const old = paramsRows.get(args[0] as string);
+              if (!old || (args[2] as string) > old.updated_at) paramsRows.set(args[0] as string, { params: args[1] as string, updated_at: args[2] as string });
+            }
             return { success: true };
           },
         });
@@ -44,6 +52,7 @@ describe("Worker tRPC boundary", () => {
         if (statements[0].sql.startsWith("SELECT")) return [
           { results: [{ exercise_id: exerciseIdForName("Row"), name: "Row", section: "warmup", c: 1, last: "2026-09-23" }] },
           { results: [{ exercise_id: exerciseIdForName("Row"), name: "Row", date: "2026-09-23", section: "warmup", detail: JSON.stringify({ sets: [{ type: "working", weight: null, reps: 10 }] }) }] },
+          { results: [...paramsRows].map(([exercise_id, row]) => ({ exercise_id, ...row })) },
         ];
         const { sql, args } = statements[0];
         const date = args[0] as string;
@@ -144,5 +153,14 @@ describe("Worker tRPC boundary", () => {
     expect((await client.days.get.query(grouped.date)).doc).toEqual(grouped);
     expect((await client.backup.export.query()).days.find((entry) => entry.date === grouped.date)?.doc).toEqual(grouped);
     expect(logRows.some((row) => row.args[1] === "activity" && row.args[6] === activityId)).toBe(true);
+
+    const changed = await client.exercises.setParams.mutate({ exerciseId: "seed:0121", params: { perSet: ["height", "reps"] }, updatedAt: "2026-10-05T08:20:11.000Z" });
+    expect(changed).toEqual({ exerciseId: "seed:0121", params: { perSet: ["height", "reps"] }, updatedAt: "2026-10-05T08:20:11.000Z" });
+    const older = await client.exercises.setParams.mutate({ exerciseId: "seed:0121", params: { perSet: ["reps"] }, updatedAt: "2026-10-04T08:20:11.000Z" });
+    expect(older).toEqual(changed);
+    expect((await client.exercises.library.query()).params["seed:0121"]).toEqual(changed.params);
+    expect((await client.backup.export.query()).exerciseParams).toContainEqual(changed);
+    await expect(client.exercises.setParams.mutate({ exerciseId: crypto.randomUUID(), params: { perSet: ["time"] }, updatedAt: "2026-10-05T08:20:11.000Z" }))
+      .rejects.toMatchObject({ data: { code: "BAD_REQUEST" } });
   });
 });

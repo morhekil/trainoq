@@ -28,7 +28,9 @@ const day = await api.days.get.query("2026-09-26");
 | `days.save` | mutation | `{ date: string, doc: DayDoc, base: string \| null }` | `SaveResult` below |
 | `exercises.catalog` | query | none | catalog records with `id`, `name`, `section`, `aliases` |
 | `exercises.create` | mutation | `{ id: UUID, name: string }` | custom `{ id, name }`; legacy `legacy:<normalized name>` IDs are accepted for migration |
-| `exercises.library` | query | none | `{ catalog, stats: ExerciseStat[], history: Record<string, ExerciseHistoryEntry[]> }` |
+| `exercises.library` | query | none | `{ catalog, stats: ExerciseStat[], history: Record<string, ExerciseHistoryEntry[]>, params: Record<string, ParamSet> }` |
+| `exercises.setParams` | mutation | `{ exerciseId: string, params: ParamSet, updatedAt: ISO string }` | Stored `{ exerciseId, params, updatedAt }`; newer `updatedAt` wins |
+| `exercises.history` | query | `{ exerciseId: string }` | Up to 200 entries, newest first; seed IDs include old name-based rows |
 | `garmin.list` | query | `{ from: string, to: string, includeLinked?: boolean, cursor?: { importedAt: string, sourceKey: string } }` | `{ items, nextCursor }`, up to 20 imported summaries per page |
 | `garmin.summaries` | query | `{ sourceKeys: string[] }`, 1 to 100 FIT session keys | Imported summaries for those keys; missing keys are omitted |
 | `garmin.connection` | query | none | Connection status, email, last sync time and error, next backfill offset |
@@ -36,7 +38,7 @@ const day = await api.days.get.query("2026-09-26");
 | `garmin.verifyMfa` | mutation | `{ code: string }` | `{ status: "connected" }` |
 | `garmin.disconnect` | mutation | none | `{ status: "disconnected" }` |
 | `garmin.sync` | mutation | none | One 20-ID page with counts, `nextOffset`, and `complete` |
-| `backup.export` | query | none | `{ exportedAt: string, days: StoredDay[], catalog, garminActivities }` |
+| `backup.export` | query | none | `{ exportedAt: string, days: StoredDay[], catalog, garminActivities, exerciseParams }` |
 
 Every procedure except `auth.login` and `auth.logout` requires the signed `tq_session` cookie. It is HttpOnly, SameSite=Lax, and lasts one year. HTTPS adds the Secure flag. The server checks the cookie against `APP_PASSWORD`.
 
@@ -116,6 +118,8 @@ interface DayDoc {
 }
 ```
 
+Parameter keys have one canonical order. `height` is box height in inches (step 2); `edge` is millimetres (step 5); `distance` is metres (step 100); `weight` is kilograms (step 2.5, with 0 meaning bodyweight); `time` is seconds (step 5); and `reps` is a count (step 1). These six are per set. `angle` is bench angle in degrees (step 5) and belongs once per entry in `setup`. A parameter set has one to three per-set keys and at most two setup keys, without repeats or keys in the wrong scope. Writers send `null` for empty selected values; readers accept a missing selected key as empty. `paramsName()` derives display names from the keys, so template names are not saved in day records.
+
 Each saved session or activity belongs to exactly one event. A lone item has a singleton event; grouping items changes their event membership while retaining their IDs and edits. Entries in a combined event are ordered by start time. Separating a part creates a new singleton and keeps the grouped event's note. Combining refuses event-level totals or secondary titles and notes that would otherwise be lost. Pending Garmin summaries remain outside the day document. `Activity` uses the catalog ID and comment of a session performance, with minutes and calories in `result`. Session calories, activity calories, and the manually entered daily `totalCalories` are separate fields. `Section` locates an item within a session; `ExerciseContext` also includes activities. `SetType` describes a set or superset round independently of its section. A catalog `Exercise.id` identifies the exercise name, while each `PerformedExercise.id` identifies one occurrence. Built-in definitions come from [`shared/exercises/seed.ts`](shared/exercises/seed.ts); custom definitions use UUIDs created on the device and are stored in `exercise_catalog`. The same exercise can be chosen in a session or as an activity.
 
 Each `DayComment.time` is a local 24-hour `HH:mm` time on the document's date. The day view and shared text order comments, sessions, and activities by their displayed local start time. Activities without a start time follow timed records. Editing a comment's time moves it within the timeline.
@@ -130,14 +134,15 @@ There is no `Block` in v8. V2 used `{ id, exercises: [...] }` blocks in all thre
 | --- | --- | --- |
 | D1 `days` | `date`, full `DayDoc` JSON, server `updated_at` | Source of truth, one row per saved day |
 | D1 `exercise_catalog` | Custom exercise `id`, `name`, normalized `name_key` | Definitions referenced by `exerciseId` |
-| D1 `exercise_log` | One row per session performance or activity, with date, context, ID, name, order, and set or activity result detail | Derived index rebuilt from the day on each save |
+| D1 `exercise_params` | Exercise ID, parameter-set JSON, ISO update time | Default parameters for new records; newer writes win |
+| D1 `exercise_log` | One row per session performance or activity, with date, context, ID, name, order, and detail including session `params`, optional `setup`, and sets | Derived index rebuilt from the day on each save |
 | D1 `garmin_activities` | Imported summary JSON, hash, and import time keyed by Garmin source identity | Imported source values |
 | D1 `garmin_links` | Garmin source key, decision day, target kind and ID | Derived index rebuilt from the day on each save |
 | D1 `garmin_connection` | AES-GCM encrypted Garmin account credentials and tokens, sync status and cursor | Recurring import connection, excluded from backup |
 | D1 `garmin_downloads` | Garmin activity IDs whose original FITs were imported | Skip completed downloads on later sweeps |
 | Browser `tq:day:<date>` | `Entry { doc, base, dirty, rev, conflict? }` | Local draft, sync revision, and optional conflict copy |
 
-The table definitions are in [`migrations/0001_init.sql`](migrations/0001_init.sql), [`migrations/0002_exercise_catalog.sql`](migrations/0002_exercise_catalog.sql), and [`migrations/0004_garmin.sql`](migrations/0004_garmin.sql) through [`migrations/0006_garmin_sync.sql`](migrations/0006_garmin_sync.sql). [`migrations/0003_activity_catalog.sql`](migrations/0003_activity_catalog.sql) adds old activities to the catalog and log without rewriting day JSON. [`backend/features/days/db.ts`](backend/features/days/db.ts) rebuilds `exercise_log` and `garmin_links` in the same revision-checked batch; the full day JSON retains the superset structure and Garmin decisions. The browser's [`store.ts`](frontend/features/days/store.ts) writes drafts locally first and syncs whole days. Custom definitions sync before a day that references them.
+The table definitions are in [`migrations/0001_init.sql`](migrations/0001_init.sql) through [`migrations/0007_exercise_params.sql`](migrations/0007_exercise_params.sql). [`migrations/0003_activity_catalog.sql`](migrations/0003_activity_catalog.sql) adds old activities to the catalog and log without rewriting day JSON. [`backend/features/days/db.ts`](backend/features/days/db.ts) rebuilds `exercise_log` and `garmin_links` in the same revision-checked batch; the full day JSON retains the superset structure and Garmin decisions. Session log rows written before v8 have no parameters and read as weight × reps. The browser's [`store.ts`](frontend/features/days/store.ts) writes drafts locally first and syncs whole days. Custom definitions sync before a day that references them.
 
 `exercises.library` returns the read model defined in [`shared/exercises/model.ts`](shared/exercises/model.ts):
 

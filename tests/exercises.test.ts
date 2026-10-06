@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { SEED_EXERCISES } from "../shared/exercises/catalog";
 import { nameKey, type Section } from "../shared/exercises/model";
 import { searchExercises, suggestedSet } from "../frontend/features/exercises/library";
-import { exerciseLibrary } from "../backend/features/exercises/db";
+import { exerciseHistory, exerciseLibrary } from "../backend/features/exercises/db";
 import { addEventEntry, emptyDay } from "../shared/days/model";
 import { exerciseIdForName } from "../shared/exercises/catalog";
 import { allCatalog, clearLocalCatalog, setRemoteCatalog } from "../frontend/features/exercises/catalog";
@@ -39,6 +39,20 @@ describe("starter exercise list", () => {
 
 describe("exercise history", () => {
   afterEach(() => vi.unstubAllGlobals());
+
+  it("includes a seed's legacy log rows and their weight × reps parameters", async () => {
+    let ids: unknown[] = [];
+    const db = { prepare: () => ({ bind(...args: unknown[]) { ids = args; return this; }, async all() { return { results: [
+      { name: "Pike push-up", date: "2026-10-05", section: "main", detail: JSON.stringify({ params: { perSet: ["height", "reps"] }, sets: [{ type: "working", height: 24, reps: 5 }] }) },
+      { name: "Pike push-up", date: "2026-09-28", section: "warmup", detail: JSON.stringify({ sets: [{ type: "working", weight: null, reps: 6 }] }) },
+    ] }; } }) } as unknown as D1Database;
+    const history = await exerciseHistory(db, "seed:0121");
+    expect(ids).toEqual(["seed:0121", "legacy:pike push-up"]);
+    expect(history).toMatchObject([
+      { date: "2026-10-05", params: { perSet: ["height", "reps"] }, sets: [{ height: 24, reps: 5 }] },
+      { date: "2026-09-28", params: { perSet: ["weight", "reps"] }, sets: [{ weight: null, reps: 6 }] },
+    ]);
+  });
 
   it("keeps suggestions within the section in offline days", () => {
     const map = new Map<string, string>();

@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { t } from "../../trpc";
 import { authed } from "../auth/router";
-import { catalog, createExercise, exerciseLibrary } from "./db";
+import { catalog, createExercise, exerciseHistory, exerciseLibrary, setExerciseParams } from "./db";
 import { nameKey } from "../../../shared/exercises/model";
+import { paramSetSchema } from "../../../shared/days/schema";
 
 export const exercisesRouter = t.router({
   library: authed.query(({ ctx }) => exerciseLibrary(ctx.env.DB)),
@@ -10,4 +11,8 @@ export const exercisesRouter = t.router({
   create: authed.input(z.object({ id: z.string().min(1), name: z.string().trim().min(1).max(200) })
     .refine(({ id, name }) => z.uuid().safeParse(id).success || id === `legacy:${nameKey(name)}`, "Invalid exercise ID"))
     .mutation(({ ctx, input }) => createExercise(ctx.env.DB, input)),
+  setParams: authed.input(z.object({ exerciseId: z.string().min(1), params: paramSetSchema, updatedAt: z.iso.datetime() }))
+    .mutation(({ ctx, input }) => setExerciseParams(ctx.env.DB, input)),
+  history: authed.input(z.object({ exerciseId: z.string().min(1) }))
+    .query(({ ctx, input }) => exerciseHistory(ctx.env.DB, input.exerciseId)),
 });
