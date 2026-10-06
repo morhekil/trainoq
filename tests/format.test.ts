@@ -82,4 +82,19 @@ describe("dayToText", () => {
     );
     expect(daySummary(doc, "Australia/Sydney")).toContain("4 exercises");
   });
+
+  it("shares a grouped event as one named visit with every original part and note", () => {
+    const doc: DayDoc = {
+      v: 7, date: "2026-10-02", comments: [{ id: "c", time: "17:05", text: "Between parts" }], ignoredGarminSourceKeys: [], totalCalories: 430,
+      events: [{ id: "visit", title: "Walk-run", notes: "Intervals with hills", entries: [
+        { kind: "activity", activity: { id: "walk", exerciseId: "walk", startedAt: "2026-10-02T06:00:00.000Z", comment: "Easy", result: { minutes: 5, calories: 30 } } },
+        { kind: "activity", activity: { id: "run", exerciseId: "run", startedAt: "2026-10-02T06:10:00.000Z", comment: "", result: { minutes: 5, calories: 40 } } },
+      ] }],
+    };
+    const shared = dayToText(doc, "Australia/Sydney", (id) => id === "walk" ? "Walk" : "Run");
+    expect(shared).toContain("Walk-run (2 parts)\nIntervals with hills\n- 16:00 Walk · 5 min · 30 cal – Easy\n- 16:10 Run · 5 min · 40 cal");
+    expect(shared.indexOf("Between parts")).toBeGreaterThan(shared.indexOf("Run · 5 min"));
+    expect(shared).toContain("Total daily active calories: 430");
+    expect(daySummary(doc, "Australia/Sydney", (id) => id === "walk" ? "Walk" : "Run")).toBe("Walk-run (2 parts) · 430 cal total");
+  });
 });

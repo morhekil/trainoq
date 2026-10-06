@@ -505,6 +505,10 @@ test("a grouped visit appears as one expandable event with its original parts", 
       await expect(page).toHaveScreenshot(`grouped-event-${width}-${colorScheme}.png`, { fullPage: true });
     }
   }
+  await page.getByRole("button", { name: "Share day with PT / physio" }).click();
+  await expect(page.getByTestId("share-text")).toContainText("Rehab walk-run (2 parts)");
+  await expect(page.getByTestId("share-text")).toContainText("Walk · 5 min · 20 cal");
+  await expect(page.getByTestId("share-text")).toContainText("Run · 5 min · 20 cal");
 });
 
 test("groups existing parts by choice, edits the event, and separates a part", async ({ page }) => {
