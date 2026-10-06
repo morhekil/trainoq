@@ -11,13 +11,15 @@ import { OverlayProvider, useOverlays } from "./overlays";
 import { request, trpc } from "./api";
 import { AuthError, onAuthRequired } from "./features/auth/session";
 import { refreshLibrary } from "./features/exercises/library";
+import { exerciseName } from "./features/exercises/catalog";
+import { ExerciseDetail, ExercisesView } from "./features/exercises/view";
 import { clearLocalData, hasUnsynced, syncAll } from "./features/days/store";
 import { clearLibrary } from "./features/exercises/library";
 import { lsGet, lsSet } from "./storage";
 
 // ---------------------------------------------------------------- routing (hash based)
 
-type Route = { view: "day"; date: string | null } | { view: "history" } | { view: "garmin" };
+type Route = { view: "day"; date: string | null } | { view: "history" } | { view: "garmin" } | { view: "exercises" } | { view: "exercise"; id: string };
 
 function useOnline() {
   return useSyncExternalStore(
@@ -37,6 +39,9 @@ function parseHash(): Route {
   const h = location.hash.replace(/^#\/?/, "");
   if (h === "history") return { view: "history" };
   if (h === "garmin") return { view: "garmin" };
+  if (h === "exercises") return { view: "exercises" };
+  const exercise = h.match(/^exercises\/(.+)$/);
+  if (exercise) return { view: "exercise", id: decodeURIComponent(exercise[1]) };
   const m = h.match(/^d\/(\d{4}-\d{2}-\d{2})$/);
   return { view: "day", date: m ? m[1] : null };
 }
@@ -123,6 +128,7 @@ function Main({ onSignedOut }: { onSignedOut: () => void }) {
     openSheet({
       actions: [
         { label: "History", icon: "history", onClick: () => (location.hash = "#/history") },
+        { label: "Exercises", icon: "repeat", onClick: () => (location.hash = "#/exercises") },
         { label: "Garmin activities", icon: "download", onClick: () => (location.hash = "#/garmin") },
         { label: "Share this day", icon: "share", onClick: () => setSharing(date) },
         { label: "Download backup (JSON)", icon: "download", onClick: () => void downloadBackup() },
@@ -152,10 +158,10 @@ function Main({ onSignedOut }: { onSignedOut: () => void }) {
     <div className="app">
       {route.view !== "day" ? (
         <header className="topbar">
-          <button type="button" className="icon-btn" aria-label="Back" onClick={() => (location.hash = "#/")}>
+          <button type="button" className="icon-btn" aria-label="Back" onClick={() => (location.hash = route.view === "exercise" ? "#/exercises" : "#/")}>
             <Icon name="back" />
           </button>
-          <h1 className="topbar-title">{route.view === "history" ? "History" : "Garmin activities"}</h1>
+          <h1 className="topbar-title">{route.view === "history" ? "History" : route.view === "garmin" ? "Garmin activities" : route.view === "exercise" ? exerciseName(route.id) : "Exercises"}</h1>
           <SyncBadge />
         </header>
       ) : (
@@ -163,7 +169,7 @@ function Main({ onSignedOut }: { onSignedOut: () => void }) {
       )}
       {!online && <div className="offline-bar">Offline – everything is saved on this phone and syncs when you're back online.</div>}
       <main className="content">
-        {route.view === "history" ? <HistoryView /> : route.view === "garmin" ? <GarminView /> : (
+        {route.view === "history" ? <HistoryView /> : route.view === "garmin" ? <GarminView /> : route.view === "exercises" ? <ExercisesView /> : route.view === "exercise" ? <ExerciseDetail key={route.id} id={route.id} /> : (
           <>
             <DayView key={date} date={date} />
             <button type="button" className="btn big secondary share-btn" onClick={() => setSharing(date)}>

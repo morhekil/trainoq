@@ -46,6 +46,7 @@ async function mockApi(page: Page, signedIn = true) {
       : procedure === "days.get" ? { date: day, doc: null, updatedAt: null }
       : procedure === "days.list" ? []
       : procedure === "exercises.library" ? { catalog: [], stats: [], history: {} }
+      : procedure === "exercises.history" ? []
       : procedure === "exercises.create" ? JSON.parse(route.request().postData() ?? "{}").json ?? null
       : procedure === "days.save" ? { ok: true, updatedAt: "2026-09-15T09:00:00.000Z" }
       : null;
@@ -1086,4 +1087,22 @@ test("exercise parameters change from the logging header and Undo restores value
   await expect(page.getByRole("textbox", { name: "Squat W1 box height in inches" })).toBeVisible();
   await page.getByRole("button", { name: "Undo" }).click();
   await expect(page.getByRole("textbox", { name: "Squat W1 weight" })).toHaveValue("40");
+});
+
+test("Exercises lists logged records and groups detail history by parameters", async ({ page }) => {
+  await mockApi(page);
+  await page.route("**/api/trpc/days.save", (route) => route.abort("failed"));
+  await page.addInitScript(({ date, doc }) => {
+    localStorage.setItem("tq:authed", JSON.stringify(true));
+    localStorage.setItem(`tq:day:${date}`, JSON.stringify({ doc, base: null, dirty: true, rev: 1 }));
+  }, { date: day, doc });
+  await page.goto(`/#/d/${day}`);
+  await page.getByRole("button", { name: "Menu" }).click();
+  await page.getByRole("button", { name: "Exercises", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Exercises" })).toBeVisible();
+  await page.getByRole("searchbox", { name: "Search exercises" }).fill("Squat");
+  await page.getByRole("link", { name: /Squat/ }).click();
+  await expect(page.getByRole("heading", { name: "Squat" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: /Weight × reps/ })).toBeVisible();
+  await expect(page.getByText(/40kg×8/)).toBeVisible();
 });

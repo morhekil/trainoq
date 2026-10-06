@@ -887,6 +887,26 @@ textarea {
 .params-option:has(input:checked) { background: var(--accent-soft); }
 .params-columns { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
 .sheet-description.warn { background: var(--warn-soft); color: var(--text); }
+.exercises-view, .exercise-detail { display: grid; gap: 16px; }
+.exercise-search-label { font-weight: 700; }
+.exercise-list-search { width: 100%; min-height: 44px; }
+.exercise-list-group h2, .exercise-detail-section h2 { margin: 0 0 8px; font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.exercise-list-row { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px 12px; align-items: center; min-height: 64px; padding: 10px 12px; border-bottom: 1px solid var(--line); color: var(--text); text-decoration: none; }
+.exercise-list-row:hover, .exercise-list-row:focus-visible { background: var(--surface-2); }
+.exercise-list-name { font-weight: 700; }
+.exercise-list-meta { grid-column: 1; color: var(--muted); font-size: 13px; }
+.exercise-list-chevron { grid-column: 2; grid-row: 1 / span 2; font-size: 24px; color: var(--muted); }
+.param-chip { display: inline-block; margin-right: 8px; padding: 2px 7px; border-radius: 6px; background: var(--surface-2); color: var(--text); }
+.exercise-empty { padding: 18px 0; }
+.exercise-detail-section { padding: 16px; }
+.exercise-detail-section p { margin: 8px 0; }
+.exercise-detail-params { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.exercise-history-group { padding: 12px 0; border-top: 1px solid var(--line); }
+.exercise-history-group h3 { display: flex; justify-content: space-between; gap: 8px; margin: 0 0 10px; font-size: 15px; }
+.exercise-history-group h3 span { color: var(--muted); font-size: 13px; font-weight: 400; }
+.exercise-history-entry { display: grid; gap: 3px; padding: 8px 0; }
+.exercise-history-entry strong { font-size: 13px; }
+.exercise-history-entry > span { color: var(--muted); }
 .sheet-btn {
   display: flex;
   align-items: center;

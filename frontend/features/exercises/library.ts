@@ -43,6 +43,7 @@ export function libraryVersion(): number {
 }
 export function notifyLibrary(): void { version++; listeners.forEach((fn) => fn()); }
 export const libraryParams = (): Record<string, ParamSet> => lib.params ?? {};
+export const cachedExerciseHistory = (id: string): ExerciseHistoryEntry[] => lib.history[id] ?? [];
 export function rememberLibraryParams(exerciseId: string, params: ParamSet): void {
   lib = { ...lib, params: { ...lib.params, [exerciseId]: params } };
   lsSet(LS_KEY, lib);
@@ -121,6 +122,12 @@ function buildIndex(extraDocs: DayDoc[]): Map<string, LibItem> {
 export interface SearchGroup {
   title: string;
   items: LibItem[];
+}
+
+export function listExercises(query = ""): LibItem[] {
+  if (query.trim()) return searchExercises(query, "main").flatMap((group) => group.items);
+  return [...buildIndex(cachedDays().filter((entry) => entry.dirty).map((entry) => entry.doc)).values()]
+    .sort((a, b) => Number(b.total > 0) - Number(a.total > 0) || (b.last ?? "").localeCompare(a.last ?? "") || a.name.localeCompare(b.name));
 }
 
 type SetHistoryEntry = Extract<ExerciseHistoryEntry, { section: Section }>;
