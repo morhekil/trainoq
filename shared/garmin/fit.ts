@@ -13,6 +13,11 @@ export interface GarminActivitySummary {
   activeCalories: number;
 }
 
+export function fitRecordingKey(sourceKey: string): string {
+  const lastColon = sourceKey.lastIndexOf(":");
+  return lastColon < 0 ? sourceKey : sourceKey.slice(0, lastColon);
+}
+
 const fitEpoch = Date.UTC(1989, 11, 31);
 const nonnegative = (value: unknown): value is number => typeof value === "number" && Number.isFinite(value) && value >= 0;
 

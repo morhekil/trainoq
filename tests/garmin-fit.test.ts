@@ -1,6 +1,12 @@
 import { expect, it } from "vitest";
 import { Encoder, Profile, type ActivityMesg, type FileIdMesg, type SessionMesg } from "@garmin/fitsdk";
-import { parseGarminFit } from "../shared/garmin/fit";
+import { fitRecordingKey, parseGarminFit } from "../shared/garmin/fit";
+
+it("identifies sessions from one FIT recording without confusing ISO timestamp colons", () => {
+  expect(fitRecordingKey("garmin:123:2026-10-02T06:24:00.000Z:0")).toBe("garmin:123:2026-10-02T06:24:00.000Z");
+  expect(fitRecordingKey("garmin:123:2026-10-02T06:24:00.000Z:12")).toBe("garmin:123:2026-10-02T06:24:00.000Z");
+  expect(fitRecordingKey("garmin:456:2026-10-02T06:24:00.000Z:0")).not.toBe(fitRecordingKey("garmin:123:2026-10-02T06:24:00.000Z:0"));
+});
 
 const run = Uint8Array.from(Buffer.from("DgLhUpUAAAAuRklURV5AAAAAAAUAAQIBAoQCAoQDBIwEBIYABAEAAQB7AAAAPXUcRUEAABIADP4ChAIEhv0EhgUBAgYBAm4EBwcEhggEhgsChMQChAABAgEBAgEAAD11HEVWexxFAQBSdW4A+9IXAPvSFwDPACMACAFCAAAiAAb9BIYFBIYBAoQABIYDAQIEAQICPXUcRd0BHUUBAPvSFwAaAVfl", "base64"));
 

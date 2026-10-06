@@ -52,6 +52,8 @@ The Garmin screen submits credentials through the authenticated API, clears the 
 
 Accepting a Garmin record as an activity copies its start time, source UTC offset when present, timer duration rounded to minutes, and active calories into a new editable activity. The offset preserves the Garmin time of day when reviewing a trip from another time zone. Linking a strength recording to a completed session keeps its exercises, sets, time, notes, and any already entered calories; otherwise it fills active calories once. Strength suggestions require the same source local date and a completed session starting within an hour. Multiple matches need an explicit choice. Ignoring stores the source key on the day. Unlinking or restoring removes the decision key while leaving the Trainoq item and its edits intact.
 
+The source key ends with the FIT session's message index. Removing that final index identifies summaries from one FIT recording for grouping suggestions; each child retains its full source key.
+
 Moving a linked activity to a corrected date preserves its ID, exercise, notes, duration, calories and displayed local time. Both day drafts are stored locally first, then the old day syncs before the new one so the unique source link moves in order. If either sync fails, the drafts remain available through the normal sync retry and conflict controls. The saved source offset remains the original FIT offset; edit the start time if the corrected date has another UTC offset.
 
 ## Data model
