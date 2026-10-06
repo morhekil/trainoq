@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { addEventEntry, dayActivities, daySessions, emptyDay, removeEventEntry, type Activity, type DayComment, type DayDoc, type EventEntry, type TrainingEvent } from "../../../shared/days/model";
+import { addEventEntry, dayActivities, daySessions, detachEventEntry, emptyDay, mergeEvents, removeEventEntry, type Activity, type DayComment, type DayDoc, type EventEntry, type TrainingEvent } from "../../../shared/days/model";
 import { dayToText } from "../../../shared/days/format";
 import { activityTime, orderedDayEvents, orderedDayRecords } from "../../../shared/days/timeline";
 import { useDay } from "./hooks";
@@ -21,7 +21,7 @@ import { SessionCard } from "../sessions/session";
 export function DayView({ date }: { date: string }) {
   useSyncExternalStore(subscribeLibrary, libraryVersion);
   const { doc, entry, update, replace } = useDay(date);
-  const { toast } = useOverlays();
+  const { openSheet, toast } = useOverlays();
   const [recentVersion, setRecentVersion] = useState(0);
 
   useEffect(() => {
@@ -42,6 +42,20 @@ export function DayView({ date }: { date: string }) {
   const active = daySessions(doc).some((s) => !s.endedAt);
   const records = orderedDayRecords(doc);
   const sessionIndices = new Map(records.filter((record) => record.kind === "session").map((record) => [record.s.id, record.index]));
+  const actionFor = (event: TrainingEvent, entry: EventEntry): EventAction | undefined => {
+    const id = entry.kind === "session" ? entry.session.id : entry.activity.id;
+    if (event.entries.length > 1) return { label: "Remove from training event", onClick: () => undoable("Part removed from training event", (day) => detachEventEntry(day, event.id, entry.kind, id)) };
+    if (doc.events.length < 2 || event.title || event.notes || event.summaryOverrides) return undefined;
+    const candidates = orderedDayEvents(doc).flatMap((item) => item.kind === "event" && item.event.id !== event.id && !item.event.summaryOverrides ? [item.event] : []);
+    return { label: "Add to training event", onClick: () => openSheet({
+      title: "Add to training event",
+      description: "Choose the event for this part. Its saved values and Garmin link stay with it.",
+      actions: candidates.map((item) => ({
+        label: `${eventLabel(item)} · ${item.entries.length} ${item.entries.length === 1 ? "part" : "parts"}`,
+        onClick: () => undoable("Training events combined", (day) => mergeEvents(day, [item.id, event.id])),
+      })),
+    }) };
+  };
 
   const start = () =>
     update((d) => {
@@ -59,9 +73,9 @@ export function DayView({ date }: { date: string }) {
       {entry?.conflict && <ConflictBanner date={date} local={doc} other={entry.conflict.doc} />}
       {orderedDayEvents(doc).map((record) => record.kind === "comment"
         ? <CommentCard key={`comment-${record.comment.id}`} comment={record.comment} />
-        : record.event.entries.length > 1
-          ? <TrainingEventCard key={record.event.id} event={record.event} sessionIndices={sessionIndices} totalSessions={daySessions(doc).length} />
-          : <EventPart key={record.event.id} entry={record.event.entries[0]} sessionIndices={sessionIndices} totalSessions={daySessions(doc).length} />)}
+        : record.event.entries.length > 1 || record.event.title || record.event.notes
+          ? <TrainingEventCard key={record.event.id} event={record.event} sessionIndices={sessionIndices} totalSessions={daySessions(doc).length} actionFor={actionFor} />
+          : <EventPart key={record.event.id} entry={record.event.entries[0]} sessionIndices={sessionIndices} totalSessions={daySessions(doc).length} action={actionFor(record.event, record.event.entries[0])} />)}
       {!active && (
         <button type="button" className="btn big primary start-btn" onClick={start}>
           <Icon name="play" size={18} />
@@ -75,18 +89,36 @@ export function DayView({ date }: { date: string }) {
   );
 }
 
-function EventPart({ entry, sessionIndices, totalSessions }: { entry: EventEntry; sessionIndices: Map<string, number>; totalSessions: number }) {
-  return entry.kind === "session"
-    ? <SessionCard s={entry.session} index={sessionIndices.get(entry.session.id) ?? 0} total={totalSessions} />
-    : <ActivityCard a={entry.activity} />;
+type EventAction = { label: string; onClick: () => void };
+
+function eventLabel(event: TrainingEvent): string {
+  if (event.title?.trim()) return event.title.trim();
+  const first = event.entries[0];
+  if (first.kind === "session") return `Session at ${new Date(first.session.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
+  return `${exerciseName(first.activity.exerciseId)} at ${activityTime(first.activity) ?? "unknown time"}`;
 }
 
-function TrainingEventCard({ event, sessionIndices, totalSessions }: { event: TrainingEvent; sessionIndices: Map<string, number>; totalSessions: number }) {
+function EventPart({ entry, sessionIndices, totalSessions, action }: { entry: EventEntry; sessionIndices: Map<string, number>; totalSessions: number; action?: EventAction }) {
+  return entry.kind === "session"
+    ? <SessionCard s={entry.session} index={sessionIndices.get(entry.session.id) ?? 0} total={totalSessions} eventAction={action} />
+    : <ActivityCard a={entry.activity} eventAction={action} />;
+}
+
+function TrainingEventCard({ event, sessionIndices, totalSessions, actionFor }: { event: TrainingEvent; sessionIndices: Map<string, number>; totalSessions: number; actionFor: (event: TrainingEvent, entry: EventEntry) => EventAction | undefined }) {
+  const { update } = useDayCtx();
+  const change = (fn: (item: TrainingEvent) => void) => update((day) => {
+    const item = day.events.find((candidate) => candidate.id === event.id);
+    if (item) fn(item);
+  });
   return <details className="card training-event">
-    <summary>{event.title?.trim() || "Training event"} · {event.entries.length} parts</summary>
+    <summary>{event.title?.trim() || "Training event"} · {event.entries.length} {event.entries.length === 1 ? "part" : "parts"}</summary>
     <div className="event-parts">
-      {event.notes && <p>{event.notes}</p>}
-      {event.entries.map((entry) => <EventPart key={entry.kind === "session" ? `session-${entry.session.id}` : `activity-${entry.activity.id}`} entry={entry} sessionIndices={sessionIndices} totalSessions={totalSessions} />)}
+      <label className="event-field">Event title
+        <input className="text" type="text" value={event.title ?? ""} onChange={(changeEvent) => change((item) => (item.title = changeEvent.target.value || null))} />
+      </label>
+      <label className="event-field" htmlFor={`event-notes-${event.id}`}>Event notes</label>
+      <AutoTextarea id={`event-notes-${event.id}`} minRows={2} value={event.notes} onChange={(changeEvent) => change((item) => (item.notes = changeEvent.target.value))} />
+      {event.entries.map((entry) => <EventPart key={entry.kind === "session" ? `session-${entry.session.id}` : `activity-${entry.activity.id}`} entry={entry} sessionIndices={sessionIndices} totalSessions={totalSessions} action={actionFor(event, entry)} />)}
     </div>
   </details>;
 }
@@ -186,7 +218,7 @@ function AddCommentCard() {
   );
 }
 
-function ActivityCard({ a }: { a: Activity }) {
+function ActivityCard({ a, eventAction }: { a: Activity; eventAction?: EventAction }) {
   const { date, update, undoable } = useDayCtx();
   const { openPicker, openSheet } = useOverlays();
   const up = (id: string, fn: (a: Activity) => void) =>
@@ -226,7 +258,7 @@ function ActivityCard({ a }: { a: Activity }) {
             onClick={() =>
               openSheet({
                 title: exerciseName(a.exerciseId),
-                actions: [{
+                actions: [...(eventAction ? [eventAction] : []), {
                   label: "Delete",
                   danger: true,
                   onClick: () => undoable("Activity deleted", (d) => removeEventEntry(d, "activity", a.id)),

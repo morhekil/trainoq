@@ -30,7 +30,7 @@ function formatDuration(min: number): string {
   return min < 60 ? `${min} min` : `${Math.floor(min / 60)}h ${String(min % 60).padStart(2, "0")}m`;
 }
 
-export function SessionCard({ s, index, total }: { s: Session; index: number; total: number }) {
+export function SessionCard({ s, index, total, eventAction }: { s: Session; index: number; total: number; eventAction?: { label: string; onClick: () => void } }) {
   const { date, update, undoable } = useDayCtx();
   const { openSheet } = useOverlays();
   const active = !s.endedAt;
@@ -38,6 +38,7 @@ export function SessionCard({ s, index, total }: { s: Session; index: number; to
   const minutes = minutesBetween(s.startedAt, s.endedAt ?? new Date().toISOString());
   const up = (fn: (session: Session) => void) => update((d) => fn(findSession(d, s.id)));
   const menu = () => openSheet({ title: "Session", actions: [
+    ...(eventAction ? [eventAction] : []),
     ...(s.endedAt ? [{ label: "Resume session", icon: "play" as const, onClick: () => up((x) => (x.endedAt = null)) }] : []),
     { label: "Delete session", danger: true, onClick: () => undoable("Session deleted", (d) => removeEventEntry(d, "session", s.id)) },
   ] });

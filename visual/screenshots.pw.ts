@@ -507,6 +507,59 @@ test("a grouped visit appears as one expandable event with its original parts", 
   }
 });
 
+test("groups existing parts by choice, edits the event, and separates a part", async ({ page }) => {
+  await mockApi(page);
+  const activity = (id: string, exerciseId: string, startedAt: string) => ({ id, exerciseId, comment: "", startedAt, result: { minutes: 5, calories: 20 } });
+  const saved = {
+    v: 7, date: day, comments: [], events: [
+      { id: "walk-event", title: null, notes: "", entries: [{ kind: "activity", activity: activity("walk", "seed:0033", "2026-09-15T06:24:00.000Z") }] },
+      { id: "run-event", title: null, notes: "", entries: [{ kind: "activity", activity: activity("run", "seed:0170", "2026-09-15T06:30:00.000Z") }] },
+    ], ignoredGarminSourceKeys: [], totalCalories: null,
+  };
+  await page.addInitScript(({ date, saved }) => {
+    localStorage.setItem("tq:authed", JSON.stringify(true));
+    localStorage.setItem(`tq:day:${date}`, JSON.stringify({ doc: saved, base: null, dirty: false, rev: 1 }));
+  }, { date: day, saved });
+  await page.goto(`/#/d/${day}`);
+  await page.locator(".activity-card").filter({ hasText: "Run" }).getByRole("button", { name: "Activity options" }).click();
+  await page.getByRole("button", { name: "Add to training event" }).click();
+  const choices = page.getByRole("dialog", { name: "Add to training event" });
+  await choices.getByRole("button", { name: /Walk at 16:24/ }).click();
+  const event = page.locator("details.training-event");
+  await expect(event).toHaveCount(1);
+  await event.locator("summary").click();
+  await event.getByLabel("Event title").fill("Rehab walk-run");
+  await event.getByLabel("Event notes").fill("Kept as one visit");
+  await event.locator(".activity-card").filter({ hasText: "Run" }).getByRole("button", { name: "Activity options" }).click();
+  await page.getByRole("button", { name: "Remove from training event" }).click();
+  await expect(event.locator("summary")).toHaveText("Rehab walk-run · 1 part");
+  const draft = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!).doc, day);
+  expect(draft.events).toHaveLength(2);
+  expect(draft.events[0]).toMatchObject({ title: "Rehab walk-run", notes: "Kept as one visit", entries: [{ activity: { id: "walk" } }] });
+  expect(draft.events[1]).toMatchObject({ title: null, notes: "", entries: [{ activity: { id: "run" } }] });
+});
+
+test("a manual session can join a separate cardio recording", async ({ page }) => {
+  await mockApi(page);
+  const session = { id: "cardio-session", startedAt: "2026-09-15T05:59:00.000Z", endedAt: "2026-09-15T06:20:00.000Z", warmup: [], main: [], cooldown: [], calories: 120, notes: "Manual work" };
+  const activity = { id: "run", exerciseId: "seed:0170", comment: "", startedAt: "2026-09-15T05:49:00.000Z", garminSourceKey: "garmin:run:0", result: { minutes: 20, calories: 100 } };
+  const saved = { v: 7, date: day, comments: [], events: [
+    { id: "session-event", title: null, notes: "", entries: [{ kind: "session", session }] },
+    { id: "run-event", title: null, notes: "", entries: [{ kind: "activity", activity }] },
+  ], ignoredGarminSourceKeys: [], totalCalories: null };
+  await page.addInitScript(({ date, saved }) => {
+    localStorage.setItem("tq:authed", JSON.stringify(true));
+    localStorage.setItem(`tq:day:${date}`, JSON.stringify({ doc: saved, base: null, dirty: false, rev: 1 }));
+  }, { date: day, saved });
+  await page.goto(`/#/d/${day}`);
+  await page.getByRole("button", { name: "Session options" }).click();
+  await page.getByRole("button", { name: "Add to training event" }).click();
+  await page.getByRole("dialog", { name: "Add to training event" }).getByRole("button", { name: /Run at 15:49/ }).click();
+  const draft = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!).doc, day);
+  expect(draft.events).toHaveLength(1);
+  expect(draft.events[0].entries).toMatchObject([{ kind: "activity", activity: { id: "run", garminSourceKey: "garmin:run:0" } }, { kind: "session", session: { id: "cardio-session", notes: "Manual work", calories: 120 } }]);
+});
+
 test("new manual activities use the selected day's current local time", async ({ page }) => {
   await page.clock.setFixedTime(new Date("2026-10-05T13:45:00+11:00"));
   await mockApi(page);

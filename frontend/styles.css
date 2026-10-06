@@ -342,6 +342,13 @@ textarea {
   padding-block-start: var(--pad);
 }
 
+.event-field {
+  display: grid;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
 .hint {
   font-size: 13px;
   color: var(--muted);
