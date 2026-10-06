@@ -1,7 +1,9 @@
 import copy
+import json
+import sqlite3
 import unittest
 
-from migrate_exercise_records import convert_day, session_log_rows
+from migrate_exercise_records import convert_day, session_log_rows, update_sql
 
 
 def day(date, items):
@@ -58,6 +60,35 @@ class RecordConversionTest(unittest.TestCase):
         self.assertEqual(record["sets"][0]["weight"], 0)
         self.assertEqual(record["sets"][0]["time"], 30)
         self.assertEqual(record["comment"], "30s")
+
+    def test_sql_requires_exact_before_row_and_rebuilds_history(self):
+        hold = {"kind": "exercise", "id": "hold", "exerciseId": "seed:0048", "comment": "30s",
+                "sets": [{"id": "1", "type": "warmup", "weight": None, "reps": None}]}
+        original = day("2026-09-24", [hold])
+        old_raw = json.dumps(original, separators=(",", ":"))
+        converted = convert_day(copy.deepcopy(original))
+        names = {"legacy:pull-up hold": "Pull-up hold"}
+        sql = update_sql("2026-09-24", old_raw, "old-stamp", converted, "new-stamp", names)
+        db = sqlite3.connect(":memory:")
+        db.executescript("""
+            CREATE TABLE days (date TEXT PRIMARY KEY, doc TEXT, updated_at TEXT);
+            CREATE TABLE exercise_log (date TEXT, section TEXT, name TEXT, name_key TEXT, detail TEXT, ord INTEGER, exercise_id TEXT);
+            CREATE TABLE exercise_catalog (id TEXT PRIMARY KEY, name TEXT, name_key TEXT);
+            CREATE TABLE exercise_params (exercise_id TEXT PRIMARY KEY, params TEXT, updated_at TEXT);
+        """)
+        db.execute("INSERT INTO days VALUES (?, ?, ?)", ("2026-09-24", old_raw, "other-stamp"))
+        db.execute("INSERT INTO exercise_log VALUES (?, ?, ?, ?, ?, ?, ?)",
+                   ("2026-09-24", "main", "Pull-up", "pull-up", "old", 0, "seed:0048"))
+        db.executescript(sql)
+        self.assertEqual(db.execute("SELECT updated_at FROM days").fetchone()[0], "other-stamp")
+        self.assertEqual(db.execute("SELECT detail FROM exercise_log").fetchone()[0], "old")
+        db.execute("UPDATE days SET updated_at = 'old-stamp'")
+        db.executescript(sql)
+        self.assertEqual(json.loads(db.execute("SELECT doc FROM days").fetchone()[0]), converted)
+        self.assertEqual(db.execute("SELECT name FROM exercise_log").fetchone()[0], "Pull-up hold")
+        self.assertEqual(db.execute("SELECT name FROM exercise_catalog").fetchone()[0], "Pull-up hold")
+        self.assertEqual(json.loads(db.execute("SELECT params FROM exercise_params").fetchone()[0]),
+                         {"perSet": ["weight", "time"]})
 
 
 if __name__ == "__main__":

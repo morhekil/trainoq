@@ -5,6 +5,7 @@ documents and history rows; the caller checks the old document and timestamp
 before applying any write.
 """
 
+import json
 import re
 
 
@@ -145,3 +146,34 @@ def session_log_rows(doc, names):
                         rows.append({"section": section, "exercise_id": record["exerciseId"],
                                      "name": names[record["exerciseId"]], "detail": detail})
     return rows
+
+
+def update_sql(date, old_raw, old_stamp, doc, new_stamp, names):
+    def q(value):
+        return "'" + value.replace("'", "''") + "'"
+
+    new_raw = json.dumps(doc, ensure_ascii=False, separators=(",", ":"))
+    guard = f"EXISTS (SELECT 1 FROM days WHERE date = {q(date)} AND updated_at = {q(new_stamp)})"
+    statements = [
+        f"UPDATE days SET doc = {q(new_raw)}, updated_at = {q(new_stamp)} "
+        f"WHERE date = {q(date)} AND doc = {q(old_raw)} AND updated_at = {q(old_stamp)};",
+        "SELECT changes() AS day_changes;",
+    ]
+    if any(row["exercise_id"] == "legacy:pull-up hold" for row in session_log_rows(doc, names)):
+        statements.extend([
+            f"INSERT OR IGNORE INTO exercise_catalog (id, name, name_key) "
+            f"SELECT 'legacy:pull-up hold', 'Pull-up hold', 'pull-up hold' WHERE {guard};",
+            f"INSERT OR IGNORE INTO exercise_params (exercise_id, params, updated_at) "
+            f"SELECT 'legacy:pull-up hold', '{{\"perSet\":[\"weight\",\"time\"]}}', "
+            f"{q(new_stamp.split('Z:')[0] + 'Z' if 'Z:' in new_stamp else new_stamp)} WHERE {guard};",
+        ])
+    statements.append(f"DELETE FROM exercise_log WHERE date = {q(date)} AND section != 'activity' AND {guard};")
+    for order, row in enumerate(session_log_rows(doc, names)):
+        name = row["name"]
+        detail = json.dumps(row["detail"], ensure_ascii=False, separators=(",", ":"))
+        values = ", ".join(q(value) for value in (date, row["section"], name, " ".join(name.lower().split()), detail))
+        statements.append(
+            "INSERT INTO exercise_log (date, section, name, name_key, detail, ord, exercise_id) "
+            f"SELECT {values}, {order}, {q(row['exercise_id'])} WHERE {guard};"
+        )
+    return "\n".join(statements) + "\n"
