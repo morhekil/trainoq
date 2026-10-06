@@ -1196,6 +1196,32 @@ test("custom parameters validate, save a template and delete it with Undo", asyn
   await expect(page.getByText("Box reps")).toBeVisible();
 });
 
+test("a pending template retries on the periodic sync without a day draft", async ({ page }) => {
+  await page.clock.install();
+  await mockApi(page);
+  let attempts = 0;
+  await page.route("**/api/trpc/exercises.saveTemplate", async (route) => {
+    attempts++;
+    if (attempts === 1) await route.abort("failed");
+    else {
+      const raw = JSON.parse(route.request().postData() ?? "{}");
+      await route.fulfill({ contentType: "application/json", body: JSON.stringify({ result: { data: raw.json ?? raw[0]?.json ?? raw } }) });
+    }
+  });
+  await page.addInitScript(() => {
+    localStorage.setItem("tq:authed", JSON.stringify(true));
+    localStorage.setItem("tq:param-templates", JSON.stringify({ saved: {
+      "3bf61709-0d42-4626-82e6-0b32c622fc0a": { id: "3bf61709-0d42-4626-82e6-0b32c622fc0a", name: "Box reps", params: { perSet: ["height", "reps"] } },
+    }, deleted: [] }));
+  });
+  await page.goto("/#/exercises");
+  await page.clock.fastForward(1200);
+  await expect.poll(() => attempts).toBe(1);
+  await page.clock.fastForward(15100);
+  await expect.poll(() => attempts).toBe(2);
+  await expect.poll(() => page.evaluate(() => Object.keys(JSON.parse(localStorage.getItem("tq:param-templates")!).saved))).toEqual([]);
+});
+
 for (const width of [320, 1280]) {
   test(`exercise parameter screens at ${width}px`, async ({ page }) => {
     test.setTimeout(120_000);

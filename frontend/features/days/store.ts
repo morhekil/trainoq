@@ -319,7 +319,7 @@ if (typeof window !== "undefined") {
     syncAll();
   });
   setInterval(() => {
-    if (dirty.size || hasPendingParams()) syncAll();
+    if (dirty.size || hasPendingParams() || hasPendingTemplates()) syncAll();
   }, 15000);
   setTimeout(syncAll, 1000);
 }
