@@ -24,7 +24,7 @@ describe("formatSets", () => {
 describe("dayToText", () => {
   it("renders a day the way it gets shared", () => {
     const doc: DayDoc = {
-      v: 7,
+      v: 8,
       date: "2026-09-22",
       ignoredGarminSourceKeys: [],
       comments: [{ id: "c", time: "08:00", text: "Morning stiffness: 4/10" }],
@@ -32,17 +32,17 @@ describe("dayToText", () => {
           id: "s",
           startedAt: "2026-09-22T07:00:00.000Z",
           endedAt: "2026-09-22T08:10:00.000Z",
-          warmup: [{ kind: "exercise", id: "wa", exerciseId: exerciseIdForName("Side plank"), sets: [{ id: "w1", ...set("working", null, null) }], comment: "30s" }],
+          warmup: [{ kind: "exercise", id: "wa", exerciseId: exerciseIdForName("Side plank"), params: { perSet: ["weight", "reps"] }, sets: [{ id: "w1", ...set("working", null, null) }], comment: "30s" }],
           main: [
             { kind: "superset", id: "b", members: [
-              { id: "e1", exerciseId: exerciseIdForName("Pull-up"), comment: "" },
-              { id: "e2", exerciseId: exerciseIdForName("Bench press"), comment: "easy" },
+              { id: "e1", exerciseId: exerciseIdForName("Pull-up"), comment: "", params: { perSet: ["weight", "reps"] } },
+              { id: "e2", exerciseId: exerciseIdForName("Bench press"), comment: "easy", params: { perSet: ["weight", "reps"] } },
             ], rounds: [{ id: "r", type: "working" }], results: [
               { memberId: "e1", roundId: "r", weight: 10, reps: 5 },
               { memberId: "e2", roundId: "r", weight: 40, reps: 6 },
             ] },
           ],
-          cooldown: [{ kind: "exercise", id: "ce", exerciseId: exerciseIdForName("Jefferson curl"), sets: [{ id: "c1", ...set("working", 4, 4) }], comment: "4kg" }],
+          cooldown: [{ kind: "exercise", id: "ce", exerciseId: exerciseIdForName("Jefferson curl"), params: { perSet: ["weight", "reps"] }, sets: [{ id: "c1", ...set("working", 4, 4) }], comment: "4kg" }],
           calories: 317,
           notes: "",
         } }] }, { id: "walk-event", title: null, notes: "", entries: [{ kind: "activity", activity: { id: "w", exerciseId: exerciseIdForName("Walk"), comment: "", result: { minutes: 30, calories: 115 } } }] }],
@@ -85,7 +85,7 @@ describe("dayToText", () => {
 
   it("shares a grouped event as one named visit with every original part and note", () => {
     const doc: DayDoc = {
-      v: 7, date: "2026-10-02", comments: [{ id: "c", time: "17:05", text: "Between parts" }], ignoredGarminSourceKeys: [], totalCalories: 430,
+      v: 8, date: "2026-10-02", comments: [{ id: "c", time: "17:05", text: "Between parts" }], ignoredGarminSourceKeys: [], totalCalories: 430,
       events: [{ id: "visit", title: "Walk-run", notes: "Intervals with hills", entries: [
         { kind: "activity", activity: { id: "walk", exerciseId: "walk", startedAt: "2026-10-02T06:00:00.000Z", comment: "Easy", result: { minutes: 5, calories: 30 } } },
         { kind: "activity", activity: { id: "run", exerciseId: "run", startedAt: "2026-10-02T06:10:00.000Z", comment: "", result: { minutes: 5, calories: 40 } } },

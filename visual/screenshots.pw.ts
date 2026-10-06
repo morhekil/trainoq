@@ -925,7 +925,7 @@ test("touch drag scrolls to the superset target", async ({ page }) => {
   await expect(main.locator(".block.superset")).toHaveCount(1);
 });
 
-test("an offline v1 draft syncs as v7 and preserves its revision base", async ({ page }) => {
+test("an offline v1 draft syncs as v8 and preserves its revision base", async ({ page }) => {
   await mockApi(page);
   const requests: string[] = [];
   page.on("request", (request) => { if (request.url().includes("/api/trpc/")) requests.push(request.url().split("/").at(-1)!); });
@@ -943,14 +943,14 @@ test("an offline v1 draft syncs as v7 and preserves its revision base", async ({
   const payload = request.postDataJSON();
   const input = payload.json ?? payload;
   expect(input.base).toBe("previous-revision");
-  expect(input.doc.v).toBe(7);
+  expect(input.doc.v).toBe(8);
   expect(requests.indexOf("exercises.create")).toBeGreaterThanOrEqual(0);
   expect(requests.indexOf("exercises.create")).toBeLessThan(requests.indexOf("days.save"));
   expect(savedSessions(input.doc)[0].warmup[0].sets.map((set: { reps: number }) => set.reps)).toEqual([15, 15]);
   await expect(page.getByText("Band pull-apart", { exact: true })).toBeVisible();
   const entry = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!), day);
   expect(entry.rev).toBe(7);
-  expect(entry.doc.v).toBe(7);
+  expect(entry.doc.v).toBe(8);
 });
 
 test("v1 conflict copies normalize before either version is chosen", async ({ page }) => {
@@ -968,13 +968,13 @@ test("v1 conflict copies normalize before either version is chosen", async ({ pa
   }, { date: day, legacy });
   await page.goto(`/#/d/${day}`);
   const before = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!), day);
-  expect([before.doc.v, before.conflict.doc.v, before.base, before.dirty, before.rev, before.conflict.updatedAt]).toEqual([7, 7, "old-revision", true, 9, "new-revision"]);
+  expect([before.doc.v, before.conflict.doc.v, before.base, before.dirty, before.rev, before.conflict.updatedAt]).toEqual([8, 8, "old-revision", true, 9, "new-revision"]);
   await page.getByRole("button", { name: "Use other device's" }).click();
   const dialog = page.getByRole("dialog", { name: "Review day versions" });
   await expect(dialog).toContainText("Other device");
   await dialog.getByRole("button", { name: "Replace this device's edits" }).click();
   const after = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!), day);
-  expect([after.doc.v, after.doc.comments[0].text, after.base, after.dirty, after.rev]).toEqual([7, "Other device", "new-revision", false, 10]);
+  expect([after.doc.v, after.doc.comments[0].text, after.base, after.dirty, after.rev]).toEqual([8, "Other device", "new-revision", false, 10]);
 });
 
 test("repeat keeps grouping and set types across every section without recorded values", async ({ page }) => {

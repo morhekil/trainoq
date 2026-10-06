@@ -12,7 +12,7 @@ describe("training events", () => {
 
     const migrated = normalizeDay(old);
 
-    expect(migrated).toEqual({ v: 7, date: old.date, comments: old.comments, events: [
+    expect(migrated).toEqual({ v: 8, date: old.date, comments: old.comments, events: [
       { id: "migrated:session:session-1", title: null, notes: "", entries: [{ kind: "session", session }] },
       { id: "migrated:activity:activity-1", title: null, notes: "", entries: [{ kind: "activity", activity }] },
     ], ignoredGarminSourceKeys: [], totalCalories: 220 });

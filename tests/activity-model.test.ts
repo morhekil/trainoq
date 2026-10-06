@@ -19,7 +19,7 @@ describe("catalog-backed activities", () => {
     };
 
     const migrated = inputDaySchema.parse(old);
-    expect(migrated.v).toBe(7);
+    expect(migrated.v).toBe(8);
     expect(dayActivities(migrated)).toMatchObject([
       { id: "walk", exerciseId: exerciseIdForName("Walk"), comment: "Hills", result: { minutes: 30, calories: 120 } },
       { id: "custom", exerciseId: exerciseIdForName("Trail run"), comment: "Easy", result: { minutes: null, calories: 20 } },

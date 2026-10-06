@@ -21,10 +21,10 @@ export interface LibItem {
   last: string | null;
 }
 
-let lib: ExerciseLibrary = lsGet<ExerciseLibrary>(LS_KEY) ?? { catalog: [], stats: [], history: {} };
+let lib: ExerciseLibrary = lsGet<ExerciseLibrary>(LS_KEY) ?? { catalog: [], stats: [], history: {}, params: {} };
 setRemoteCatalog(lib.catalog ?? []);
 export function clearLibrary(): void {
-  lib = { catalog: [], stats: [], history: {} };
+  lib = { catalog: [], stats: [], history: {}, params: {} };
   lastFetch = 0;
   lsRemove(LS_KEY);
   version++;
@@ -178,7 +178,7 @@ export function lastTime(exerciseId: string, beforeDate: string, section: Sectio
       for (const item of s[section])
         for (const ex of item.kind === "exercise" ? [item] : item.members)
           if (ex.exerciseId === exerciseId && itemSets(item, ex.id).length && (!best || d.date > best.date)) {
-            best = { date: d.date, section, sets: itemSets(item, ex.id).map(({ type, weight, reps }) => ({ type, weight, reps })) };
+            best = { date: d.date, section, params: ex.params, ...(ex.setup ? { setup: ex.setup } : {}), sets: itemSets(item, ex.id).map(({ id: _id, type, ...values }) => ({ type, ...values })) };
           }
   }
   return best;

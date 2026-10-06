@@ -87,7 +87,7 @@ describe("Worker tRPC boundary", () => {
     const first = await client.days.save.mutate({ date: old.date, doc: old, base: null });
     expect(first.ok).toBe(true);
     const migrated = (await client.days.get.query(old.date)).doc!;
-    expect(migrated.v).toBe(7);
+    expect(migrated.v).toBe(8);
     expect(daySessions(migrated)[0].warmup[0]).toMatchObject({ kind: "exercise", exerciseId: exerciseIdForName("Row"), comment: "Light band", sets: [{ reps: 10 }, { reps: 10 }] });
     expect(dayActivities(migrated)).toEqual([{ id: "activity", exerciseId: exerciseIdForName("Trail run"), comment: "Steady", result: { minutes: 35, calories: 280 } }]);
     expect((await client.days.list.query({ withSessions: true, limit: 10 }))[0].doc).toEqual(migrated);
@@ -114,7 +114,7 @@ describe("Worker tRPC boundary", () => {
     const activityId = "d34437b6-06c3-4b89-a9ed-37825a68822e";
     addEventEntry(custom, { kind: "activity", activity: { id: "activity-2", exerciseId: activityId, comment: "Doubles", result: { minutes: 60, calories: 400 } } });
     addEventEntry(custom, { kind: "session", session: { id: "custom", startedAt: "2026-09-24T07:00:00Z", endedAt: null, warmup: [], main: [
-      { kind: "superset", id: "ss", members: [{ id: "member", exerciseId: customId, comment: "" }], rounds: [{ id: "round", type: "working" }], results: [{ memberId: "member", roundId: "round", weight: 0, reps: 8 }] },
+      { kind: "superset", id: "ss", members: [{ id: "member", exerciseId: customId, comment: "", params: { perSet: ["weight", "reps"] } }], rounds: [{ id: "round", type: "working" }], results: [{ memberId: "member", roundId: "round", weight: 0, reps: 8 }] },
     ], cooldown: [], calories: null, notes: "" } });
     await expect(client.days.save.mutate({ date: custom.date, doc: custom, base: null })).rejects.toMatchObject({ data: { code: "BAD_REQUEST" } });
     await client.exercises.create.mutate({ id: customId, name: "Custom raise" });

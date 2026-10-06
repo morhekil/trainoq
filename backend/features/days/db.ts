@@ -29,7 +29,7 @@ function logRows(doc: DayDoc): LogRow[] {
         for (const e of item.kind === "exercise" ? [item] : item.members)
           rows.push({
             section, exerciseId: e.exerciseId, name: seedExercise(e.exerciseId)?.name ?? "",
-            detail: JSON.stringify({ sets: itemSets(item, e.id).map(({ type, weight, reps }) => ({ type, weight, reps })), superset: item.kind === "superset" }),
+            detail: JSON.stringify({ params: e.params, ...(e.setup ? { setup: e.setup } : {}), sets: itemSets(item, e.id).map(({ id: _id, ...set }) => set), superset: item.kind === "superset" }),
           });
   }
   for (const activity of dayActivities(doc))
@@ -59,12 +59,12 @@ export type PutResult = { ok: true; updatedAt: string | null } | { ok: false; cu
  * Save a day. `base` is the updatedAt the client last saw from the server (null if it never saw one).
  * If the server copy has moved on since then, nothing is written and the current copy is returned.
  */
-export async function putDay(db: D1Database, date: string, doc: DayDoc, base: string | null, sourceVersion = 7, legacyNames: string[] = []): Promise<PutResult> {
+export async function putDay(db: D1Database, date: string, doc: DayDoc, base: string | null, sourceVersion = 8, legacyNames: string[] = []): Promise<PutResult> {
   const links = garminLinks(doc);
   if (new Set(links.map((link) => link.key)).size !== links.length)
     throw new TRPCError({ code: "BAD_REQUEST", message: "Garmin source is used more than once" });
   const existing = await db.prepare("SELECT updated_at, doc FROM days WHERE date = ?").bind(date).first<{ updated_at: string; doc: string }>();
-  if (sourceVersion < 7 && existing && JSON.parse(existing.doc).v === 7)
+  if (sourceVersion < 8 && existing && JSON.parse(existing.doc).v >= 8)
     throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Refresh this client before saving a newer day" });
   if (existing && existing.updated_at !== base) {
     return { ok: false, current: await getDay(db, date) };

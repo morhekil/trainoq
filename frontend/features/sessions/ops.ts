@@ -3,6 +3,8 @@ import { daySessions, type DayDoc } from "../../../shared/days/model";
 import type { Session } from "../../../shared/sessions/model";
 import { suggestedSet } from "../exercises/library";
 import { uid } from "../../id";
+import { DEFAULT_PARAMS, normalizeParams, valuesOf, type ParamValues } from "../../../shared/exercises/params";
+import { SEED_PARAMS } from "../../../shared/exercises/seed";
 export { move } from "../../../shared/sessions/ops";
 
 export function findSession(d: DayDoc, sid: string): Session {
@@ -31,20 +33,21 @@ export function newSession(): Session {
 }
 
 export function makeSet(exercise: StandaloneExercise, date: string, section: Section, type?: SetType): WorkSet {
+  const params = exercise.params;
   const prev = exercise.sets.at(-1);
   const t: SetType = type ?? prev?.type ?? suggestedSet(exercise.exerciseId, date, section)?.type ?? "warmup";
-  const from = (set: Pick<WorkSet, "weight" | "reps">): WorkSet => ({ id: uid(), type: t, weight: set.weight, reps: set.reps });
+  const from = (set: ParamValues): WorkSet => ({ id: uid(), type: t, ...valuesOf(set, params) });
   const same = [...exercise.sets].reverse().find((set) => set.type === t);
   if (same) return from(same);
   const hint = suggestedSet(exercise.exerciseId, date, section, t, true);
   if (hint) return from(hint);
   if (prev) return from(prev);
   const first = suggestedSet(exercise.exerciseId, date, section);
-  return first ? from(first) : { id: uid(), type: t, weight: null, reps: null };
+  return from(first ?? {});
 }
 
 export function newExercise(exerciseId: string, date: string, section: Section): StandaloneExercise {
-  const exercise: StandaloneExercise = { kind: "exercise", id: uid(), exerciseId, sets: [], comment: "" };
+  const exercise: StandaloneExercise = { kind: "exercise", id: uid(), exerciseId, sets: [], comment: "", params: normalizeParams(SEED_PARAMS[exerciseId] ?? DEFAULT_PARAMS) };
   exercise.sets.push(makeSet(exercise, date, section));
   return exercise;
 }
@@ -63,14 +66,14 @@ export function setLabels(sets: Pick<WorkSet, "type">[]): string[] {
 
 export function copyItems(items: SessionItem[]): SessionItem[] {
   return items.map((item) => item.kind === "exercise"
-    ? { ...item, id: uid(), comment: "", sets: item.sets.map((set) => ({ id: uid(), type: set.type, weight: null, reps: null })) }
+    ? { ...item, id: uid(), comment: "", sets: item.sets.map((set) => ({ id: uid(), type: set.type, ...valuesOf(undefined, item.params) })) }
     : {
       kind: "superset" as const, id: uid(),
       members: item.members.map((member) => ({ ...member, id: uid(), comment: "" })),
       rounds: item.rounds.map((round) => ({ id: uid(), type: round.type })),
       results: [] as Superset["results"],
     }).map((item) => {
-      if (item.kind === "superset") item.results = item.rounds.flatMap((round) => item.members.map((member) => ({ memberId: member.id, roundId: round.id, weight: null, reps: null })));
+      if (item.kind === "superset") item.results = item.rounds.flatMap((round) => item.members.map((member) => ({ memberId: member.id, roundId: round.id, ...valuesOf(undefined, member.params) })));
       return item;
     });
 }

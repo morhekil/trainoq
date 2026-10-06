@@ -6,7 +6,7 @@ import type { SessionItem, Superset, WorkSet } from "../shared/exercises/model";
 import { addMember, addRound, createSuperset, dissolveSuperset, joinPerformance, moveMember, reorderRound, removeMember, removeRound, setRoundType } from "../shared/sessions/ops";
 
 const exercise = (id: string, name: string, sets: WorkSet[] = [{ id: `${id}-set`, type: "working", weight: 0, reps: 8 }]) =>
-  ({ kind: "exercise" as const, id, exerciseId: exerciseIdForName(name), comment: `${name} note`, sets });
+  ({ kind: "exercise" as const, id, exerciseId: exerciseIdForName(name), comment: `${name} note`, params: { perSet: ["weight" as const, "reps" as const] }, sets });
 
 describe("session items", () => {
   it("migrates v2 values and comments without inferring a one-member superset", () => {
@@ -18,24 +18,24 @@ describe("session items", () => {
       ] }, { id: "b2", exercises: [{ id: "c", name: "Press", comment: "pause", sets: [] }] }],
     }] };
     const migrated = inputDaySchema.parse(old);
-    expect(migrated.v).toBe(7);
+    expect(migrated.v).toBe(8);
     expect(daySessions(migrated)[0].main).toEqual([
       { kind: "superset", id: "b1", members: [
-        { id: "a", exerciseId: exerciseIdForName("Squat"), comment: "depth" },
-        { id: "b", exerciseId: exerciseIdForName("Row"), comment: "slow" },
+        { id: "a", exerciseId: exerciseIdForName("Squat"), comment: "depth", params: { perSet: ["weight", "reps"] } },
+        { id: "b", exerciseId: exerciseIdForName("Row"), comment: "slow", params: { perSet: ["weight", "reps"] } },
       ], rounds: [{ id: "a1", type: "warmup" }, { id: "a2", type: "working" }], results: [
         { memberId: "a", roundId: "a1", weight: 0, reps: 5 },
         { memberId: "b", roundId: "a1", weight: null, reps: 5 },
         { memberId: "a", roundId: "a2", weight: 40, reps: 8 },
         { memberId: "b", roundId: "a2", weight: 20, reps: 8 },
       ] },
-      { kind: "exercise", id: "c", exerciseId: exerciseIdForName("Press"), comment: "pause", sets: [] },
+      { kind: "exercise", id: "c", exerciseId: exerciseIdForName("Press"), comment: "pause", params: { perSet: ["weight", "reps"] }, sets: [] },
     ]);
   });
 
   it("validates exactly one result per member-round pair", () => {
     const doc = emptyDay("2026-09-28");
-    const item: Superset = { kind: "superset", id: "ss", members: [{ id: "a", exerciseId: exerciseIdForName("Squat"), comment: "" }], rounds: [{ id: "r", type: "working" }], results: [{ memberId: "a", roundId: "r", weight: 0, reps: 8 }] };
+    const item: Superset = { kind: "superset", id: "ss", members: [{ id: "a", exerciseId: exerciseIdForName("Squat"), comment: "", params: { perSet: ["weight", "reps"] } }], rounds: [{ id: "r", type: "working" }], results: [{ memberId: "a", roundId: "r", weight: 0, reps: 8 }] };
     addEventEntry(doc, { kind: "session", session: { id: "s", startedAt: "2026-09-28T01:00:00Z", endedAt: null, warmup: [], main: [item], cooldown: [], calories: null, notes: "" } });
     expect(daySchema.parse(doc)).toEqual(doc);
     const invalid = (replacement: Superset) => ({ ...doc, events: [{ ...doc.events[0], entries: [{ kind: "session" as const, session: { ...daySessions(doc)[0], main: [replacement] } }] }] });
@@ -48,8 +48,8 @@ describe("session items", () => {
     const ss: Superset = {
       kind: "superset", id: "ss",
       members: [
-        { id: "a", exerciseId: exerciseIdForName("Squat"), comment: "" },
-        { id: "b", exerciseId: exerciseIdForName("Row"), comment: "" },
+        { id: "a", exerciseId: exerciseIdForName("Squat"), comment: "", params: { perSet: ["weight", "reps"] } },
+        { id: "b", exerciseId: exerciseIdForName("Row"), comment: "", params: { perSet: ["weight", "reps"] } },
       ],
       rounds: [{ id: "r1", type: "warmup" }, { id: "r2", type: "working" }],
       results: [
@@ -84,7 +84,7 @@ describe("session items", () => {
     removeMember(ss, "b");
     removeMember(ss, "a");
     expect(ss).toMatchObject({ kind: "superset", members: [], rounds: [{ id: "r2", type: "warmup" }], results: [] });
-    addMember(ss, { id: "c", exerciseId: exerciseIdForName("Press"), comment: "" });
+    addMember(ss, { id: "c", exerciseId: exerciseIdForName("Press"), comment: "", params: { perSet: ["weight", "reps"] } });
     expect(ss.results).toEqual([{ memberId: "c", roundId: "r2", weight: null, reps: null }]);
   });
 

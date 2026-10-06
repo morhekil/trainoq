@@ -4,6 +4,39 @@ import { migrateDay, normalizeDay, type LegacyDayDoc } from "../shared/days/migr
 import { daySchema, inputDaySchema } from "../shared/days/schema";
 import type { StandaloneExercise } from "../shared/exercises/model";
 
+it("copies v7 session records to v8 without changing their values or activities", () => {
+  const v7 = {
+    v: 7, date: "2026-10-05", comments: [], ignoredGarminSourceKeys: [], totalCalories: null,
+    events: [{ id: "event", title: null, notes: "", entries: [
+      { kind: "session", session: { id: "session", startedAt: "2026-10-05T07:00:00.000Z", endedAt: null, calories: null, notes: "",
+        warmup: [{ kind: "exercise", id: "e", exerciseId: "seed:0029", comment: "", sets: [{ id: "s", type: "working", weight: 0, reps: 5 }] }],
+        main: [{ kind: "superset", id: "ss", members: [{ id: "m", exerciseId: "seed:0121", comment: "" }], rounds: [{ id: "r", type: "working" }], results: [{ memberId: "m", roundId: "r", weight: 10, reps: 6 }] }], cooldown: [] } },
+      { kind: "activity", activity: { id: "a", exerciseId: "seed:0170", comment: "", result: { minutes: 20, calories: 100 } } },
+    ] }],
+  };
+  const migrated = inputDaySchema.parse(v7);
+  expect(migrated.v).toBe(8);
+  const session = daySessions(migrated)[0];
+  expect(session.warmup[0]).toMatchObject({ params: { perSet: ["weight", "reps"] }, sets: [{ weight: 0, reps: 5 }] });
+  expect(session.main[0]).toMatchObject({ members: [{ params: { perSet: ["weight", "reps"] } }], results: [{ weight: 10, reps: 6 }] });
+  expect(dayActivities(migrated)[0]).toEqual(v7.events[0].entries[1].activity);
+  expect(daySchema.parse(migrated)).toEqual(migrated);
+  expect(normalizeDay(migrated)).toBe(migrated);
+});
+
+it("rejects values outside a record's parameters", () => {
+  const day = emptyDay("2026-10-05");
+  day.events.push({ id: "event", title: null, notes: "", entries: [{ kind: "session", session: {
+    id: "session", startedAt: "2026-10-05T07:00:00.000Z", endedAt: null, calories: null, notes: "",
+    warmup: [{ kind: "exercise", id: "e", exerciseId: "seed:0029", comment: "", params: { perSet: ["time"] }, sets: [{ id: "s", type: "working", time: 30, weight: 5 }] }], main: [], cooldown: [],
+  } }] });
+  expect(() => daySchema.parse(day)).toThrow(/Value outside the exercise's parameters/);
+  const entry = day.events[0].entries[0];
+  if (entry.kind !== "session" || entry.session.warmup[0].kind !== "exercise") throw new Error("Expected exercise");
+  delete entry.session.warmup[0].sets[0].weight;
+  expect(daySchema.parse(day)).toMatchObject({ v: 8 });
+});
+
 const doc: LegacyDayDoc = {
   ...emptyDay("2026-09-25"),
   v: 1,
@@ -37,7 +70,7 @@ describe("v1 day migration", () => {
     const curl = s.cooldown[0] as StandaloneExercise;
     const values = (sets: typeof rows.sets) => sets.map(({ type, weight, reps }) => ({ type, weight, reps }));
 
-    expect(migrated.v).toBe(7);
+  expect(migrated.v).toBe(8);
     expect(s.warmup.map((item) => item.id)).toEqual(["a", "b", "c", "d", "e", "f"]);
     expect(values(rows.sets)).toEqual([{ type: "working", weight: null, reps: 10 }, { type: "working", weight: null, reps: 10 }]);
     expect(values(hold.sets)).toEqual([{ type: "working", weight: null, reps: null }]);
@@ -62,7 +95,7 @@ describe("v1 day migration", () => {
     expect(() => migrateDay(unknown)).toThrow(/tenish/);
   });
 
-  it("normalizes v1 once and validates the canonical v7 day", () => {
+  it("normalizes v1 once and validates the canonical v8 day", () => {
     const migrated = normalizeDay(doc);
     expect(migrated).toEqual(migrateDay(doc));
     expect(normalizeDay(migrated)).toBe(migrated);
@@ -71,12 +104,12 @@ describe("v1 day migration", () => {
   });
 });
 
-it("migrates v4 decisions to v7 and keeps ignored Garmin records on an otherwise empty day", () => {
+it("migrates v4 decisions to v8 and keeps ignored Garmin records on an otherwise empty day", () => {
   const v4 = { ...emptyDay("2026-09-25"), v: 4 as const, morning: "", notes: "", sessions: [], activities: [] };
   delete (v4 as Partial<typeof v4>).ignoredGarminSourceKeys;
   const migrated = inputDaySchema.parse(v4);
   expect(migrated).toEqual(emptyDay("2026-09-25"));
-  expect(emptyDay("2026-09-25").v).toBe(7);
+  expect(emptyDay("2026-09-25").v).toBe(8);
   expect(isDayEmpty({ ...migrated, ignoredGarminSourceKeys: ["garmin:source"] })).toBe(false);
   addEventEntry(migrated, { kind: "activity", activity: { id: "a", exerciseId: "x", comment: "", startedAt: "2026-09-25T09:00:00.000Z", garminSourceKey: "garmin:source", result: { minutes: 25, calories: 172 } } });
   expect(dayActivities(daySchema.parse(migrated))[0].garminSourceKey).toBe("garmin:source");

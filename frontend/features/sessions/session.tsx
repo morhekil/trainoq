@@ -172,7 +172,7 @@ function SupersetCard({ s, section, item, index, count, drag, over, startDrag, j
   const { openPicker, openSheet } = useOverlays();
   const letter = blockLetter(index);
   const up = (fn: (superset: Superset) => void) => update((d) => fn(findSuperset(findSession(d, s.id), section, item.id)));
-  const add = () => openPicker({ section, title: "Add to superset", onPick: (id) => up((superset) => addMember(superset, { id: uid(), exerciseId: id, comment: "" })) });
+  const add = () => openPicker({ section, title: "Add to superset", onPick: (id) => up((superset) => addMember(superset, { id: uid(), exerciseId: id, comment: "", params: { perSet: ["weight", "reps"] } })) });
   const menu = () => {
     const actions: SheetAction[] = [{ label: "Add exercise to superset", icon: "plus", onClick: add }];
     item.rounds.forEach((round, i) => {
@@ -285,8 +285,8 @@ function SetRow({ label, set, name, onCycle, onWeight, onReps, dragHandle, onDra
   }, [hint]);
   return <div className="set-row">
     <div className="badge-cell"><button type="button" className={`set-badge ${set.type}`} aria-label={`${name} set ${label}, ${TYPE_NAME[set.type]}. Change type`} onClick={() => { setHint(TYPE_NAME[nextSetType(set.type)]); onCycle(); }}>{label}</button><span className="type-hint" role="status">{hint}</span></div>
-    <Stepper value={set.weight} onChange={onWeight} step={2.5} decimal placeholder="–" label={`${name} ${label} weight`} />
-    <Stepper value={set.reps} onChange={onReps} step={1} placeholder="–" label={`${name} ${label} reps`} />
+    <Stepper value={set.weight ?? null} onChange={onWeight} step={2.5} decimal placeholder="–" label={`${name} ${label} weight`} />
+    <Stepper value={set.reps ?? null} onChange={onReps} step={1} placeholder="–" label={`${name} ${label} reps`} />
     {dragHandle ? <button type="button" className="drag-handle round-handle" aria-label={`Drag round ${label}; activate for options`} onPointerDown={dragHandle} onClick={onDragActivate}>⋮⋮</button> : <span />}
   </div>;
 }

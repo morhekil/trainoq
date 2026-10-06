@@ -19,7 +19,7 @@ describe("day comments", () => {
 
     const day = inputDaySchema.parse(old);
     expect(day).toEqual({
-      v: 7,
+      v: 8,
       date: old.date,
       comments: [
         { id: "migrated:morning:2026-09-23:0", time: "08:00", text: old.morning },

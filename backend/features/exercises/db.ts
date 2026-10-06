@@ -1,6 +1,8 @@
 import { SEED_EXERCISES, exerciseIdForName } from "../../../shared/exercises/catalog";
 import { nameKey, type ActivityResult, type ExerciseContext, type ExerciseLibrary, type ExerciseStat, type WorkSet } from "../../../shared/exercises/model";
 import { migrateLegacyItem } from "../../../shared/days/migrate";
+import { DEFAULT_PARAMS, valuesOf, type ParamSet, type ParamValues } from "../../../shared/exercises/params";
+import { SEED_PARAMS } from "../../../shared/exercises/seed";
 
 export async function catalog(db: D1Database): Promise<ExerciseLibrary["catalog"]> {
   const { results } = await db.prepare("SELECT id, name FROM exercise_catalog ORDER BY name").all<{ id: string; name: string }>();
@@ -43,9 +45,10 @@ export async function exerciseLibrary(db: D1Database): Promise<ExerciseLibrary> 
     if (r.section === "activity") {
       (history[id] ??= []).push({ date: r.date, section: "activity", result: JSON.parse(r.detail) as ActivityResult });
     } else {
-      const detail = JSON.parse(r.detail) as { sets?: Pick<WorkSet, "type" | "weight" | "reps">[]; reps?: string };
+      const detail = JSON.parse(r.detail) as { params?: ParamSet; setup?: ParamValues; sets?: (Pick<WorkSet, "type"> & ParamValues)[]; reps?: string };
+      const params = detail.params ?? DEFAULT_PARAMS;
       const sets = detail.sets ?? migrateLegacyItem({ id: "legacy-log", name: r.name, reps: detail.reps ?? "", comment: "" }).exercises[0].sets;
-      (history[id] ??= []).push({ date: r.date, section: r.section, sets: sets.map(({ type, weight, reps }) => ({ type, weight, reps })) });
+      (history[id] ??= []).push({ date: r.date, section: r.section, params, ...(detail.setup ? { setup: detail.setup } : {}), sets: sets.map(({ type, ...values }) => ({ type, ...valuesOf(values, params) })) });
     }
   }
   // Old name-based and current IDs can resolve to the same exercise after SQL's per-ID limit.
@@ -54,5 +57,5 @@ export async function exerciseLibrary(db: D1Database): Promise<ExerciseLibrary> 
     history[id] = entries.sort((a, b) => b.date.localeCompare(a.date)).filter((entry) =>
       (counts[entry.section] = (counts[entry.section] ?? 0) + 1) <= 4);
   }
-  return { catalog: await catalog(db), stats: [...stats.values()], history };
+  return { catalog: await catalog(db), stats: [...stats.values()], history, params: SEED_PARAMS };
 }

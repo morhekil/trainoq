@@ -1,4 +1,5 @@
-import type { PerformedExercise, SessionItem, SetType, StandaloneExercise, Superset, WorkSet } from "../exercises/model";
+import type { SessionExercise, SessionItem, SetType, StandaloneExercise, Superset, WorkSet } from "../exercises/model";
+import { normalizeParams, PARAM_KEYS, valuesOf, type Param, type ParamSet, type ParamValues } from "../exercises/params";
 
 export function move<T>(items: T[], from: number, to: number): void {
   if (from < 0 || from >= items.length || to < 0 || to >= items.length) return;
@@ -11,18 +12,18 @@ export function createSuperset(items: SessionItem[], exerciseId: string, superse
   const exercise = items[index] as StandaloneExercise;
   const superset: Superset = {
     kind: "superset", id: supersetId,
-    members: [{ id: exercise.id, exerciseId: exercise.exerciseId, comment: exercise.comment }],
+    members: [{ id: exercise.id, exerciseId: exercise.exerciseId, comment: exercise.comment, params: exercise.params, ...(exercise.setup ? { setup: exercise.setup } : {}) }],
     rounds: exercise.sets.map(({ id, type }) => ({ id, type })),
-    results: exercise.sets.map(({ id, weight, reps }) => ({ memberId: exercise.id, roundId: id, weight, reps })),
+    results: exercise.sets.map(({ id, ...set }) => ({ memberId: exercise.id, roundId: id, ...valuesOf(set, exercise.params) })),
   };
   items.splice(index, 1, superset);
   return superset;
 }
 
-export function addMember(superset: Superset, member: PerformedExercise): void {
+export function addMember(superset: Superset, member: SessionExercise): void {
   if (superset.members.some((m) => m.id === member.id)) throw new Error("Duplicate member ID");
   superset.members.push(member);
-  for (const round of superset.rounds) superset.results.push({ memberId: member.id, roundId: round.id, weight: null, reps: null });
+  for (const round of superset.rounds) superset.results.push({ memberId: member.id, roundId: round.id, ...valuesOf(undefined, member.params) });
 }
 
 export function removeMember(superset: Superset, memberId: string): void {
@@ -40,7 +41,7 @@ export function addRound(superset: Superset, roundId: string, type: SetType, cop
   superset.rounds.push({ id: roundId, type });
   for (const member of superset.members) {
     const previous = copyLast ? superset.results.find((r) => r.memberId === member.id && r.roundId === previousRoundId) : undefined;
-    superset.results.push({ memberId: member.id, roundId, weight: previous?.weight ?? null, reps: previous?.reps ?? null });
+    superset.results.push({ memberId: member.id, roundId, ...valuesOf(previous, member.params) });
   }
 }
 
@@ -59,12 +60,12 @@ export function removeRound(superset: Superset, roundId: string): void {
   superset.results = superset.results.filter((r) => r.roundId !== roundId);
 }
 
-export function memberAsExercise(superset: Superset, member: PerformedExercise): StandaloneExercise {
+export function memberAsExercise(superset: Superset, member: SessionExercise): StandaloneExercise {
   return {
     kind: "exercise", ...member,
     sets: superset.rounds.map((round) => {
       const result = superset.results.find((r) => r.memberId === member.id && r.roundId === round.id);
-      return { ...round, weight: result?.weight ?? null, reps: result?.reps ?? null };
+      return { ...round, ...valuesOf(result, member.params) };
     }),
   };
 }
@@ -101,16 +102,45 @@ export function joinPerformance(items: SessionItem[], exerciseId: string, supers
   const exercise = items[from] as StandaloneExercise;
   const matching = exercise.sets.length === superset.rounds.length && exercise.sets.every((set, i) => set.type === superset.rounds[i].type);
   if (!matching && alignment !== "append") throw new Error("Align set types before joining");
-  addMember(superset, { id: exercise.id, exerciseId: exercise.exerciseId, comment: exercise.comment });
+  const { kind: _kind, sets: _sets, ...member } = exercise;
+  addMember(superset, member);
   if (!matching) for (const set of exercise.sets) addRound(superset, superset.rounds.some((r) => r.id === set.id) ? `${set.id}:${exercise.id}` : set.id, set.type, false);
   exercise.sets.forEach((set, i) => {
     const roundId = matching ? superset.rounds[i].id : superset.rounds[superset.rounds.length - exercise.sets.length + i].id;
     const result = superset.results.find((r) => r.memberId === exercise.id && r.roundId === roundId)!;
-    result.weight = set.weight;
-    result.reps = set.reps;
+    Object.assign(result, valuesOf(set, member.params));
   });
   items.splice(from, 1);
 }
 
 export function addSet(exercise: StandaloneExercise, set: WorkSet): void { exercise.sets.push(set); }
 export function removeSet(exercise: StandaloneExercise, setId: string): void { exercise.sets = exercise.sets.filter((set) => set.id !== setId); }
+
+function recordOf(item: SessionItem, memberId: string): SessionExercise {
+  const record = item.kind === "exercise" ? item : item.members.find((member) => member.id === memberId);
+  if (!record || record.id !== memberId) throw new Error("Member not found");
+  return record;
+}
+const rowsOf = (item: SessionItem, memberId: string): ParamValues[] => item.kind === "exercise"
+  ? item.sets : item.results.filter((result) => result.memberId === memberId);
+
+export function removedValues(item: SessionItem, memberId: string, next: ParamSet): { param: Param; count: number }[] {
+  const record = recordOf(item, memberId);
+  const lost = record.params.perSet.filter((key) => !next.perSet.includes(key))
+    .map((param) => ({ param, count: rowsOf(item, memberId).filter((row) => row[param] != null).length }));
+  for (const param of record.params.setup ?? [])
+    if (!next.setup?.includes(param) && record.setup?.[param] != null) lost.push({ param, count: 1 });
+  return lost.filter((entry) => entry.count > 0);
+}
+
+export function setRecordParams(item: SessionItem, memberId: string, next: ParamSet): void {
+  const record = recordOf(item, memberId);
+  const params = normalizeParams(next);
+  record.params = params;
+  for (const row of rowsOf(item, memberId)) {
+    for (const key of PARAM_KEYS) if (!params.perSet.includes(key)) delete row[key];
+    Object.assign(row, valuesOf(row, params));
+  }
+  if (params.setup) record.setup = Object.fromEntries(params.setup.map((key) => [key, record.setup?.[key] ?? null]));
+  else delete record.setup;
+}

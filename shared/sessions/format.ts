@@ -1,6 +1,7 @@
 import type { Section, SessionItem, WorkSet } from "../exercises/model";
 import { seedExercise } from "../exercises/catalog";
-import { formatNum, formatSets } from "../exercises/format";
+import { formatNum, formatSets, formatSetup } from "../exercises/format";
+import { DEFAULT_PARAMS, valuesOf } from "../exercises/params";
 import type { Session } from "./model";
 
 export function formatTime(iso: string, timeZone?: string): string {
@@ -19,9 +20,10 @@ export function minutesBetween(a: string, b: string): number {
 
 export function itemSets(item: SessionItem, memberId?: string): WorkSet[] {
   if (item.kind === "exercise") return item.sets;
+  const params = item.members.find((member) => member.id === memberId)?.params ?? DEFAULT_PARAMS;
   return item.rounds.map((round) => {
     const result = item.results.find((r) => r.memberId === memberId && r.roundId === round.id);
-    return { ...round, weight: result?.weight ?? null, reps: result?.reps ?? null };
+    return { ...round, ...valuesOf(result, params) };
   });
 }
 
@@ -31,15 +33,17 @@ function itemLines(item: SessionItem, resolveName: (id: string) => string): stri
   const lines: string[] = [];
   if (item.kind === "exercise") {
     const e = exs[0];
-    const sets = formatSets(item.sets);
-    lines.push(`${resolveName(e.exerciseId)}${sets ? `: ${sets}` : ""}`);
+    const sets = formatSets(item.sets, e.params);
+    const setup = formatSetup(e.setup, e.params);
+    lines.push(`${resolveName(e.exerciseId)}${setup ? ` (${setup})` : ""}${sets ? `: ${sets}` : ""}`);
     if (e.comment.trim()) lines.push(`  – ${e.comment.trim()}`);
     return lines;
   }
   lines.push(`Superset: ${exs.map((e) => resolveName(e.exerciseId)).join(" / ")}`);
   for (const e of exs) {
-    const sets = formatSets(itemSets(item, e.id));
-    lines.push(`- ${resolveName(e.exerciseId)}${sets ? `: ${sets}` : ""}`);
+    const sets = formatSets(itemSets(item, e.id), e.params);
+    const setup = formatSetup(e.setup, e.params);
+    lines.push(`- ${resolveName(e.exerciseId)}${setup ? ` (${setup})` : ""}${sets ? `: ${sets}` : ""}`);
     if (e.comment.trim()) lines.push(`  – ${e.comment.trim()}`);
   }
   return lines;

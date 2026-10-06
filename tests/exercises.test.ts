@@ -50,8 +50,8 @@ describe("exercise history", () => {
     });
     const doc = emptyDay("2026-08-19");
     addEventEntry(doc, { kind: "session", session: { id: "s", startedAt: "2026-08-19T07:00:00Z", endedAt: null, calories: null, notes: "",
-      warmup: [{ kind: "exercise", id: "we", exerciseId: exerciseIdForName("Squat"), comment: "", sets: [{ id: "ws", type: "working", weight: 20, reps: 10 }] }],
-      main: [{ kind: "exercise", id: "me", exerciseId: exerciseIdForName("Squat"), comment: "", sets: [{ id: "ms", type: "working", weight: 100, reps: 5 }] }],
+      warmup: [{ kind: "exercise", id: "we", exerciseId: exerciseIdForName("Squat"), comment: "", params: { perSet: ["weight", "reps"] }, sets: [{ id: "ws", type: "working", weight: 20, reps: 10 }] }],
+      main: [{ kind: "exercise", id: "me", exerciseId: exerciseIdForName("Squat"), comment: "", params: { perSet: ["weight", "reps"] }, sets: [{ id: "ms", type: "working", weight: 100, reps: 5 }] }],
       cooldown: [],
     } });
     map.set(`tq:day:${doc.date}`, JSON.stringify({ doc, dirty: true, base: null, rev: 1 }));
@@ -70,8 +70,8 @@ describe("exercise history", () => {
     ]; } } as unknown as D1Database;
     const lib = await exerciseLibrary(db);
     expect(lib.history[exerciseIdForName("Squat")]).toEqual([
-      { date: "2026-09-01", section: "warmup", sets: [{ type: "working", weight: 20, reps: 10 }] },
-      { date: "2026-08-01", section: "cooldown", sets: [{ type: "working", weight: null, reps: 8 }, { type: "working", weight: null, reps: 8 }] },
+      { date: "2026-09-01", section: "warmup", params: { perSet: ["weight", "reps"] }, sets: [{ type: "working", weight: 20, reps: 10 }] },
+      { date: "2026-08-01", section: "cooldown", params: { perSet: ["weight", "reps"] }, sets: [{ type: "working", weight: null, reps: 8 }, { type: "working", weight: null, reps: 8 }] },
     ]);
   });
 

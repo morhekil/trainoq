@@ -18,7 +18,7 @@ export interface TrainingEvent {
 }
 
 export interface DayDoc {
-  v: 7;
+  v: 8;
   date: string; // YYYY-MM-DD
   comments: DayComment[];
   events: TrainingEvent[];
@@ -28,7 +28,7 @@ export interface DayDoc {
 }
 
 export function emptyDay(date: string): DayDoc {
-  return { v: 7, date, comments: [], events: [], ignoredGarminSourceKeys: [], totalCalories: null };
+  return { v: 8, date, comments: [], events: [], ignoredGarminSourceKeys: [], totalCalories: null };
 }
 
 export function isDayEmpty(d: DayDoc): boolean {
