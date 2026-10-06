@@ -11,6 +11,7 @@ it("lists automatically imported Garmin summaries through the authenticated Work
   sqlite.exec(`CREATE TABLE days (date TEXT PRIMARY KEY, doc TEXT NOT NULL, updated_at TEXT NOT NULL);
     CREATE TABLE exercise_catalog (id TEXT PRIMARY KEY, name TEXT, name_key TEXT, section TEXT, aliases TEXT);
     CREATE TABLE exercise_params (exercise_id TEXT PRIMARY KEY, params TEXT NOT NULL, updated_at TEXT NOT NULL);
+    CREATE TABLE param_templates (id TEXT PRIMARY KEY, name TEXT NOT NULL, params TEXT NOT NULL);
     CREATE TABLE garmin_activities (source_key TEXT PRIMARY KEY, summary TEXT NOT NULL, summary_hash TEXT NOT NULL, imported_at TEXT NOT NULL);
     CREATE TABLE garmin_links (source_key TEXT PRIMARY KEY, date TEXT NOT NULL, target_kind TEXT NOT NULL, target_id TEXT);`);
   type Bound = { sql: string; args: unknown[] };

@@ -12,6 +12,7 @@ describe("Worker tRPC boundary", () => {
     const days = new Map<string, { date: string; doc: string; updated_at: string }>();
     const catalog = new Map<string, string>();
     const paramsRows = new Map<string, { params: string; updated_at: string }>();
+    const templateRows = new Map<string, { name: string; params: string }>();
     let logRows: { sql: string; args: unknown[] }[] = [];
     const db = {
       prepare(sql: string) {
@@ -30,6 +31,7 @@ describe("Worker tRPC boundary", () => {
           async all() {
             if (sql.includes("FROM garmin_activities")) return { results: [] };
             if (sql.includes("FROM exercise_params")) return { results: [...paramsRows].map(([exercise_id, row]) => ({ exercise_id, ...row })) };
+            if (sql.includes("FROM param_templates")) return { results: [...templateRows].map(([id, row]) => ({ id, ...row })) };
             if (sql.includes("FROM exercise_log")) return { results: [] };
             if (sql.includes("FROM exercise_catalog")) {
               const rows = [...catalog].map(([id, name]) => ({ id, name }));
@@ -43,6 +45,8 @@ describe("Worker tRPC boundary", () => {
               const old = paramsRows.get(args[0] as string);
               if (!old || (args[2] as string) > old.updated_at) paramsRows.set(args[0] as string, { params: args[1] as string, updated_at: args[2] as string });
             }
+            if (sql.startsWith("INSERT INTO param_templates")) templateRows.set(args[0] as string, { name: args[1] as string, params: args[2] as string });
+            if (sql.startsWith("DELETE FROM param_templates")) templateRows.delete(args[0] as string);
             return { success: true };
           },
         });
@@ -53,6 +57,7 @@ describe("Worker tRPC boundary", () => {
           { results: [{ exercise_id: exerciseIdForName("Row"), name: "Row", section: "warmup", c: 1, last: "2026-09-23" }] },
           { results: [{ exercise_id: exerciseIdForName("Row"), name: "Row", date: "2026-09-23", section: "warmup", detail: JSON.stringify({ sets: [{ type: "working", weight: null, reps: 10 }] }) }] },
           { results: [...paramsRows].map(([exercise_id, row]) => ({ exercise_id, ...row })) },
+          { results: [...templateRows].map(([id, row]) => ({ id, ...row })) },
         ];
         const { sql, args } = statements[0];
         const date = args[0] as string;
@@ -162,5 +167,12 @@ describe("Worker tRPC boundary", () => {
     expect((await client.backup.export.query()).exerciseParams).toContainEqual(changed);
     await expect(client.exercises.setParams.mutate({ exerciseId: crypto.randomUUID(), params: { perSet: ["time"] }, updatedAt: "2026-10-05T08:20:11.000Z" }))
       .rejects.toMatchObject({ data: { code: "BAD_REQUEST" } });
+
+    const template = { id: crypto.randomUUID(), name: "Weighted step-up", params: { perSet: ["height", "weight", "reps"] as ["height", "weight", "reps"] } };
+    expect(await client.exercises.saveTemplate.mutate(template)).toEqual(template);
+    expect((await client.exercises.library.query()).templates).toContainEqual(template);
+    expect((await client.backup.export.query()).paramTemplates).toContainEqual(template);
+    await client.exercises.deleteTemplate.mutate({ id: template.id });
+    expect((await client.exercises.library.query()).templates).toEqual([]);
   });
 });

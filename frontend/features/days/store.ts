@@ -8,7 +8,7 @@ import { clearLocalCatalog, registerExercise, syncDefinitions } from "../exercis
 import { trpc, request, NetworkError } from "../../api";
 import { AuthError } from "../auth/session";
 import { lsGet, lsKeys, lsRemove, lsSet } from "../../storage";
-import { clearPendingParams, hasPendingParams, syncParams } from "../exercises/params";
+import { clearPendingParams, clearPendingTemplates, hasPendingParams, hasPendingTemplates, syncParams, syncTemplates } from "../exercises/params";
 import { scheduleLibraryRefresh } from "../exercises/library";
 
 export interface StoredDay {
@@ -242,6 +242,7 @@ export async function sync(date: string): Promise<void> {
 export function syncAll(): void {
   for (const date of dirty) if (!conflicts.has(date)) void sync(date);
   void syncParams();
+  void syncTemplates();
 }
 
 export function resolveConflict(date: string, keep: "mine" | "theirs"): void {
@@ -257,7 +258,7 @@ export function resolveConflict(date: string, keep: "mine" | "theirs"): void {
 }
 
 export function hasUnsynced(): boolean {
-  return dirty.size > 0 || hasPendingParams();
+  return dirty.size > 0 || hasPendingParams() || hasPendingTemplates();
 }
 
 /** Recent locally cached days (for offline "repeat last session"). */
@@ -275,6 +276,7 @@ export function clearLocalData(): void {
   conflicts.clear();
   lsRemove("tq:catalog");
   clearPendingParams();
+  clearPendingTemplates();
   clearLocalCatalog();
   notifyStatus();
 }

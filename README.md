@@ -23,6 +23,7 @@ Runs on Cloudflare: a Worker serves the app and a tRPC API, data lives in D1.
 - **Exercise search** – full-screen picker for session exercises and other activities: recent first, starter list, search by name or alias (`rdl`, `ohp`). If it's not there, "Use "…"" saves what you typed and it shows up in search from then on. Run, Walk, Tennis, Yoga, and Skipping use the same catalog.
 - **Exercises** – menu → Exercises lists logged and unlogged exercises with their current parameters. Search opens a detail page with a parameter change control and history grouped by the parameters recorded on each entry. Changes save on the phone first and sync independently of day drafts.
 - **Once per entry values** – bench angle can be recorded above an exercise's sets. A new entry starts with the latest angle for the same exercise and parameters, even when the earlier entry is in another section. Share text and history include the recorded angle.
+- **Custom parameters and templates** – the parameter sheet allows one to three values per set and optional bench angle. Name a custom choice to save it as a template; saved templates appear in the sheet and at the end of Exercises. Deleting a template offers Undo and does not alter recorded entries.
 - **Repeat** – an empty section offers "Repeat <last date>" to copy exercise references, superset grouping, and set types. Copied records use each exercise's current parameters with recorded values cleared.
 - **Calories** – per session, per extra activity (walk etc.), and a daily total.
 - **Narrow screens** – activity name and numeric fields use two compact rows when a single row would hide the name.
@@ -49,7 +50,7 @@ Local password is whatever `APP_PASSWORD` is in `.dev.vars`.
 
 ## Frontend screenshots
 
-`npm run screenshots:check` compares login, full-page day, exercise picker, menu, share, history, and Garmin review screens at narrow and desktop widths in light and dark themes against the checked-in images in `visual/*-snapshots/`. The test uses Chrome, a fixed Sydney time zone and locale, and mocked tRPC responses, so it does not change your D1 database. Install Google Chrome before running it.
+`npm run screenshots:check` compares login, full-page day, exercise picker, parameter sheet and builder, Exercises list and detail, menu, share, history, and Garmin review screens at narrow and desktop widths in light and dark themes against the checked-in images in `visual/*-snapshots/`. The test uses Chrome, a fixed Sydney time zone and locale, and mocked tRPC responses, so it does not change your D1 database. Install Google Chrome before running it.
 
 Run `npm run screenshots:baseline` only after reviewing an intentional visual change. It updates the reference images; inspect the changed PNGs before committing them.
 

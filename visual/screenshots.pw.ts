@@ -34,20 +34,28 @@ const savedActivities = (doc: any) => doc.events.flatMap((event: any) => event.e
 const savedSessions = (doc: any) => doc.events.flatMap((event: any) => event.entries.filter((entry: any) => entry.kind === "session").map((entry: any) => entry.session));
 
 async function mockApi(page: Page, signedIn = true) {
+  const templates = new Map<string, { id: string; name: string; params: unknown }>();
+  const params = new Map<string, unknown>();
   await page.route("**/api/trpc/**", async (route) => {
     const procedure = new URL(route.request().url()).pathname.split("/").at(-1);
+    const raw = JSON.parse(route.request().postData() ?? "{}");
+    const input = raw.json ?? raw[0]?.json ?? raw;
     if (procedure === "auth.me" && !signedIn) {
       await route.fulfill({ status: 401, contentType: "application/json", body: JSON.stringify({
         error: { message: "Unauthorized", code: -32001, data: { code: "UNAUTHORIZED", httpStatus: 401 } },
       }) });
       return;
     }
+    if (procedure === "exercises.saveTemplate") templates.set(input.id, input);
+    if (procedure === "exercises.deleteTemplate") templates.delete(input.id);
+    if (procedure === "exercises.setParams") params.set(input.exerciseId, input.params);
     const data = procedure === "auth.me" ? { ok: true }
       : procedure === "days.get" ? { date: day, doc: null, updatedAt: null }
       : procedure === "days.list" ? []
-      : procedure === "exercises.library" ? { catalog: [], stats: [], history: {} }
+      : procedure === "exercises.library" ? { catalog: [], stats: [], history: {}, params: Object.fromEntries(params), templates: [...templates.values()] }
       : procedure === "exercises.history" ? []
-      : procedure === "exercises.create" ? JSON.parse(route.request().postData() ?? "{}").json ?? null
+      : procedure === "exercises.create" || procedure === "exercises.saveTemplate" ? input ?? null
+      : procedure === "exercises.setParams" ? { ...input, updatedAt: input.updatedAt }
       : procedure === "days.save" ? { ok: true, updatedAt: "2026-09-15T09:00:00.000Z" }
       : null;
     await route.fulfill({ contentType: "application/json", body: JSON.stringify({ result: { data } }) });
@@ -888,7 +896,7 @@ test("mismatched sets show an alignment preview before joining", async ({ page }
   await page.mouse.up();
   const preview = page.getByRole("dialog", { name: "Align Squat with superset" });
   await expect(preview).toContainText("Superset rounds: warmup, warmup");
-  await expect(preview).toContainText("40kg ×8");
+  await expect(preview).toContainText("40kg×8");
   const before = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!), day);
   expect(savedSessions(before.doc)[0].main).toHaveLength(2);
   await preview.getByRole("button", { name: "Append sets as new rounds" }).click();
@@ -1089,6 +1097,42 @@ test("exercise parameters change from the logging header and Undo restores value
   await expect(page.getByRole("textbox", { name: "Squat W1 weight" })).toHaveValue("40");
 });
 
+test("parameter radios support arrows and Enter, then return focus", async ({ page }) => {
+  await mockApi(page);
+  await page.addInitScript(({ date, doc }) => {
+    localStorage.setItem("tq:authed", JSON.stringify(true));
+    localStorage.setItem(`tq:day:${date}`, JSON.stringify({ doc, base: null, dirty: false, rev: 1 }));
+  }, { date: day, doc });
+  await page.goto(`/#/d/${day}`);
+  const opener = page.getByRole("button", { name: /Squat parameters/ });
+  await opener.focus();
+  await page.keyboard.press("Enter");
+  const dialog = page.getByRole("dialog", { name: "Squat parameters" });
+  await expect(dialog.getByRole("radio", { name: /Weight × reps/ })).toBeFocused();
+  for (let i = 0; i < 5; i++) await page.keyboard.press("ArrowDown");
+  await expect(dialog.getByRole("radio", { name: /Box height × reps/ })).toBeChecked();
+  await page.keyboard.press("Enter");
+  await expect(dialog).not.toBeVisible();
+  await expect(opener).toBeFocused();
+});
+
+test("changing an exercise takes its parameters and offers Undo for removed values", async ({ page }) => {
+  await mockApi(page);
+  await page.addInitScript(({ date, doc }) => {
+    localStorage.setItem("tq:authed", JSON.stringify(true));
+    localStorage.setItem(`tq:day:${date}`, JSON.stringify({ doc, base: null, dirty: false, rev: 1 }));
+  }, { date: day, doc });
+  await page.goto(`/#/d/${day}`);
+  await page.getByRole("button", { name: "Squat options" }).click();
+  await page.getByRole("button", { name: "Change exercise" }).click();
+  const picker = page.getByRole("dialog", { name: "Change exercise" });
+  await picker.getByRole("searchbox").fill("Dead hang");
+  await picker.getByRole("button", { name: /Dead hang/ }).click();
+  await expect(page.getByRole("textbox", { name: "Dead hang W1 seconds" })).toBeVisible();
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(page.getByRole("textbox", { name: "Squat W1 weight" })).toHaveValue("40");
+});
+
 test("Exercises lists logged records and groups detail history by parameters", async ({ page }) => {
   await mockApi(page);
   await page.route("**/api/trpc/days.save", (route) => route.abort("failed"));
@@ -1120,3 +1164,83 @@ test("bench angle is recorded once per entry", async ({ page }) => {
   await page.getByRole("textbox", { name: "Squat bench angle in degrees" }).fill("40");
   await expect(page.getByRole("textbox", { name: "Squat bench angle in degrees" })).toHaveValue("40");
 });
+
+test("custom parameters validate, save a template and delete it with Undo", async ({ page }) => {
+  await mockApi(page);
+  await page.addInitScript(({ date, doc }) => {
+    localStorage.setItem("tq:authed", JSON.stringify(true));
+    localStorage.setItem(`tq:day:${date}`, JSON.stringify({ doc, base: null, dirty: false, rev: 1 }));
+  }, { date: day, doc });
+  await page.goto(`/#/d/${day}`);
+  await page.getByRole("button", { name: /Squat parameters/ }).click();
+  const dialog = page.getByRole("dialog", { name: "Squat parameters" });
+  await dialog.getByRole("radio", { name: "Custom" }).check();
+  await dialog.getByRole("checkbox", { name: "kg" }).uncheck();
+  await dialog.getByRole("checkbox", { name: "Reps" }).uncheck();
+  await dialog.getByRole("button", { name: /Use/ }).click();
+  await expect(dialog.getByText("Choose at least one value for each set.")).toBeVisible();
+  await dialog.getByRole("checkbox", { name: "Box in" }).check();
+  await dialog.getByRole("checkbox", { name: "Reps" }).check();
+  await dialog.getByRole("textbox", { name: "Save as template (optional)" }).fill("Box reps");
+  await dialog.getByRole("button", { name: "Use Box height × reps" }).click();
+  await page.getByRole("button", { name: /Squat parameters/ }).click();
+  await expect(page.getByRole("radio", { name: "Box reps" })).toBeVisible();
+  await page.getByRole("button", { name: "Cancel" }).click();
+  await page.getByRole("button", { name: "Menu" }).click();
+  await page.getByRole("button", { name: "Exercises", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Your templates" })).toBeVisible();
+  await expect(page.getByText("Box reps")).toBeVisible();
+  await page.getByRole("button", { name: "Delete template Box reps" }).click();
+  await expect(page.getByText("Box reps")).not.toBeVisible();
+  await page.getByRole("button", { name: "Undo" }).last().click();
+  await expect(page.getByText("Box reps")).toBeVisible();
+});
+
+for (const width of [320, 1280]) {
+  test(`exercise parameter screens at ${width}px`, async ({ page }) => {
+    test.setTimeout(120_000);
+    await page.setViewportSize({ width, height: 844 });
+    await mockApi(page);
+    await page.route("**/api/trpc/days.save", (route) => route.abort("failed"));
+    await page.addInitScript(({ date, doc }) => {
+      localStorage.setItem("tq:authed", JSON.stringify(true));
+      localStorage.setItem(`tq:day:${date}`, JSON.stringify({ doc, base: null, dirty: true, rev: 1 }));
+    }, { date: day, doc });
+    const shot = async (name: string) => {
+      await checkWidth(page);
+      for (const theme of ["light", "dark"] as const) {
+        await page.emulateMedia({ colorScheme: theme });
+        await expect(page).toHaveScreenshot(`${name}-${width}-${theme}.png`, { fullPage: true });
+      }
+    };
+    await page.goto(`/#/d/${day}`);
+    await page.getByRole("button", { name: /Squat parameters/ }).click();
+    await shot("parameters-sheet");
+    await page.getByRole("radio", { name: /Edge × time × reps/ }).check();
+    await page.getByRole("button", { name: "Use Edge × time × reps" }).click();
+    await expect(page.getByRole("textbox", { name: "Squat W1 edge in millimetres" })).toBeVisible();
+    await page.getByRole("button", { name: "Dismiss message" }).click();
+    await shot("three-parameter-row");
+    await page.getByRole("button", { name: "Menu" }).click();
+    await page.getByRole("button", { name: "Exercises", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Offline. Retry sync" })).toBeVisible();
+    await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
+    await shot("exercises-list");
+    await page.getByRole("link", { name: /Squat/ }).click();
+    await shot("exercises-detail");
+    await page.getByRole("button", { name: /Change/ }).click();
+    await page.getByRole("radio", { name: "Custom" }).check();
+    await shot("parameters-builder");
+    await page.getByRole("button", { name: "Cancel" }).click();
+    await page.getByRole("button", { name: "Back" }).click();
+    await expect(page.getByRole("heading", { name: "Exercises" })).toBeVisible();
+    await page.goto(`/#/d/${day}`);
+    await page.getByRole("button", { name: /Squat parameters/ }).click();
+    await page.getByRole("radio", { name: /Bench angle, weight × reps/ }).check();
+    await page.getByRole("button", { name: "Use Bench angle, weight × reps" }).click();
+    await page.getByRole("textbox", { name: "Squat bench angle in degrees" }).fill("40");
+    await page.getByRole("button", { name: "Dismiss message" }).last().click();
+    await page.locator(".session-heading").click();
+    await shot("bench-angle-row");
+  });
+}

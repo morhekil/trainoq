@@ -35,7 +35,9 @@ export interface ExerciseLibrary {
   stats: ExerciseStat[];
   history: Record<string, ExerciseHistoryEntry[]>;
   params: Record<string, ParamSet>;
+  templates: ParamTemplate[];
 }
+export interface ParamTemplate { id: string; name: string; params: ParamSet }
 export function nameKey(name: string): string {
   return name.trim().toLowerCase().replace(/\s+/g, " ");
 }

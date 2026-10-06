@@ -28,9 +28,11 @@ const day = await api.days.get.query("2026-09-26");
 | `days.save` | mutation | `{ date: string, doc: DayDoc, base: string \| null }` | `SaveResult` below |
 | `exercises.catalog` | query | none | catalog records with `id`, `name`, `section`, `aliases` |
 | `exercises.create` | mutation | `{ id: UUID, name: string }` | custom `{ id, name }`; legacy `legacy:<normalized name>` IDs are accepted for migration |
-| `exercises.library` | query | none | `{ catalog, stats: ExerciseStat[], history: Record<string, ExerciseHistoryEntry[]>, params: Record<string, ParamSet> }` |
+| `exercises.library` | query | none | `{ catalog, stats: ExerciseStat[], history: Record<string, ExerciseHistoryEntry[]>, params: Record<string, ParamSet>, templates: ParamTemplate[] }` |
 | `exercises.setParams` | mutation | `{ exerciseId: string, params: ParamSet, updatedAt: ISO string }` | Stored `{ exerciseId, params, updatedAt }`; newer `updatedAt` wins |
 | `exercises.history` | query | `{ exerciseId: string }` | Up to 200 entries, newest first; seed IDs include old name-based rows |
+| `exercises.saveTemplate` | mutation | `{ id: UUID, name: string (1–60 characters), params: ParamSet }` | Saved template; insert or update by ID |
+| `exercises.deleteTemplate` | mutation | `{ id: UUID }` | Deletes a template; a missing ID is accepted |
 | `garmin.list` | query | `{ from: string, to: string, includeLinked?: boolean, cursor?: { importedAt: string, sourceKey: string } }` | `{ items, nextCursor }`, up to 20 imported summaries per page |
 | `garmin.summaries` | query | `{ sourceKeys: string[] }`, 1 to 100 FIT session keys | Imported summaries for those keys; missing keys are omitted |
 | `garmin.connection` | query | none | Connection status, email, last sync time and error, next backfill offset |
@@ -38,7 +40,7 @@ const day = await api.days.get.query("2026-09-26");
 | `garmin.verifyMfa` | mutation | `{ code: string }` | `{ status: "connected" }` |
 | `garmin.disconnect` | mutation | none | `{ status: "disconnected" }` |
 | `garmin.sync` | mutation | none | One 20-ID page with counts, `nextOffset`, and `complete` |
-| `backup.export` | query | none | `{ exportedAt: string, days: StoredDay[], catalog, garminActivities, exerciseParams }` |
+| `backup.export` | query | none | `{ exportedAt: string, days: StoredDay[], catalog, garminActivities, exerciseParams, paramTemplates }` |
 
 Every procedure except `auth.login` and `auth.logout` requires the signed `tq_session` cookie. It is HttpOnly, SameSite=Lax, and lasts one year. HTTPS adds the Secure flag. The server checks the cookie against `APP_PASSWORD`.
 
@@ -135,15 +137,17 @@ There is no `Block` in v8. V2 used `{ id, exercises: [...] }` blocks in all thre
 | D1 `days` | `date`, full `DayDoc` JSON, server `updated_at` | Source of truth, one row per saved day |
 | D1 `exercise_catalog` | Custom exercise `id`, `name`, normalized `name_key` | Definitions referenced by `exerciseId` |
 | D1 `exercise_params` | Exercise ID, parameter-set JSON, ISO update time | Default parameters for new records; newer writes win |
+| D1 `param_templates` | UUID, user name, parameter-set JSON | Reusable choices; recorded days do not reference templates |
 | D1 `exercise_log` | One row per session performance or activity, with date, context, ID, name, order, and detail including session `params`, optional `setup`, and sets | Derived index rebuilt from the day on each save |
 | D1 `garmin_activities` | Imported summary JSON, hash, and import time keyed by Garmin source identity | Imported source values |
 | D1 `garmin_links` | Garmin source key, decision day, target kind and ID | Derived index rebuilt from the day on each save |
 | Browser `tq:params` | Pending per-exercise parameter sets and update times | Saved before network requests; retried independently of day drafts |
+| Browser `tq:param-templates` | Pending template saves and deleted IDs | Saved before network requests; retried independently of day drafts |
 | D1 `garmin_connection` | AES-GCM encrypted Garmin account credentials and tokens, sync status and cursor | Recurring import connection, excluded from backup |
 | D1 `garmin_downloads` | Garmin activity IDs whose original FITs were imported | Skip completed downloads on later sweeps |
 | Browser `tq:day:<date>` | `Entry { doc, base, dirty, rev, conflict? }` | Local draft, sync revision, and optional conflict copy |
 
-The table definitions are in [`migrations/0001_init.sql`](migrations/0001_init.sql) through [`migrations/0007_exercise_params.sql`](migrations/0007_exercise_params.sql). [`migrations/0003_activity_catalog.sql`](migrations/0003_activity_catalog.sql) adds old activities to the catalog and log without rewriting day JSON. [`backend/features/days/db.ts`](backend/features/days/db.ts) rebuilds `exercise_log` and `garmin_links` in the same revision-checked batch; the full day JSON retains the superset structure and Garmin decisions. Session log rows written before v8 have no parameters and read as weight × reps. The browser's [`store.ts`](frontend/features/days/store.ts) writes drafts locally first and syncs whole days. Parameter changes save to `tq:params` first and sync through `exercises.setParams` independently of day saves. Custom definitions sync before a day or parameter change that references them.
+The table definitions are in [`migrations/0001_init.sql`](migrations/0001_init.sql) through [`migrations/0008_param_templates.sql`](migrations/0008_param_templates.sql). [`migrations/0003_activity_catalog.sql`](migrations/0003_activity_catalog.sql) adds old activities to the catalog and log without rewriting day JSON. [`backend/features/days/db.ts`](backend/features/days/db.ts) rebuilds `exercise_log` and `garmin_links` in the same revision-checked batch; the full day JSON retains the superset structure and Garmin decisions. Session log rows written before v8 have no parameters and read as weight × reps. The browser's [`store.ts`](frontend/features/days/store.ts) writes drafts locally first and syncs whole days. Parameter changes save to `tq:params` first and sync through `exercises.setParams` independently of day saves. Template saves and deletions use `tq:param-templates` and retry through their own procedures. Custom definitions sync before a day or parameter change that references them.
 
 `exercises.library` returns the read model defined in [`shared/exercises/model.ts`](shared/exercises/model.ts):
 
@@ -162,10 +166,12 @@ interface ExerciseLibrary {
   stats: ExerciseStat[];
   history: Record<string, ExerciseHistoryEntry[]>;
   params: Record<string, ParamSet>;
+  templates: ParamTemplate[];
 }
+interface ParamTemplate { id: string; name: string; params: ParamSet }
 ```
 
-History is keyed by exercise ID; the Worker returns up to four recent entries per context. Activities contribute to recent usage and have minutes and calories in history. `backup.export` includes catalog records, imported Garmin summaries, and stored days in ascending date order. `StoredDay` is `{ date, doc: DayDoc, updatedAt }`.
+History is keyed by exercise ID; the Worker returns up to four recent entries per context. Activities contribute to recent usage and have minutes and calories in history. Templates are sorted by name. They do not change records or exercise defaults when edited or deleted. `backup.export` includes catalog records, imported Garmin summaries, parameter defaults, templates, and stored days in ascending date order. `StoredDay` is `{ date, doc: DayDoc, updatedAt }`.
 
 ## Saving a day
 

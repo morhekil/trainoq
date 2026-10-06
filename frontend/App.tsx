@@ -103,6 +103,11 @@ export default function App() {
 
 function Main({ onSignedOut }: { onSignedOut: () => void }) {
   const route = useRoute();
+  const routeKey = route.view === "exercise" ? route.id : route.view === "day" ? route.date : route.view;
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => window.scrollTo(0, 0));
+    return () => cancelAnimationFrame(frame);
+  }, [routeKey]);
   const today = useToday();
   const online = useOnline();
   const [sharing, setSharing] = useState<string | null>(null);

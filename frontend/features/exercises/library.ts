@@ -1,6 +1,6 @@
 // Exercise search: starter list + everything logged before (server) + names in local unsynced days.
 
-import { nameKey, type ExerciseContext, type ExerciseHistoryEntry, type ExerciseLibrary, type Section, type WorkSet } from "../../../shared/exercises/model";
+import { nameKey, type ExerciseContext, type ExerciseHistoryEntry, type ExerciseLibrary, type ParamTemplate, type Section, type WorkSet } from "../../../shared/exercises/model";
 import { itemSets } from "../../../shared/sessions/format";
 import { allCatalog, exerciseName, setRemoteCatalog } from "./catalog";
 import { dayActivities, daySessions, type DayDoc } from "../../../shared/days/model";
@@ -22,10 +22,10 @@ export interface LibItem {
   last: string | null;
 }
 
-let lib: ExerciseLibrary = lsGet<ExerciseLibrary>(LS_KEY) ?? { catalog: [], stats: [], history: {}, params: {} };
+let lib: ExerciseLibrary = lsGet<ExerciseLibrary>(LS_KEY) ?? { catalog: [], stats: [], history: {}, params: {}, templates: [] };
 setRemoteCatalog(lib.catalog ?? []);
 export function clearLibrary(): void {
-  lib = { catalog: [], stats: [], history: {}, params: {} };
+  lib = { catalog: [], stats: [], history: {}, params: {}, templates: [] };
   lastFetch = 0;
   lsRemove(LS_KEY);
   version++;
@@ -43,6 +43,17 @@ export function libraryVersion(): number {
 }
 export function notifyLibrary(): void { version++; listeners.forEach((fn) => fn()); }
 export const libraryParams = (): Record<string, ParamSet> => lib.params ?? {};
+export const libraryTemplates = (): ParamTemplate[] => lib.templates ?? [];
+export function rememberLibraryTemplate(template: ParamTemplate): void {
+  lib = { ...lib, templates: [...(lib.templates ?? []).filter((item) => item.id !== template.id), template].sort((a, b) => a.name.localeCompare(b.name)) };
+  lsSet(LS_KEY, lib);
+  notifyLibrary();
+}
+export function forgetLibraryTemplate(id: string): void {
+  lib = { ...lib, templates: (lib.templates ?? []).filter((item) => item.id !== id) };
+  lsSet(LS_KEY, lib);
+  notifyLibrary();
+}
 export const cachedExerciseHistory = (id: string): ExerciseHistoryEntry[] => lib.history[id] ?? [];
 export function rememberLibraryParams(exerciseId: string, params: ParamSet): void {
   lib = { ...lib, params: { ...lib.params, [exerciseId]: params } };

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { t } from "../../trpc";
 import { authed } from "../auth/router";
-import { catalog, createExercise, exerciseHistory, exerciseLibrary, setExerciseParams } from "./db";
+import { catalog, createExercise, deleteTemplate, exerciseHistory, exerciseLibrary, saveTemplate, setExerciseParams } from "./db";
 import { nameKey } from "../../../shared/exercises/model";
 import { paramSetSchema } from "../../../shared/days/schema";
 
@@ -15,4 +15,8 @@ export const exercisesRouter = t.router({
     .mutation(({ ctx, input }) => setExerciseParams(ctx.env.DB, input)),
   history: authed.input(z.object({ exerciseId: z.string().min(1) }))
     .query(({ ctx, input }) => exerciseHistory(ctx.env.DB, input.exerciseId)),
+  saveTemplate: authed.input(z.object({ id: z.uuid(), name: z.string().trim().min(1).max(60), params: paramSetSchema }))
+    .mutation(({ ctx, input }) => saveTemplate(ctx.env.DB, input)),
+  deleteTemplate: authed.input(z.object({ id: z.uuid() }))
+    .mutation(({ ctx, input }) => deleteTemplate(ctx.env.DB, input.id)),
 });

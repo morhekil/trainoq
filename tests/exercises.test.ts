@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { SEED_EXERCISES } from "../shared/exercises/catalog";
 import { nameKey, type Section } from "../shared/exercises/model";
 import { searchExercises, suggestedSet, suggestedSetup, lastTime } from "../frontend/features/exercises/library";
-import { clearPendingParams, hasPendingParams, paramsFor, setExerciseParams } from "../frontend/features/exercises/params";
+import { clearPendingParams, clearPendingTemplates, deleteLocalTemplate, hasPendingParams, hasPendingTemplates, paramsFor, saveLocalTemplate, setExerciseParams, templatesFor } from "../frontend/features/exercises/params";
 import { exerciseHistory, exerciseLibrary } from "../backend/features/exercises/db";
 import { addEventEntry, emptyDay } from "../shared/days/model";
 import { exerciseIdForName } from "../shared/exercises/catalog";
@@ -154,4 +154,23 @@ describe("exercise history", () => {
       ...[27, 26, 25].map((day) => ({ date: `2026-09-${day}`, section: "activity", result: { minutes: day, calories: null } })),
     ]);
   });
+});
+
+it("keeps saved templates and deletions on the phone until synced", () => {
+  const map = new Map<string, string>();
+  vi.stubGlobal("localStorage", {
+    get length() { return map.size; }, key: (i: number) => [...map.keys()][i] ?? null,
+    getItem: (key: string) => map.get(key) ?? null,
+    setItem: (key: string, value: string) => { map.set(key, value); },
+    removeItem: (key: string) => { map.delete(key); },
+  });
+  const template = { id: "3bf61709-0d42-4626-82e6-0b32c622fc0a", name: "Weighted step-up", params: { perSet: ["height", "weight", "reps"] as ["height", "weight", "reps"] } };
+  saveLocalTemplate(template);
+  expect(templatesFor()).toContainEqual(template);
+  expect(hasPendingTemplates()).toBe(true);
+  deleteLocalTemplate(template.id);
+  expect(templatesFor()).not.toContainEqual(template);
+  expect(JSON.parse(map.get("tq:param-templates")!).deleted).toContain(template.id);
+  clearPendingTemplates();
+  vi.unstubAllGlobals();
 });

@@ -8,7 +8,7 @@ import type { Session } from "../../../shared/sessions/model";
 import { removeEventEntry } from "../../../shared/days/model";
 import { addMember, addRound, addSet, createSuperset, deleteSuperset, dissolveSuperset, joinPerformance, moveMember, removeMember, removeRound, removeSet, removedValues, reorderRound, setRecordParams, setRoundType, takeOutMember } from "../../../shared/sessions/ops";
 import { exerciseName } from "../exercises/catalog";
-import { lastTime } from "../exercises/library";
+import { lastTime, suggestedSetup } from "../exercises/library";
 import { paramsFor, setExerciseParams } from "../exercises/params";
 import { blockLetter, copyItems, findItem, findSession, findStandalone, findSuperset, makeSet, move, newExercise, newMember, nextSetType, setLabels } from "./ops";
 import { findRepeatSource } from "./recent";
@@ -238,6 +238,7 @@ function ExerciseEditor({ s, section, item, member, label, index, count, memberI
       if (!record) return;
       record.exerciseId = id;
       setRecordParams(current, member.id, next);
+      if (next.setup?.length) record.setup = suggestedSetup(id, date, next) ?? Object.fromEntries(next.setup.map((key) => [key, null]));
     };
     if (removedValues(item, member.id, next).length) undoable(`${name} changed to ${exerciseName(id)}`, apply);
     else update(apply);

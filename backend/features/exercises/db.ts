@@ -1,5 +1,5 @@
 import { SEED_EXERCISES, exerciseIdForName, seedExercise } from "../../../shared/exercises/catalog";
-import { nameKey, type ActivityResult, type ExerciseContext, type ExerciseHistoryEntry, type ExerciseLibrary, type ExerciseStat, type WorkSet } from "../../../shared/exercises/model";
+import { nameKey, type ActivityResult, type ExerciseContext, type ExerciseHistoryEntry, type ExerciseLibrary, type ExerciseStat, type ParamTemplate, type WorkSet } from "../../../shared/exercises/model";
 import { migrateLegacyItem } from "../../../shared/days/migrate";
 import { DEFAULT_PARAMS, normalizeParams, valuesOf, type ParamSet, type ParamValues } from "../../../shared/exercises/params";
 import { SEED_PARAMS } from "../../../shared/exercises/seed";
@@ -24,6 +24,17 @@ export async function setExerciseParams(db: D1Database, input: { exerciseId: str
     .bind(input.exerciseId, JSON.stringify(normalizeParams(input.params)), updatedAt).run();
   const row = await db.prepare("SELECT params, updated_at FROM exercise_params WHERE exercise_id = ?").bind(input.exerciseId).first<{ params: string; updated_at: string }>();
   return { exerciseId: input.exerciseId, params: JSON.parse(row!.params) as ParamSet, updatedAt: row!.updated_at };
+}
+
+export async function saveTemplate(db: D1Database, template: ParamTemplate): Promise<ParamTemplate> {
+  const saved = { ...template, name: template.name.trim(), params: normalizeParams(template.params) };
+  await db.prepare("INSERT INTO param_templates (id, name, params) VALUES (?, ?, ?) ON CONFLICT(id) DO UPDATE SET name = excluded.name, params = excluded.params")
+    .bind(saved.id, saved.name, JSON.stringify(saved.params)).run();
+  return saved;
+}
+
+export async function deleteTemplate(db: D1Database, id: string): Promise<void> {
+  await db.prepare("DELETE FROM param_templates WHERE id = ?").bind(id).run();
 }
 
 export async function exerciseHistory(db: D1Database, exerciseId: string): Promise<ExerciseHistoryEntry[]> {
@@ -53,7 +64,7 @@ export async function createExercise(db: D1Database, input: { id: string; name: 
 }
 
 export async function exerciseLibrary(db: D1Database): Promise<ExerciseLibrary> {
-  const [statsRes, histRes, paramsRes] = await db.batch([
+  const [statsRes, histRes, paramsRes, templatesRes] = await db.batch([
     db.prepare("SELECT exercise_id, name_key, name, section, COUNT(*) AS c, MAX(date) AS last FROM exercise_log GROUP BY exercise_id, name_key, section"),
     db.prepare(`SELECT exercise_id, name_key, name, date, section, detail FROM (
       SELECT exercise_id, name_key, name, date, section, detail,
@@ -61,6 +72,7 @@ export async function exerciseLibrary(db: D1Database): Promise<ExerciseLibrary> 
       FROM exercise_log
     ) WHERE rn <= 4 ORDER BY exercise_id, section, date DESC`),
     db.prepare("SELECT exercise_id, params FROM exercise_params"),
+    db.prepare("SELECT id, name, params FROM param_templates ORDER BY name"),
   ]);
   const stats = new Map<string, ExerciseStat>();
   for (const r of statsRes.results as { exercise_id: string | null; name: string; section: ExerciseContext; c: number; last: string }[]) {
@@ -86,5 +98,9 @@ export async function exerciseLibrary(db: D1Database): Promise<ExerciseLibrary> 
     const value = row as { exercise_id: string; params: string };
     return [value.exercise_id, JSON.parse(value.params) as ParamSet];
   })) };
-  return { catalog: await catalog(db), stats: [...stats.values()], history, params };
+  const templates = (templatesRes?.results ?? []).map((row) => {
+    const value = row as { id: string; name: string; params: string };
+    return { id: value.id, name: value.name, params: JSON.parse(value.params) as ParamSet };
+  });
+  return { catalog: await catalog(db), stats: [...stats.values()], history, params, templates };
 }

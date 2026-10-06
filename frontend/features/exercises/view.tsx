@@ -3,25 +3,27 @@ import { formatDateShort } from "../../../shared/days/format";
 import { dayActivities, daySessions } from "../../../shared/days/model";
 import { formatSets, formatSetup } from "../../../shared/exercises/format";
 import type { ExerciseHistoryEntry } from "../../../shared/exercises/model";
-import { paramsKey, paramsName } from "../../../shared/exercises/params";
+import { PARAMS, paramsKey, paramsName } from "../../../shared/exercises/params";
 import { itemSets } from "../../../shared/sessions/format";
 import { request, trpc } from "../../api";
 import { useOverlays } from "../../overlays";
 import { cachedDays } from "../days/store";
 import { exerciseName } from "./catalog";
 import { cachedExerciseHistory, libraryVersion, listExercises, refreshLibrary, subscribeLibrary } from "./library";
-import { paramsFor, setExerciseParams } from "./params";
+import { deleteLocalTemplate, paramsFor, saveLocalTemplate, setExerciseParams, templatesFor } from "./params";
 
 const useLibraryVersion = () => useSyncExternalStore(subscribeLibrary, libraryVersion);
 
 export function ExercisesView() {
   const [query, setQuery] = useState("");
+  const { toast } = useOverlays();
   useLibraryVersion();
   useEffect(() => { void refreshLibrary(); }, []);
   const items = listExercises(query);
   const logged = items.filter((item) => item.total > 0);
   const unlogged = items.filter((item) => item.total === 0);
   const groups = query.trim() ? [{ title: "Matches", items }] : [{ title: "Logged", items: logged }, { title: "Not logged yet", items: unlogged }];
+  const templates = templatesFor();
   return <div className="exercises-view">
     <label className="exercise-search-label" htmlFor="exercise-list-search">Search exercises</label>
     <input id="exercise-list-search" className="text exercise-list-search" type="search" value={query} onChange={(event) => setQuery(event.target.value)} />
@@ -34,6 +36,16 @@ export function ExercisesView() {
         <span className="exercise-list-chevron" aria-hidden="true">›</span>
       </a>)}
     </section>)}
+    {templates.length > 0 && <section className="exercise-list-group">
+      <h2>Your templates</h2>
+      {templates.map((template) => <div className="template-row" key={template.id}>
+        <span><strong>{template.name}</strong><small>{template.params.perSet.map((key) => PARAMS[key].column).join(" · ")}</small></span>
+        <button type="button" className="link-btn" aria-label={`Delete template ${template.name}`} onClick={() => {
+          deleteLocalTemplate(template.id);
+          toast("Template deleted", () => saveLocalTemplate(template));
+        }}>Delete</button>
+      </div>)}
+    </section>}
   </div>;
 }
 
