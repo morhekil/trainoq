@@ -5,8 +5,9 @@ import { itemSets } from "../../../shared/sessions/format";
 import { allCatalog, exerciseName, setRemoteCatalog } from "./catalog";
 import { dayActivities, daySessions, type DayDoc } from "../../../shared/days/model";
 import { request, trpc } from "../../api";
-import { cachedDays, onSynced } from "../days/store";
+import { cachedDays } from "../days/store";
 import { lsGet, lsRemove, lsSet } from "../../storage";
+import { DEFAULT_PARAMS, sameParams, valuesOf, type ParamSet, type ParamValues } from "../../../shared/exercises/params";
 
 const LS_KEY = "tq:library";
 
@@ -40,6 +41,13 @@ export function subscribeLibrary(fn: () => void): () => void {
 export function libraryVersion(): number {
   return version;
 }
+export function notifyLibrary(): void { version++; listeners.forEach((fn) => fn()); }
+export const libraryParams = (): Record<string, ParamSet> => lib.params ?? {};
+export function rememberLibraryParams(exerciseId: string, params: ParamSet): void {
+  lib = { ...lib, params: { ...lib.params, [exerciseId]: params } };
+  lsSet(LS_KEY, lib);
+  notifyLibrary();
+}
 
 let lastFetch = 0;
 let pending: Promise<void> | null = null;
@@ -64,10 +72,10 @@ export function refreshLibrary(force = false): Promise<void> {
 }
 
 let syncRefreshTimer: ReturnType<typeof setTimeout> | undefined;
-onSynced(() => {
+export function scheduleLibraryRefresh(): void {
   clearTimeout(syncRefreshTimer);
   syncRefreshTimer = setTimeout(() => void refreshLibrary(true), 3000);
-});
+}
 
 function namesInDoc(d: DayDoc): [string, ExerciseContext][] {
   const out: [string, ExerciseContext][] = [];
@@ -167,8 +175,8 @@ export function searchExercises(query: string, section: ExerciseContext): Search
 }
 
 /** Most recent entry for an exercise in this section before `beforeDate`. */
-export function lastTime(exerciseId: string, beforeDate: string, section: Section): SetHistoryEntry | null {
-  const serverHits = (lib.history[exerciseId] ?? []).filter((h): h is SetHistoryEntry => h.date < beforeDate && h.section === section);
+export function lastTime(exerciseId: string, beforeDate: string, section: Section, params?: ParamSet): SetHistoryEntry | null {
+  const serverHits = (lib.history[exerciseId] ?? []).filter((h): h is SetHistoryEntry => h.date < beforeDate && h.section === section && (!params || sameParams(h.params ?? DEFAULT_PARAMS, params)));
   // include unsynced local days too
   let best: SetHistoryEntry | null = serverHits[0] ?? null;
   for (const e of cachedDays()) {
@@ -177,7 +185,7 @@ export function lastTime(exerciseId: string, beforeDate: string, section: Sectio
     for (const s of daySessions(d))
       for (const item of s[section])
         for (const ex of item.kind === "exercise" ? [item] : item.members)
-          if (ex.exerciseId === exerciseId && itemSets(item, ex.id).length && (!best || d.date > best.date)) {
+          if (ex.exerciseId === exerciseId && (!params || sameParams(ex.params, params)) && itemSets(item, ex.id).length && (!best || d.date > best.date)) {
             best = { date: d.date, section, params: ex.params, ...(ex.setup ? { setup: ex.setup } : {}), sets: itemSets(item, ex.id).map(({ id: _id, type, ...values }) => ({ type, ...values })) };
           }
   }
@@ -189,12 +197,13 @@ export function suggestedSet(
   exerciseId: string,
   beforeDate: string,
   section: Section,
+  params: ParamSet = DEFAULT_PARAMS,
   type?: WorkSet["type"],
   strict = false,
-): Pick<WorkSet, "type" | "weight" | "reps"> | null {
-  const h = lastTime(exerciseId, beforeDate, section);
+): (Pick<WorkSet, "type"> & ParamValues) | null {
+  const h = lastTime(exerciseId, beforeDate, section, params);
   if (!h || !h.sets.length) return null;
   const s = (type && h.sets.find((x) => x.type === type)) || (strict ? null : h.sets[0]);
   if (!s) return null;
-  return { type: type ?? s.type, weight: s.weight, reps: s.reps };
+  return { type: type ?? s.type, ...valuesOf(s, params) };
 }

@@ -2,12 +2,14 @@
 // synced to the server in the background, so a flaky gym connection never loses data.
 
 import { dayActivities, emptyDay, type DayDoc } from "../../../shared/days/model";
-import { legacyExerciseNames, normalizeDay, type LegacyDayDoc, type V2DayDoc, type V3DayDoc, type V4DayDoc, type V5DayDoc, type V6DayDoc } from "../../../shared/days/migrate";
+import { legacyExerciseNames, normalizeDay, type LegacyDayDoc, type V2DayDoc, type V3DayDoc, type V4DayDoc, type V5DayDoc, type V6DayDoc, type V7DayDoc } from "../../../shared/days/migrate";
 import { exerciseIdForName } from "../../../shared/exercises/catalog";
 import { clearLocalCatalog, registerExercise, syncDefinitions } from "../exercises/catalog";
 import { trpc, request, NetworkError } from "../../api";
 import { AuthError } from "../auth/session";
 import { lsGet, lsKeys, lsRemove, lsSet } from "../../storage";
+import { clearPendingParams, hasPendingParams, syncParams } from "../exercises/params";
+import { scheduleLibraryRefresh } from "../exercises/library";
 
 export interface StoredDay {
   date: string;
@@ -79,12 +81,12 @@ export function getEntry(date: string): Entry | null {
   if (!mem.has(date)) {
     const entry = lsGet<Entry>(PREFIX + date);
     if (entry) {
-      const raw = entry.doc as DayDoc | V6DayDoc | V5DayDoc | V4DayDoc | LegacyDayDoc | V2DayDoc | V3DayDoc;
+      const raw = entry.doc as DayDoc | V7DayDoc | V6DayDoc | V5DayDoc | V4DayDoc | LegacyDayDoc | V2DayDoc | V3DayDoc;
       if (raw.v === 1 || raw.v === 2 || raw.v === 3) legacyExerciseNames(raw).forEach((name) => registerExercise(exerciseIdForName(name), name));
       const doc = normalizeDay(raw);
       const conflict = entry.conflict?.doc
         ? (() => {
-          const rawConflict = entry.conflict!.doc as DayDoc | V6DayDoc | V5DayDoc | V4DayDoc | LegacyDayDoc | V2DayDoc | V3DayDoc;
+          const rawConflict = entry.conflict!.doc as DayDoc | V7DayDoc | V6DayDoc | V5DayDoc | V4DayDoc | LegacyDayDoc | V2DayDoc | V3DayDoc;
           if (rawConflict.v === 1 || rawConflict.v === 2 || rawConflict.v === 3) legacyExerciseNames(rawConflict).forEach((name) => registerExercise(exerciseIdForName(name), name));
           return { ...entry.conflict, doc: normalizeDay(rawConflict) };
         })()
@@ -213,6 +215,7 @@ export async function sync(date: string): Promise<void> {
       persist(date, { ...cur, base: result.updatedAt, dirty: stillDirty });
       if (stillDirty) schedule(date, 300);
       syncedListeners.forEach((fn) => fn());
+      scheduleLibraryRefresh();
       for (const key of lsKeys(MOVE_PREFIX)) {
         if (lsGet<string>(key) === date) schedule(key.slice(MOVE_PREFIX.length).slice(0, 10), 0);
       }
@@ -238,6 +241,7 @@ export async function sync(date: string): Promise<void> {
 
 export function syncAll(): void {
   for (const date of dirty) if (!conflicts.has(date)) void sync(date);
+  void syncParams();
 }
 
 export function resolveConflict(date: string, keep: "mine" | "theirs"): void {
@@ -253,7 +257,7 @@ export function resolveConflict(date: string, keep: "mine" | "theirs"): void {
 }
 
 export function hasUnsynced(): boolean {
-  return dirty.size > 0;
+  return dirty.size > 0 || hasPendingParams();
 }
 
 /** Recent locally cached days (for offline "repeat last session"). */
@@ -270,6 +274,7 @@ export function clearLocalData(): void {
   dirty.clear();
   conflicts.clear();
   lsRemove("tq:catalog");
+  clearPendingParams();
   clearLocalCatalog();
   notifyStatus();
 }
@@ -312,7 +317,7 @@ if (typeof window !== "undefined") {
     syncAll();
   });
   setInterval(() => {
-    if (dirty.size) syncAll();
+    if (dirty.size || hasPendingParams()) syncAll();
   }, 15000);
   setTimeout(syncAll, 1000);
 }

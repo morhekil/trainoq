@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SEED_EXERCISES } from "../shared/exercises/catalog";
 import { nameKey, type Section } from "../shared/exercises/model";
-import { searchExercises, suggestedSet } from "../frontend/features/exercises/library";
+import { searchExercises, suggestedSet, lastTime } from "../frontend/features/exercises/library";
+import { clearPendingParams, hasPendingParams, paramsFor, setExerciseParams } from "../frontend/features/exercises/params";
 import { exerciseHistory, exerciseLibrary } from "../backend/features/exercises/db";
 import { addEventEntry, emptyDay } from "../shared/days/model";
 import { exerciseIdForName } from "../shared/exercises/catalog";
@@ -38,7 +39,7 @@ describe("starter exercise list", () => {
 });
 
 describe("exercise history", () => {
-  afterEach(() => vi.unstubAllGlobals());
+  afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
 
   it("includes a seed's legacy log rows and their weight × reps parameters", async () => {
     let ids: unknown[] = [];
@@ -72,6 +73,33 @@ describe("exercise history", () => {
     expect(suggestedSet(exerciseIdForName("Squat"), "2026-08-20", "warmup")?.weight).toBe(20);
     expect(suggestedSet(exerciseIdForName("Squat"), "2026-08-20", "main")?.weight).toBe(100);
     expect(suggestedSet(exerciseIdForName("Squat"), "2026-08-20", "cooldown")).toBeNull();
+  });
+
+  it("keeps parameter changes on the phone and suggests only matching records", () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-05T08:20:11.000Z"));
+    const map = new Map<string, string>();
+    vi.stubGlobal("localStorage", {
+      get length() { return map.size; }, key: (i: number) => [...map.keys()][i] ?? null,
+      getItem: (key: string) => map.get(key) ?? null,
+      setItem: (key: string, value: string) => { map.set(key, value); },
+      removeItem: (key: string) => { map.delete(key); },
+    });
+    const doc = emptyDay("2026-10-05");
+    addEventEntry(doc, { kind: "session", session: { id: "s", startedAt: "2026-10-05T07:00:00Z", endedAt: null, calories: null, notes: "",
+      warmup: [{ kind: "exercise", id: "e", exerciseId: "seed:0121", comment: "", params: { perSet: ["weight", "reps"] }, sets: [{ id: "s", type: "working", weight: null, reps: 6 }] }], main: [], cooldown: [],
+    } });
+    map.set(`tq:day:${doc.date}`, JSON.stringify({ doc, dirty: true, base: null, rev: 1 }));
+    expect(lastTime("seed:0121", "2026-10-06", "warmup")?.params).toEqual({ perSet: ["weight", "reps"] });
+    expect(suggestedSet("seed:0121", "2026-10-06", "warmup", { perSet: ["height", "reps"] })).toBeNull();
+    setExerciseParams("seed:0121", { perSet: ["height", "reps"] });
+    expect(paramsFor("seed:0121")).toEqual({ perSet: ["height", "reps"] });
+    expect(hasPendingParams()).toBe(true);
+    const first = JSON.parse(map.get("tq:params")!)["seed:0121"];
+    expect(first.params).toEqual({ perSet: ["height", "reps"] });
+    setExerciseParams("seed:0121", { perSet: ["time"] });
+    expect(JSON.parse(map.get("tq:params")!)["seed:0121"].updatedAt > first.updatedAt).toBe(true);
+    clearPendingParams();
   });
 
   it("returns section-tagged set history from current and legacy log rows", async () => {

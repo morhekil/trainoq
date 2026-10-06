@@ -35,6 +35,12 @@ export function createLocalExercise(name: string): CatalogEntry {
   registerExercise(id, name);
   return local.find((entry) => entry.id === id)!;
 }
+export async function syncDefinition(id: string): Promise<void> {
+  if (seedExercise(id)) return;
+  const entry = allCatalog().find((candidate) => candidate.id === id);
+  if (!entry) throw new Error(`Exercise definition missing: ${id}`);
+  await request(trpc.exercises.create.mutate({ id, name: entry.name }));
+}
 export async function syncDefinitions(doc: DayDoc): Promise<void> {
   const ids = new Set<string>();
   for (const session of daySessions(doc))
@@ -42,10 +48,5 @@ export async function syncDefinitions(doc: DayDoc): Promise<void> {
       for (const item of session[section])
         for (const exercise of item.kind === "exercise" ? [item] : item.members) ids.add(exercise.exerciseId);
   for (const activity of dayActivities(doc)) ids.add(activity.exerciseId);
-  for (const id of ids) {
-    if (seedExercise(id)) continue;
-    const entry = allCatalog().find((candidate) => candidate.id === id);
-    if (!entry) throw new Error(`Exercise definition missing: ${id}`);
-    await request(trpc.exercises.create.mutate({ id, name: entry.name }));
-  }
+  for (const id of ids) await syncDefinition(id);
 }

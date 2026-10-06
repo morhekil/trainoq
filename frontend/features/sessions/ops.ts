@@ -3,8 +3,8 @@ import { daySessions, type DayDoc } from "../../../shared/days/model";
 import type { Session } from "../../../shared/sessions/model";
 import { suggestedSet } from "../exercises/library";
 import { uid } from "../../id";
-import { DEFAULT_PARAMS, normalizeParams, valuesOf, type ParamValues } from "../../../shared/exercises/params";
-import { SEED_PARAMS } from "../../../shared/exercises/seed";
+import { normalizeParams, valuesOf, type ParamValues } from "../../../shared/exercises/params";
+import { paramsFor } from "../exercises/params";
 export { move } from "../../../shared/sessions/ops";
 
 export function findSession(d: DayDoc, sid: string): Session {
@@ -35,21 +35,25 @@ export function newSession(): Session {
 export function makeSet(exercise: StandaloneExercise, date: string, section: Section, type?: SetType): WorkSet {
   const params = exercise.params;
   const prev = exercise.sets.at(-1);
-  const t: SetType = type ?? prev?.type ?? suggestedSet(exercise.exerciseId, date, section)?.type ?? "warmup";
+  const t: SetType = type ?? prev?.type ?? suggestedSet(exercise.exerciseId, date, section, params)?.type ?? "warmup";
   const from = (set: ParamValues): WorkSet => ({ id: uid(), type: t, ...valuesOf(set, params) });
   const same = [...exercise.sets].reverse().find((set) => set.type === t);
   if (same) return from(same);
-  const hint = suggestedSet(exercise.exerciseId, date, section, t, true);
+  const hint = suggestedSet(exercise.exerciseId, date, section, params, t, true);
   if (hint) return from(hint);
   if (prev) return from(prev);
-  const first = suggestedSet(exercise.exerciseId, date, section);
+  const first = suggestedSet(exercise.exerciseId, date, section, params);
   return from(first ?? {});
 }
 
 export function newExercise(exerciseId: string, date: string, section: Section): StandaloneExercise {
-  const exercise: StandaloneExercise = { kind: "exercise", id: uid(), exerciseId, sets: [], comment: "", params: normalizeParams(SEED_PARAMS[exerciseId] ?? DEFAULT_PARAMS) };
+  const exercise: StandaloneExercise = { kind: "exercise", ...newMember(exerciseId), sets: [] };
   exercise.sets.push(makeSet(exercise, date, section));
   return exercise;
+}
+
+export function newMember(exerciseId: string) {
+  return { id: uid(), exerciseId, comment: "", params: normalizeParams(paramsFor(exerciseId)) };
 }
 
 export function nextSetType(t: SetType): SetType {
@@ -66,10 +70,10 @@ export function setLabels(sets: Pick<WorkSet, "type">[]): string[] {
 
 export function copyItems(items: SessionItem[]): SessionItem[] {
   return items.map((item) => item.kind === "exercise"
-    ? { ...item, id: uid(), comment: "", sets: item.sets.map((set) => ({ id: uid(), type: set.type, ...valuesOf(undefined, item.params) })) }
+    ? { ...item, id: uid(), comment: "", params: normalizeParams(paramsFor(item.exerciseId)), setup: undefined, sets: item.sets.map((set) => ({ id: uid(), type: set.type, ...valuesOf(undefined, paramsFor(item.exerciseId)) })) }
     : {
       kind: "superset" as const, id: uid(),
-      members: item.members.map((member) => ({ ...member, id: uid(), comment: "" })),
+      members: item.members.map((member) => ({ ...member, id: uid(), comment: "", params: normalizeParams(paramsFor(member.exerciseId)), setup: undefined })),
       rounds: item.rounds.map((round) => ({ id: uid(), type: round.type })),
       results: [] as Superset["results"],
     }).map((item) => {

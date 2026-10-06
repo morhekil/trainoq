@@ -8,7 +8,7 @@ import { removeEventEntry } from "../../../shared/days/model";
 import { addMember, addRound, addSet, createSuperset, deleteSuperset, dissolveSuperset, joinPerformance, moveMember, removeMember, removeRound, removeSet, reorderRound, setRoundType, takeOutMember } from "../../../shared/sessions/ops";
 import { exerciseName } from "../exercises/catalog";
 import { lastTime } from "../exercises/library";
-import { blockLetter, copyItems, findItem, findSession, findStandalone, findSuperset, makeSet, move, newExercise, nextSetType, setLabels } from "./ops";
+import { blockLetter, copyItems, findItem, findSession, findStandalone, findSuperset, makeSet, move, newExercise, newMember, nextSetType, setLabels } from "./ops";
 import { findRepeatSource } from "./recent";
 import { hhmmToIso, isoToHHMM } from "./time";
 import { uid } from "../../id";
@@ -172,7 +172,7 @@ function SupersetCard({ s, section, item, index, count, drag, over, startDrag, j
   const { openPicker, openSheet } = useOverlays();
   const letter = blockLetter(index);
   const up = (fn: (superset: Superset) => void) => update((d) => fn(findSuperset(findSession(d, s.id), section, item.id)));
-  const add = () => openPicker({ section, title: "Add to superset", onPick: (id) => up((superset) => addMember(superset, { id: uid(), exerciseId: id, comment: "", params: { perSet: ["weight", "reps"] } })) });
+  const add = () => openPicker({ section, title: "Add to superset", onPick: (id) => up((superset) => addMember(superset, newMember(id))) });
   const menu = () => {
     const actions: SheetAction[] = [{ label: "Add exercise to superset", icon: "plus", onClick: add }];
     item.rounds.forEach((round, i) => {
