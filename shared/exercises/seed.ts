@@ -1,4 +1,5 @@
 import type { ExerciseContext } from "./model";
+import type { ParamSet } from "./params";
 
 /**
  * Starter exercise list for search. Anything typed that isn't here is saved as-is
@@ -198,3 +199,23 @@ export const SEEDS: Seed[] = [
   ["seed:0175", "Hike", "activity", "hiking"],
   ["seed:0176", "Mobility", "activity"],
 ];
+
+const time: ParamSet = { perSet: ["time"] };
+
+/** Defaults for built-in exercises; saved choices take precedence. */
+export const SEED_PARAMS: Record<string, ParamSet> = {
+  "seed:0007": time, "seed:0008": time, "seed:0014": time, "seed:0015": time,
+  "seed:0019": time, "seed:0020": time, "seed:0021": time, "seed:0029": time,
+  "seed:0031": time, "seed:0032": time, "seed:0036": time, "seed:0116": time,
+  "seed:0135": time, "seed:0137": time, "seed:0139": time, "seed:0140": time,
+  "seed:0141": time, "seed:0142": time, "seed:0143": time, "seed:0148": time,
+  "seed:0150": time, "seed:0151": time, "seed:0152": time, "seed:0161": time,
+  "seed:0167": time, "seed:0168": time,
+  "seed:0034": { perSet: ["distance", "time"] },
+  "seed:0035": { perSet: ["distance", "time"] },
+  "seed:0077": { perSet: ["weight", "time"] },
+  "seed:0078": { perSet: ["weight", "time"] },
+  "seed:0079": { perSet: ["edge", "time", "reps"] },
+  "seed:0121": { perSet: ["height", "reps"] },
+  "seed:0164": { perSet: ["height", "reps"] },
+};
