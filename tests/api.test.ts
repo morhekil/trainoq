@@ -1,6 +1,6 @@
 import { createTRPCClient, httpLink } from "@trpc/client";
 import { describe, expect, it, vi } from "vitest";
-import { addEventEntry, dayActivities, daySessions, emptyDay } from "../shared/days/model";
+import { addEventEntry, dayActivities, daySessions, emptyDay, mergeEvents } from "../shared/days/model";
 import type { LegacyDayDoc } from "../shared/days/migrate";
 import { exerciseIdForName } from "../shared/exercises/catalog";
 import type { SessionItem } from "../shared/exercises/model";
@@ -135,5 +135,14 @@ describe("Worker tRPC boundary", () => {
     const emptySave = await client.days.save.mutate({ date: custom.date, doc: emptied, base: saved.ok ? saved.updatedAt : null });
     expect(emptySave.ok).toBe(true);
     expect(daySessions((await client.days.get.query(custom.date)).doc!)[0].main[0]).toMatchObject({ kind: "superset", rounds: [{ id: "round" }], members: [], results: [] });
+    const grouped = structuredClone(emptied);
+    mergeEvents(grouped, grouped.events.map((event) => event.id));
+    grouped.events[0].title = "Mixed visit";
+    grouped.events[0].notes = "Keep the original parts";
+    const groupSave = await client.days.save.mutate({ date: grouped.date, doc: grouped, base: emptySave.ok ? emptySave.updatedAt : null });
+    expect(groupSave.ok).toBe(true);
+    expect((await client.days.get.query(grouped.date)).doc).toEqual(grouped);
+    expect((await client.backup.export.query()).days.find((entry) => entry.date === grouped.date)?.doc).toEqual(grouped);
+    expect(logRows.some((row) => row.args[1] === "activity" && row.args[6] === activityId)).toBe(true);
   });
 });

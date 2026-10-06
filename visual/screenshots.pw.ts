@@ -562,6 +562,9 @@ test("a manual session can join a separate cardio recording", async ({ page }) =
   const draft = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!).doc, day);
   expect(draft.events).toHaveLength(1);
   expect(draft.events[0].entries).toMatchObject([{ kind: "activity", activity: { id: "run", garminSourceKey: "garmin:run:0" } }, { kind: "session", session: { id: "cardio-session", notes: "Manual work", calories: 120 } }]);
+  await expect(page.getByText("Logged above: 220 cal")).toHaveCount(0);
+  await expect(page.getByText("Session and activity calories may overlap. Enter the daily total separately.")).toBeVisible();
+  await expect(page.getByLabel("Total daily active calories")).toBeVisible();
 });
 
 test("suggests one merge for thirteen saved parts from the same FIT recording", async ({ page }) => {

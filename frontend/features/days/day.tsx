@@ -312,6 +312,7 @@ function AddActivityCard() {
 function TotalsCard() {
   const { doc, update } = useDayCtx();
   const logged = daySessions(doc).reduce((n, s) => n + (s.calories ?? 0), 0) + dayActivities(doc).reduce((n, a) => n + (a.result.calories ?? 0), 0);
+  const mixed = doc.events.some((event) => event.entries.some((entry) => entry.kind === "session") && event.entries.some((entry) => entry.kind === "activity"));
   return (
     <section className="card">
       <label className="inline-field">
@@ -324,7 +325,7 @@ function TotalsCard() {
           onChange={(v) => update((d) => (d.totalCalories = v))}
         />
       </label>
-      {logged > 0 && <div className="hint">Logged above: {logged} cal</div>}
+      {mixed ? <div className="hint">Session and activity calories may overlap. Enter the daily total separately.</div> : logged > 0 && <div className="hint">Logged above: {logged} cal</div>}
     </section>
   );
 }
