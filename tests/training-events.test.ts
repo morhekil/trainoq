@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { normalizeDay } from "../shared/days/migrate";
 import { daySchema } from "../shared/days/schema";
-import { addEventEntry, emptyDay, mergeEvents } from "../shared/days/model";
+import { addEventEntry, detachEventEntry, emptyDay, mergeEvents } from "../shared/days/model";
 
 describe("training events", () => {
   it("wraps v6 records as stable singleton events without changing their contents", () => {
@@ -44,4 +44,19 @@ it("leaves event metadata and entries intact when a merge would discard them", (
 
   expect(() => mergeEvents(day, [first.id, second.id])).toThrow(/notes and totals/);
   expect(day).toEqual(before);
+});
+
+it("separates a part without losing its data or the original event note", () => {
+  const day = emptyDay("2026-10-05");
+  const walk = { id: "walk", exerciseId: "seed:0033", comment: "Original wording", result: { minutes: 10, calories: 20 } };
+  const run = { id: "run", exerciseId: "seed:0170", comment: "", result: { minutes: 10, calories: 30 } };
+  const event = addEventEntry(day, { kind: "activity", activity: walk });
+  event.entries.push({ kind: "activity", activity: run });
+  event.notes = "Visit note";
+
+  detachEventEntry(day, event.id, "activity", walk.id);
+
+  expect(day.events[0]).toMatchObject({ id: event.id, notes: "Visit note", entries: [{ activity: run }] });
+  expect(day.events[1]).toMatchObject({ title: null, notes: "", entries: [{ activity: walk }] });
+  expect(daySchema.parse(day)).toEqual(day);
 });

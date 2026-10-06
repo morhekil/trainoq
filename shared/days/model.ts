@@ -68,6 +68,15 @@ export function mergeEvents(d: DayDoc, ids: string[]): TrainingEvent {
   return target;
 }
 
+export function detachEventEntry(d: DayDoc, eventId: string, kind: EventEntry["kind"], id: string): void {
+  const event = d.events.find((item) => item.id === eventId);
+  if (!event || event.entries.length < 2) throw new Error("Choose a part of a grouped event");
+  const entry = event.entries.find((item) => item.kind === kind && (item.kind === "session" ? item.session.id : item.activity.id) === id);
+  if (!entry) throw new Error("Event part not found");
+  event.entries = event.entries.filter((item) => item !== entry);
+  addEventEntry(d, entry);
+}
+
 export function removeEventEntry(d: DayDoc, kind: EventEntry["kind"], id: string): void {
   for (const event of d.events) event.entries = event.entries.filter((entry) => entry.kind !== kind || (entry.kind === "session" ? entry.session.id : entry.activity.id) !== id);
   d.events = d.events.filter((event) => event.entries.length);
