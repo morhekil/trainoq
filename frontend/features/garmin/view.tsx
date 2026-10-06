@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
-import type { GarminActivitySummary } from "../../../shared/garmin/fit";
-import { dayActivities, daySessions, emptyDay } from "../../../shared/days/model";
+import { fitRecordingKey, type GarminActivitySummary } from "../../../shared/garmin/fit";
+import { dayActivities, daySessions, emptyDay, mergeEvents } from "../../../shared/days/model";
 import { acceptActivity, ignoreGarmin, linkStrengthSession, moveLinkedActivity, strengthMatches, unlinkGarmin } from "../../../shared/garmin/decisions";
 import { request, trpc } from "../../api";
 import { addDays, goToDate, todayLocal } from "../days/dates";
@@ -63,6 +63,36 @@ export function GarminView() {
     finally { setLoading(false); }
   };
 
+  const pendingGroups = new Map<string, Listed[]>();
+  for (const source of records) {
+    if (source.status !== "pending" || isStrength(source)) continue;
+    const key = `${sourceDate(source)}|${fitRecordingKey(source.sourceKey)}`;
+    pendingGroups.set(key, [...(pendingGroups.get(key) ?? []), source]);
+  }
+  const recordingGroups = [...pendingGroups.values()].filter((sources) => sources.length > 1).map((sources) => sources.sort((a, b) => a.startUtc.localeCompare(b.startUtc)));
+
+  const acceptGroup = async (sources: Listed[]) => {
+    setLoading(true);
+    const date = sourceDate(sources[0]);
+    try {
+      await loadFromServer(date);
+      const doc = structuredClone(getEntry(date)?.doc ?? emptyDay(date));
+      const eventIds = sources.map((source) => {
+        const existing = doc.events.find((event) => event.entries.some((entry) => (entry.kind === "session" ? entry.session.garminSourceKey : entry.activity.garminSourceKey) === source.sourceKey));
+        if (existing) return existing.id;
+        acceptActivity(doc, source, createLocalExercise(source.title).id);
+        return doc.events.at(-1)!.id;
+      });
+      const distinctIds = [...new Set(eventIds)];
+      if (distinctIds.length > 1) mergeEvents(doc, distinctIds);
+      setDoc(date, doc);
+      const keys = new Set(sources.map((source) => source.sourceKey));
+      setRecords((current) => current.map((source) => keys.has(source.sourceKey) ? { ...source, status: "activity", decisionDate: date } : source));
+      setMessage(`${sources.length} parts added as one training event on ${date}. They will sync with your other device.`);
+    } catch (reason) { setMessage(reason instanceof Error ? reason.message : "Unable to add this recording. Retry after reviewing the saved day."); }
+    finally { setLoading(false); }
+  };
+
   return <>
     <GarminConnection onImported={() => load()} />
     <section className="card">
@@ -75,6 +105,11 @@ export function GarminView() {
       </div>
       <div role="status" aria-live="polite">{message}</div>
     </section>
+    {recordingGroups.map((sources) => <section key={sources[0].sourceKey} className="card">
+      <h2 className="card-title">One Garmin recording · {sources.length} parts</h2>
+      <details><summary>Preview parts</summary><ol>{sources.map((source) => <li key={source.sourceKey}>{source.title} · {sourceTime(source)}</li>)}</ol></details>
+      <button type="button" className="btn big secondary garmin-bulk" onClick={() => void acceptGroup(sources)} disabled={loading}>Add {sources.length} parts as one training event</button>
+    </section>)}
     {records.some((item) => item.status === "pending" && !isStrength(item)) && <button type="button" className="btn big secondary garmin-bulk" onClick={() => void acceptAll()} disabled={loading}>Add loaded pending non-strength activities</button>}
     {!listLoading && records.length === 0 && <section className="card"><p>{showAll ? "No Garmin recordings in this date range. Sync Garmin or change the dates." : "No pending Garmin recordings in this date range. Show all to review linked or ignored recordings, or change the dates."}</p></section>}
     {records.map((source) => <GarminRecord key={source.sourceKey} source={source} />)}

@@ -61,6 +61,62 @@ test("reviews pending Garmin recordings in pages and keeps a newly added row unt
   await expect(page.getByLabel("Run 21 Garmin recording")).toHaveCount(0);
 });
 
+test("accepts one FIT recording's thirteen parts as one event and leaves another walk pending", async ({ page }) => {
+  const fit = "garmin:123:2026-09-28T01:00:00.000Z";
+  const sources = [
+    ...Array.from({ length: 13 }, (_, index) => ({
+      sourceKey: `${fit}:${index}`, sport: index % 2 ? "running" : "walking", subSport: "generic",
+      title: index % 2 ? "Run" : "Walk", startUtc: new Date(Date.parse("2026-09-28T01:00:00.000Z") + index * 5 * 60_000).toISOString(), localDate: "2026-09-28", offsetMinutes: 600,
+      timerSeconds: 300, elapsedSeconds: 300, activeCalories: 30,
+      importedAt: `2026-09-29T${String(index).padStart(2, "0")}:00:00.000Z`, status: "pending", targetId: null, decisionDate: null,
+    })).reverse(),
+    { sourceKey: "garmin:999:2026-09-28T00:00:00.000Z:0", sport: "walking", subSport: "generic", title: "Earlier walk", startUtc: "2026-09-28T00:00:00.000Z", localDate: "2026-09-28", offsetMinutes: 600, timerSeconds: 1200, elapsedSeconds: 1200, activeCalories: 40, importedAt: "2026-09-29T13:00:00.000Z", status: "pending", targetId: null, decisionDate: null },
+  ];
+  let added = false;
+  await page.route("**/api/trpc/**", async (route) => {
+    const procedure = new URL(route.request().url()).pathname.split("/").at(-1);
+    if (procedure === "days.save") added = true;
+    const data = procedure === "auth.me" ? { ok: true }
+      : procedure === "garmin.connection" ? disconnected
+      : procedure === "garmin.list" ? { items: added ? sources.slice(-1) : sources, nextCursor: null }
+      : procedure === "days.get" ? { date: "2026-09-28", doc: null, updatedAt: null }
+      : procedure === "days.save" ? { ok: true, updatedAt: "saved" }
+      : procedure === "exercises.library" ? { catalog: [], stats: [], history: {} }
+      : null;
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify({ result: { data } }) });
+  });
+  await page.addInitScript(() => localStorage.setItem("tq:authed", "true"));
+  await page.goto("/#/garmin");
+  const group = page.getByRole("button", { name: "Add 13 parts as one training event" });
+  await expect(group).toBeVisible();
+  await page.getByText("Preview parts").click();
+  await expect(page.locator("details li")).toHaveCount(13);
+  await expect(page.locator("details li").first()).toContainText("11:00");
+  await page.getByText("Preview parts").click();
+  for (const width of [320, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const colorScheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      await expect(page).toHaveScreenshot(`garmin-review-group-${width}-${colorScheme}.png`, { fullPage: true });
+    }
+  }
+  const firstWalk = page.getByLabel("Walk Garmin recording").first();
+  await firstWalk.getByRole("button", { name: "Create activity" }).click();
+  await expect(firstWalk).toContainText("Added activity");
+  await group.click();
+  const draft = await page.evaluate(() => JSON.parse(localStorage.getItem("tq:day:2026-09-28")!).doc);
+  expect(draft.events).toHaveLength(1);
+  expect(draft.events[0].entries.map((entry: any) => entry.activity.garminSourceKey)).toEqual(Array.from({ length: 13 }, (_, index) => `${fit}:${index}`));
+  await expect(page.getByLabel("Earlier walk Garmin recording")).toContainText("Pending");
+  await expect(page.getByLabel("Run Garmin recording").first()).toContainText("Added activity");
+  await expect(group).toHaveCount(0);
+  await expect(page.getByLabel("Run Garmin recording")).toHaveCount(6);
+  await expect.poll(() => added).toBe(true);
+  await page.getByRole("button", { name: "Refresh" }).click();
+  await expect(page.getByLabel("Run Garmin recording")).toHaveCount(0);
+});
+
 test("connects Garmin and backfills every page", async ({ page }) => {
   const calls: string[] = [];
   let status = "disconnected";
