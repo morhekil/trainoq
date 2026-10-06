@@ -7,7 +7,7 @@ export interface DayCtx {
   doc: DayDoc;
   update: Update;
   /** apply a destructive change and offer Undo */
-  undoable: (message: string, fn: (d: DayDoc) => void) => void;
+  undoable: (message: string, fn: (d: DayDoc) => void, onUndo?: () => void) => void;
   recentVersion: number;
 }
 

@@ -605,6 +605,7 @@ textarea {
 }
 
 .sets {
+  --cols: 2;
   display: flex;
   flex-direction: column;
   gap: 6px;
@@ -613,7 +614,7 @@ textarea {
 .set-head,
 .set-row {
   display: grid;
-  grid-template-columns: 38px minmax(0, 1.15fr) minmax(0, 1fr) 28px;
+  grid-template-columns: 38px repeat(var(--cols), minmax(0, 1fr)) 28px;
   gap: 6px;
   align-items: center;
 }
@@ -626,6 +627,23 @@ textarea {
   text-align: center;
   margin-bottom: -2px;
 }
+.params-btn {
+  grid-column: 2 / -1;
+  display: grid;
+  grid-template-columns: subgrid;
+  align-items: center;
+  min-height: 28px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+}
+.params-btn > span:not(.sr-only) { text-align: center; }
+.params-btn > svg { justify-self: center; color: var(--muted); }
+.num.compact { min-height: 40px; border-radius: 10px; background: var(--surface-2); text-align: center; }
 .set-badge {
   width: 100%;
   height: 40px;
@@ -863,6 +881,12 @@ textarea {
   padding: 6px 8px 8px;
   font-weight: 600;
 }
+.params-options { border: 0; padding: 0; margin: 0; min-width: 0; max-height: min(55vh, 500px); overflow-y: auto; }
+.params-options legend { padding: 8px 16px; text-transform: uppercase; font-size: 11px; font-weight: 700; letter-spacing: .05em; color: var(--muted); }
+.params-option { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 10px; align-items: center; min-height: 44px; padding: 4px 16px; }
+.params-option:has(input:checked) { background: var(--accent-soft); }
+.params-columns { font-size: 11px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; color: var(--muted); white-space: nowrap; }
+.sheet-description.warn { background: var(--warn-soft); color: var(--text); }
 .sheet-btn {
   display: flex;
   align-items: center;

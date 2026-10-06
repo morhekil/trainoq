@@ -46,10 +46,10 @@ export function DayView({ date }: { date: string }) {
   }, [sourceKeys]);
 
   const undoable = useCallback(
-    (message: string, fn: (d: DayDoc) => void) => {
+    (message: string, fn: (d: DayDoc) => void, onUndo?: () => void) => {
       const prev = getEntry(date)?.doc ?? emptyDay(date);
       update(fn);
-      toast(message, () => replace(prev));
+      toast(message, () => { replace(prev); onUndo?.(); });
     },
     [date, update, replace, toast],
   );

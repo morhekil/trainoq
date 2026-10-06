@@ -6,6 +6,8 @@ import { Modal } from "../../modal";
 import type { PickerState } from "../../overlays";
 import { libraryVersion, refreshLibrary, searchExercises, subscribeLibrary } from "./library";
 import { createLocalExercise, findExerciseByName } from "./catalog";
+import { paramsFor } from "./params";
+import { DEFAULT_PARAMS, paramsName, sameParams } from "../../../shared/exercises/params";
 
 function useLibraryVersion() {
   return useSyncExternalStore(subscribeLibrary, libraryVersion);
@@ -87,11 +89,10 @@ export function ExercisePicker({ state, onClose }: { state: PickerState; onClose
             {g.items.map((i) => (
               <button key={i.id} type="button" className="picker-item" onClick={() => pick(i.id)}>
                 <span className="picker-name">{i.name}</span>
-                {i.last && (
-                  <span className="picker-meta">
-                    {i.total}× · {formatDateShort(i.last)}
-                  </span>
-                )}
+                {(i.last || !sameParams(paramsFor(i.id), DEFAULT_PARAMS)) && <span className="picker-meta">
+                  {!sameParams(paramsFor(i.id), DEFAULT_PARAMS) && <>{paramsName(paramsFor(i.id))} · </>}
+                  {i.last && <>{i.total}× · {formatDateShort(i.last)}</>}
+                </span>}
               </button>
             ))}
           </div>

@@ -1067,3 +1067,23 @@ for (const width of [320, 390, 1280]) {
     await expect(page).toHaveScreenshot(`history-${width}.png`);
   });
 }
+
+test("exercise parameters change from the logging header and Undo restores values", async ({ page }) => {
+  await mockApi(page);
+  await page.addInitScript(({ date, doc }) => {
+    localStorage.setItem("tq:authed", JSON.stringify(true));
+    localStorage.setItem(`tq:day:${date}`, JSON.stringify({ doc, base: null, dirty: false, rev: 1 }));
+  }, { date: day, doc });
+  await page.goto(`/#/d/${day}`);
+  const opener = page.getByRole("button", { name: /Squat parameters/ });
+  await opener.focus();
+  await page.keyboard.press("Enter");
+  const dialog = page.getByRole("dialog", { name: "Squat parameters" });
+  await expect(dialog.getByRole("radio", { name: /Box height × reps/ })).toBeVisible();
+  await dialog.getByRole("radio", { name: /Box height × reps/ }).check();
+  await expect(dialog.getByText(/Removes weight from 3 sets/)).toBeVisible();
+  await dialog.getByRole("button", { name: "Use Box height × reps" }).click();
+  await expect(page.getByRole("textbox", { name: "Squat W1 box height in inches" })).toBeVisible();
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(page.getByRole("textbox", { name: "Squat W1 weight" })).toHaveValue("40");
+});

@@ -1,13 +1,15 @@
-import { useEffect, useState, type PointerEvent } from "react";
+import { useEffect, useState, type CSSProperties, type PointerEvent } from "react";
 import { formatDateShort } from "../../../shared/days/format";
 import { minutesBetween, itemSets } from "../../../shared/sessions/format";
-import { formatSets } from "../../../shared/exercises/format";
-import type { PerformedExercise, Section, SessionItem, SetType, Superset, WorkSet } from "../../../shared/exercises/model";
+import { formatSet, formatSets } from "../../../shared/exercises/format";
+import type { Section, SessionItem, SetType, SessionExercise, Superset, WorkSet } from "../../../shared/exercises/model";
+import { PARAMS, paramsName, sameParams, type Param, type ParamSet } from "../../../shared/exercises/params";
 import type { Session } from "../../../shared/sessions/model";
 import { removeEventEntry } from "../../../shared/days/model";
-import { addMember, addRound, addSet, createSuperset, deleteSuperset, dissolveSuperset, joinPerformance, moveMember, removeMember, removeRound, removeSet, reorderRound, setRoundType, takeOutMember } from "../../../shared/sessions/ops";
+import { addMember, addRound, addSet, createSuperset, deleteSuperset, dissolveSuperset, joinPerformance, moveMember, removeMember, removeRound, removeSet, removedValues, reorderRound, setRecordParams, setRoundType, takeOutMember } from "../../../shared/sessions/ops";
 import { exerciseName } from "../exercises/catalog";
 import { lastTime } from "../exercises/library";
+import { paramsFor, setExerciseParams } from "../exercises/params";
 import { blockLetter, copyItems, findItem, findSession, findStandalone, findSuperset, makeSet, move, newExercise, newMember, nextSetType, setLabels } from "./ops";
 import { findRepeatSource } from "./recent";
 import { hhmmToIso, isoToHHMM } from "./time";
@@ -90,7 +92,7 @@ function SectionEditor({ s, section, title }: { s: Session; section: Section; ti
     if (matching) upItems((items) => joinPerformance(items, exerciseId, supersetId));
     else openSheet({
       title: `Align ${exerciseName(exercise.exerciseId)} with superset`,
-      description: `Superset rounds: ${target.rounds.map((r) => r.type).join(", ") || "none"}. Exercise sets: ${exercise.sets.map((set) => `${set.type} ${set.weight ?? "–"}kg ×${set.reps ?? "–"}`).join(", ") || "none"}. Appending adds rounds and keeps every recorded value.`,
+      description: `Superset rounds: ${target.rounds.map((r) => r.type).join(", ") || "none"}. Exercise sets: ${exercise.sets.map((set) => `${set.type} ${formatSet(set, exercise.params)}`).join(", ") || "none"}. Appending adds rounds and keeps every recorded value.`,
       actions: [{ label: "Append sets as new rounds", onClick: () => upItems((items) => joinPerformance(items, exerciseId, supersetId, "append")) }],
     });
   };
@@ -201,23 +203,47 @@ function SupersetCard({ s, section, item, index, count, drag, over, startDrag, j
 }
 
 function ExerciseEditor({ s, section, item, member, label, index, count, memberIndex, startDrag, drag, over, roundMenu }: {
-  s: Session; section: Section; item: SessionItem; member: PerformedExercise; label: string; index: number; count: number; memberIndex: number; startDrag: StartDrag; drag?: Drag | null; over?: string | null; roundMenu?: () => void;
+  s: Session; section: Section; item: SessionItem; member: SessionExercise; label: string; index: number; count: number; memberIndex: number; startDrag: StartDrag; drag?: Drag | null; over?: string | null; roundMenu?: () => void;
 }) {
   const { date, update, undoable } = useDayCtx();
-  const { openPicker, openSheet } = useOverlays();
+  const { openPicker, openSheet, openParams } = useOverlays();
   const [noteOpen, setNoteOpen] = useState(false);
   const name = exerciseName(member.exerciseId);
   const sets = itemSets(item, member.id);
   const labels = setLabels(sets);
   const last = lastTime(member.exerciseId, date, section);
-  const upMember = (fn: (member: PerformedExercise) => void) => update((d) => {
+  const upMember = (fn: (member: SessionExercise) => void) => update((d) => {
     const current = findItem(findSession(d, s.id), section, item.id);
     const target = current.kind === "exercise" ? current : current.members.find((m) => m.id === member.id);
     if (target) fn(target);
   });
-  const rename = () => openPicker({ section, title: "Change exercise", initial: name, onPick: (id) => upMember((target) => (target.exerciseId = id)) });
+  const changeParams = () => openParams({
+    exerciseName: name, current: member.params,
+    removed: (next) => removedValues(item, member.id, next),
+    rowNoun: item.kind === "superset" ? "round" : "set",
+    note: `Applies to this entry and to future ${name} entries. Earlier entries keep their parameters.`,
+    onApply: (next) => {
+      const previous = paramsFor(member.exerciseId);
+      undoable(`${name} now records ${paramsName(next).toLowerCase()}`,
+        (d) => setRecordParams(findItem(findSession(d, s.id), section, item.id), member.id, next),
+        () => setExerciseParams(member.exerciseId, previous));
+      setExerciseParams(member.exerciseId, next);
+    },
+  });
+  const rename = () => openPicker({ section, title: "Change exercise", initial: name, onPick: (id) => {
+    const next = paramsFor(id);
+    const apply = (d: import("../../../shared/days/model").DayDoc) => {
+      const current = findItem(findSession(d, s.id), section, item.id);
+      const record = current.kind === "exercise" ? current : current.members.find((entry) => entry.id === member.id);
+      if (!record) return;
+      record.exerciseId = id;
+      setRecordParams(current, member.id, next);
+    };
+    if (removedValues(item, member.id, next).length) undoable(`${name} changed to ${exerciseName(id)}`, apply);
+    else update(apply);
+  } });
   const menu = () => {
-    const actions: SheetAction[] = [{ label: "Change exercise", onClick: rename }];
+    const actions: SheetAction[] = [{ label: "Change exercise", onClick: rename }, { label: "Change parameters", onClick: changeParams }];
     if (item.kind === "superset") {
       if (memberIndex > 0) actions.push({ label: "Move up", icon: "chevronUp", onClick: () => update((d) => moveMember(findSuperset(findSession(d, s.id), section, item.id), member.id, memberIndex - 1)) });
       if (memberIndex < item.members.length - 1) actions.push({ label: "Move down", icon: "chevronDown", onClick: () => update((d) => moveMember(findSuperset(findSession(d, s.id), section, item.id), member.id, memberIndex + 1)) });
@@ -234,7 +260,7 @@ function ExerciseEditor({ s, section, item, member, label, index, count, memberI
     }) });
     openSheet({ title: name, actions });
   };
-  const upSet = (setId: string, field: "weight" | "reps", value: number | null) => update((d) => {
+  const upSet = (setId: string, field: Param, value: number | null) => update((d) => {
     const current = findItem(findSession(d, s.id), section, item.id);
     if (current.kind === "exercise") { const set = current.sets.find((candidate) => candidate.id === setId); if (set) set[field] = value; }
     else { const result = current.results.find((candidate) => candidate.memberId === member.id && candidate.roundId === setId); if (result) result[field] = value; }
@@ -248,17 +274,17 @@ function ExerciseEditor({ s, section, item, member, label, index, count, memberI
         <button type="button" className={`icon-btn ${member.comment ? "on" : ""}`} aria-label="Comment" aria-pressed={noteOpen || !!member.comment} onClick={() => setNoteOpen(!noteOpen)}><Icon name="note" size={18} /></button>
         <button type="button" className="icon-btn" aria-label={`${name} options`} onClick={menu}><Icon name="more" /></button>
       </div>
-      {last && <div className="last-time">Last {formatDateShort(last.date)}: {formatSets(last.sets) || "no sets"}</div>}
+      {last && <div className="last-time">Last {formatDateShort(last.date)}{!sameParams(last.params, member.params) ? ` (${paramsName(last.params).toLowerCase()})` : ""}: {formatSets(last.sets, last.params) || "no sets"}</div>}
       {(noteOpen || member.comment) && <AutoTextarea minRows={1} className="comment" placeholder="Comment (form, pain, range…)" aria-label={`${name} comment`} autoFocus={noteOpen && !member.comment} value={member.comment} onChange={(event) => upMember((target) => (target.comment = event.target.value))} />}
-      {sets.length > 0 && <div className="sets">
-        <div className="set-head" aria-hidden="true"><span>{item.kind === "superset" ? "Round" : "Set"}</span><span>kg</span><span>Reps</span><span /></div>
+      {sets.length > 0 && <div className="sets" style={{ "--cols": member.params.perSet.length } as CSSProperties}>
+        <div className="set-head"><span aria-hidden="true">{item.kind === "superset" ? "Round" : "Set"}</span><button type="button" className="params-btn" onClick={changeParams}><span className="sr-only">{name} parameters: </span>{member.params.perSet.map((key) => <span key={key}>{PARAMS[key].column}</span>)}<Icon name="chevronDown" size={14} /></button></div>
         {item.kind === "superset" && memberIndex === 0 && drag?.kind === "round" && drag.supersetId === item.id && <RoundDrop item={item} index={0} over={over} />}
         {sets.map((set, i) => <div key={set.id}>
-          <SetRow label={labels[i]} set={set} name={name} onCycle={() => update((d) => {
+          <SetRow label={labels[i]} set={set} name={name} params={member.params} onCycle={() => update((d) => {
             const current = findItem(findSession(d, s.id), section, item.id);
             if (current.kind === "exercise") current.sets[i].type = nextSetType(current.sets[i].type);
             else setRoundType(current, set.id, nextSetType(current.rounds[i].type));
-          })} onWeight={(value) => upSet(set.id, "weight", value)} onReps={(value) => upSet(set.id, "reps", value)}
+          })} onValue={(key, value) => upSet(set.id, key, value)}
             dragHandle={item.kind === "superset" && memberIndex === 0 ? (event) => startDrag({ kind: "round", supersetId: item.id, roundId: set.id }, event) : undefined} onDragActivate={roundMenu} />
           {item.kind === "superset" && memberIndex === 0 && drag?.kind === "round" && drag.supersetId === item.id && <RoundDrop item={item} index={i + 1} over={over} />}
         </div>)}
@@ -274,8 +300,8 @@ function RoundDrop({ item, index, over }: { item: Superset; index: number; over?
 }
 
 const TYPE_NAME: Record<SetType, string> = { warmup: "warm-up", working: "working", backoff: "back-off" };
-function SetRow({ label, set, name, onCycle, onWeight, onReps, dragHandle, onDragActivate }: {
-  label: string; set: WorkSet; name: string; onCycle: () => void; onWeight: (value: number | null) => void; onReps: (value: number | null) => void; dragHandle?: (event: PointerEvent<HTMLButtonElement>) => void; onDragActivate?: () => void;
+function SetRow({ label, set, name, params, onCycle, onValue, dragHandle, onDragActivate }: {
+  label: string; set: WorkSet; name: string; params: ParamSet; onCycle: () => void; onValue: (key: Param, value: number | null) => void; dragHandle?: (event: PointerEvent<HTMLButtonElement>) => void; onDragActivate?: () => void;
 }) {
   const [hint, setHint] = useState("");
   useEffect(() => {
@@ -285,8 +311,9 @@ function SetRow({ label, set, name, onCycle, onWeight, onReps, dragHandle, onDra
   }, [hint]);
   return <div className="set-row">
     <div className="badge-cell"><button type="button" className={`set-badge ${set.type}`} aria-label={`${name} set ${label}, ${TYPE_NAME[set.type]}. Change type`} onClick={() => { setHint(TYPE_NAME[nextSetType(set.type)]); onCycle(); }}>{label}</button><span className="type-hint" role="status">{hint}</span></div>
-    <Stepper value={set.weight ?? null} onChange={onWeight} step={2.5} decimal placeholder="–" label={`${name} ${label} weight`} />
-    <Stepper value={set.reps ?? null} onChange={onReps} step={1} placeholder="–" label={`${name} ${label} reps`} />
+    {params.perSet.map((key) => params.perSet.length <= 2
+      ? <Stepper key={key} value={set[key] ?? null} onChange={(value) => onValue(key, value)} step={PARAMS[key].step} decimal={PARAMS[key].decimal} placeholder="–" label={`${name} ${label} ${PARAMS[key].spoken}`} />
+      : <NumberField key={key} className="compact" value={set[key] ?? null} onChange={(value) => onValue(key, value)} decimal={PARAMS[key].decimal} placeholder="–" ariaLabel={`${name} ${label} ${PARAMS[key].spoken}`} />)}
     {dragHandle ? <button type="button" className="drag-handle round-handle" aria-label={`Drag round ${label}; activate for options`} onPointerDown={dragHandle} onClick={onDragActivate}>⋮⋮</button> : <span />}
   </div>;
 }

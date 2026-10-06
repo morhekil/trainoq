@@ -3,6 +3,7 @@ import type { ExerciseContext } from "../shared/exercises/model";
 import { Icon } from "./icons";
 import { Modal } from "./modal";
 import { ExercisePicker } from "./features/exercises/picker";
+import { ParamsSheet, type ParamsSheetState } from "./features/exercises/params-sheet";
 
 // ---------- types
 
@@ -32,6 +33,7 @@ interface ToastState {
 interface Overlays {
   openSheet: (s: SheetState) => void;
   openPicker: (p: PickerState) => void;
+  openParams: (p: ParamsSheetState) => void;
   toast: (message: string, undo?: () => void) => void;
 }
 
@@ -46,6 +48,7 @@ export function useOverlays(): Overlays {
 export function OverlayProvider({ children }: { children: ReactNode }) {
   const [sheet, setSheet] = useState<SheetState | null>(null);
   const [picker, setPicker] = useState<PickerState | null>(null);
+  const [params, setParams] = useState<ParamsSheetState | null>(null);
   const [toasts, setToasts] = useState<ToastState[]>([]);
   const nextToastId = useRef(0);
 
@@ -53,13 +56,14 @@ export function OverlayProvider({ children }: { children: ReactNode }) {
     setToasts((current) => [...current, { id: ++nextToastId.current, message, undo }]);
   }, []);
 
-  const value = useMemo<Overlays>(() => ({ openSheet: setSheet, openPicker: setPicker, toast }), [toast]);
+  const value = useMemo<Overlays>(() => ({ openSheet: setSheet, openPicker: setPicker, openParams: setParams, toast }), [toast]);
 
   return (
     <Ctx.Provider value={value}>
       {children}
       {sheet && <Sheet state={sheet} onClose={() => setSheet(null)} />}
       {picker && <ExercisePicker key={picker.title} state={picker} onClose={() => setPicker((current) => current === picker ? null : current)} />}
+      {params && <ParamsSheet state={params} onClose={() => setParams(null)} />}
       {toasts.length > 0 && (
         <div className="toast-stack">
           {toasts.map((item) => (
