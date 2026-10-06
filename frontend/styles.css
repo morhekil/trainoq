@@ -326,6 +326,10 @@ textarea {
   display: block;
 }
 
+.recording-suggestion {
+  white-space: normal;
+}
+
 .training-event summary {
   cursor: pointer;
   font-weight: 700;

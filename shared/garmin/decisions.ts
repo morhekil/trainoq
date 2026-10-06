@@ -1,5 +1,19 @@
 import { addEventEntry, dayActivities, daySessions, removeEventEntry, type Activity, type DayDoc } from "../days/model";
-import type { GarminActivitySummary } from "./fit";
+import { fitRecordingKey, type GarminActivitySummary } from "./fit";
+
+export function suggestedRecordingGroups(doc: DayDoc): string[][] {
+  const groups = new Map<string, string[]>();
+  for (const event of doc.events) {
+    if (event.title || event.notes || event.summaryOverrides) continue;
+    const keys = event.entries.map((entry) => entry.kind === "session" ? entry.session.garminSourceKey : entry.activity.garminSourceKey);
+    if (keys.some((key) => !key)) continue;
+    const recordingKeys = new Set(keys.map((key) => fitRecordingKey(key!)));
+    if (recordingKeys.size !== 1) continue;
+    const recordingKey = [...recordingKeys][0];
+    groups.set(recordingKey, [...(groups.get(recordingKey) ?? []), event.id]);
+  }
+  return [...groups.values()].filter((ids) => ids.length > 1);
+}
 
 function ensurePending(doc: DayDoc, key: string): void {
   if (doc.ignoredGarminSourceKeys.includes(key) || dayActivities(doc).some((a) => a.garminSourceKey === key) || daySessions(doc).some((s) => s.garminSourceKey === key))

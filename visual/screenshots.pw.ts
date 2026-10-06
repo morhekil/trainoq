@@ -560,6 +560,36 @@ test("a manual session can join a separate cardio recording", async ({ page }) =
   expect(draft.events[0].entries).toMatchObject([{ kind: "activity", activity: { id: "run", garminSourceKey: "garmin:run:0" } }, { kind: "session", session: { id: "cardio-session", notes: "Manual work", calories: 120 } }]);
 });
 
+test("suggests one merge for thirteen saved parts from the same FIT recording", async ({ page }) => {
+  await mockApi(page);
+  const fitKey = "garmin:123:2026-09-15T06:24:00.000Z";
+  const old = { v: 6, date: day, comments: [{ id: "note", time: "17:05", text: "Keep this comment" }], sessions: [], activities: [
+    { id: "earlier", exerciseId: "seed:0033", comment: "", startedAt: "2026-09-15T02:00:00.000Z", garminSourceKey: "garmin:999:2026-09-15T02:00:00.000Z:0", result: { minutes: 20, calories: 40 } },
+    ...Array.from({ length: 13 }, (_, index) => ({ id: `part-${index}`, exerciseId: index % 2 ? "seed:0170" : "seed:0033", comment: "", startedAt: new Date(Date.parse("2026-09-15T06:24:00.000Z") + index * 5 * 60_000).toISOString(), garminSourceKey: `${fitKey}:${index}`, result: { minutes: 5, calories: 30 } })),
+  ], ignoredGarminSourceKeys: [], totalCalories: null };
+  await page.addInitScript(({ date, old }) => {
+    localStorage.setItem("tq:authed", JSON.stringify(true));
+    localStorage.setItem(`tq:day:${date}`, JSON.stringify({ doc: old, base: null, dirty: false, rev: 1 }));
+  }, { date: day, old });
+  await page.goto(`/#/d/${day}`);
+  const suggestion = page.getByRole("button", { name: "Group 13 parts from one Garmin recording" });
+  await expect(suggestion).toBeVisible();
+  for (const width of [320, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const colorScheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme });
+      await checkWidth(page);
+      await expect(page).toHaveScreenshot(`garmin-event-suggestion-${width}-${colorScheme}.png`, { fullPage: true });
+    }
+  }
+  await suggestion.click();
+  const draft = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!).doc, day);
+  expect(draft.events).toHaveLength(2);
+  expect(draft.events.map((event: { entries: unknown[] }) => event.entries.length).sort((a: number, b: number) => a - b)).toEqual([1, 13]);
+  expect(draft.comments).toEqual(old.comments);
+  await expect(page.locator("details.training-event")).toHaveCount(1);
+});
+
 test("new manual activities use the selected day's current local time", async ({ page }) => {
   await page.clock.setFixedTime(new Date("2026-10-05T13:45:00+11:00"));
   await mockApi(page);

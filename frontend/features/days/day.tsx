@@ -17,6 +17,7 @@ import { AutoTextarea, NumberField } from "../../inputs";
 import { useOverlays } from "../../overlays";
 import { Modal } from "../../modal";
 import { SessionCard } from "../sessions/session";
+import { suggestedRecordingGroups } from "../../../shared/garmin/decisions";
 
 export function DayView({ date }: { date: string }) {
   useSyncExternalStore(subscribeLibrary, libraryVersion);
@@ -42,6 +43,7 @@ export function DayView({ date }: { date: string }) {
   const active = daySessions(doc).some((s) => !s.endedAt);
   const records = orderedDayRecords(doc);
   const sessionIndices = new Map(records.filter((record) => record.kind === "session").map((record) => [record.s.id, record.index]));
+  const recordingGroups = suggestedRecordingGroups(doc);
   const actionFor = (event: TrainingEvent, entry: EventEntry): EventAction | undefined => {
     const id = entry.kind === "session" ? entry.session.id : entry.activity.id;
     if (event.entries.length > 1) return { label: "Remove from training event", onClick: () => undoable("Part removed from training event", (day) => detachEventEntry(day, event.id, entry.kind, id)) };
@@ -71,6 +73,12 @@ export function DayView({ date }: { date: string }) {
   return (
     <DayContext.Provider value={ctx}>
       {entry?.conflict && <ConflictBanner date={date} local={doc} other={entry.conflict.doc} />}
+      {recordingGroups.map((ids) => {
+        const count = ids.reduce((total, id) => total + (doc.events.find((event) => event.id === id)?.entries.length ?? 0), 0);
+        return <button key={ids[0]} type="button" className="btn big secondary recording-suggestion" onClick={() => undoable("Recording parts grouped", (day) => mergeEvents(day, ids))}>
+          Group {count} parts from one Garmin recording
+        </button>;
+      })}
       {orderedDayEvents(doc).map((record) => record.kind === "comment"
         ? <CommentCard key={`comment-${record.comment.id}`} comment={record.comment} />
         : record.event.entries.length > 1 || record.event.title || record.event.notes
