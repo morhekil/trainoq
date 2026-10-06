@@ -472,6 +472,41 @@ test("day records follow their displayed start times and reorder after edits", a
   await expect.poll(recordNames).toEqual(["Tennis", "Session 1", "Session 2", "Walk", "Run"]);
 });
 
+test("a grouped visit appears as one expandable event with its original parts", async ({ page }) => {
+  await mockApi(page);
+  const activity = (id: string, exerciseId: string, startedAt: string) => ({ id, exerciseId, comment: "", startedAt, result: { minutes: 5, calories: 20 } });
+  const grouped = {
+    v: 7, date: day, comments: [{ id: "comment", time: "17:05", text: "Between intervals" }],
+    events: [{ id: "rehab", title: "Rehab walk-run", notes: "", entries: [
+      { kind: "activity", activity: activity("walk", "seed:0033", "2026-09-15T06:24:00.000Z") },
+      { kind: "activity", activity: activity("run", "seed:0170", "2026-09-15T06:30:00.000Z") },
+    ] }], ignoredGarminSourceKeys: [], totalCalories: null,
+  };
+  await page.addInitScript(({ date, grouped }) => {
+    localStorage.setItem("tq:authed", JSON.stringify(true));
+    localStorage.setItem(`tq:day:${date}`, JSON.stringify({ doc: grouped, base: null, dirty: false, rev: 1 }));
+  }, { date: day, grouped });
+  await page.goto(`/#/d/${day}`);
+  const event = page.locator("details.training-event");
+  await expect(event).toHaveCount(1);
+  await expect(event.locator("summary")).toHaveText("Rehab walk-run · 2 parts");
+  await expect(page.getByText("Between intervals")).toBeVisible();
+  await expect(page.getByLabel("Start time for Run")).toBeHidden();
+  await event.locator("summary").focus();
+  expect(await event.locator("summary").evaluate((summary) => getComputedStyle(summary).outlineStyle)).not.toBe("none");
+  await page.keyboard.press("Enter");
+  await expect(page.getByLabel("Start time for Run")).toBeVisible();
+  await expect(page.getByLabel("Start time for Walk")).toBeVisible();
+  for (const width of [320, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const colorScheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme });
+      await checkWidth(page);
+      await expect(page).toHaveScreenshot(`grouped-event-${width}-${colorScheme}.png`, { fullPage: true });
+    }
+  }
+});
+
 test("new manual activities use the selected day's current local time", async ({ page }) => {
   await page.clock.setFixedTime(new Date("2026-10-05T13:45:00+11:00"));
   await mockApi(page);

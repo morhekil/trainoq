@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { addEventEntry, dayActivities, daySessions, emptyDay, removeEventEntry, type Activity, type DayComment, type DayDoc } from "../../../shared/days/model";
+import { addEventEntry, dayActivities, daySessions, emptyDay, removeEventEntry, type Activity, type DayComment, type DayDoc, type EventEntry, type TrainingEvent } from "../../../shared/days/model";
 import { dayToText } from "../../../shared/days/format";
-import { activityTime, orderedDayRecords } from "../../../shared/days/timeline";
+import { activityTime, orderedDayEvents, orderedDayRecords } from "../../../shared/days/timeline";
 import { useDay } from "./hooks";
 import { libraryVersion, refreshLibrary, subscribeLibrary } from "../exercises/library";
 import { exerciseName } from "../exercises/catalog";
@@ -41,6 +41,7 @@ export function DayView({ date }: { date: string }) {
   const ctx = useMemo<DayCtx>(() => ({ date, doc, update, undoable, recentVersion }), [date, doc, update, undoable, recentVersion]);
   const active = daySessions(doc).some((s) => !s.endedAt);
   const records = orderedDayRecords(doc);
+  const sessionIndices = new Map(records.filter((record) => record.kind === "session").map((record) => [record.s.id, record.index]));
 
   const start = () =>
     update((d) => {
@@ -56,11 +57,11 @@ export function DayView({ date }: { date: string }) {
   return (
     <DayContext.Provider value={ctx}>
       {entry?.conflict && <ConflictBanner date={date} local={doc} other={entry.conflict.doc} />}
-      {records.map((record) => record.kind === "session"
-        ? <SessionCard key={`session-${record.s.id}`} s={record.s} index={record.index} total={daySessions(doc).length} />
-        : record.kind === "activity"
-          ? <ActivityCard key={`activity-${record.a.id}`} a={record.a} />
-          : <CommentCard key={`comment-${record.comment.id}`} comment={record.comment} />)}
+      {orderedDayEvents(doc).map((record) => record.kind === "comment"
+        ? <CommentCard key={`comment-${record.comment.id}`} comment={record.comment} />
+        : record.event.entries.length > 1
+          ? <TrainingEventCard key={record.event.id} event={record.event} sessionIndices={sessionIndices} totalSessions={daySessions(doc).length} />
+          : <EventPart key={record.event.id} entry={record.event.entries[0]} sessionIndices={sessionIndices} totalSessions={daySessions(doc).length} />)}
       {!active && (
         <button type="button" className="btn big primary start-btn" onClick={start}>
           <Icon name="play" size={18} />
@@ -72,6 +73,22 @@ export function DayView({ date }: { date: string }) {
       <TotalsCard />
     </DayContext.Provider>
   );
+}
+
+function EventPart({ entry, sessionIndices, totalSessions }: { entry: EventEntry; sessionIndices: Map<string, number>; totalSessions: number }) {
+  return entry.kind === "session"
+    ? <SessionCard s={entry.session} index={sessionIndices.get(entry.session.id) ?? 0} total={totalSessions} />
+    : <ActivityCard a={entry.activity} />;
+}
+
+function TrainingEventCard({ event, sessionIndices, totalSessions }: { event: TrainingEvent; sessionIndices: Map<string, number>; totalSessions: number }) {
+  return <details className="card training-event">
+    <summary>{event.title?.trim() || "Training event"} · {event.entries.length} parts</summary>
+    <div className="event-parts">
+      {event.notes && <p>{event.notes}</p>}
+      {event.entries.map((entry) => <EventPart key={entry.kind === "session" ? `session-${entry.session.id}` : `activity-${entry.activity.id}`} entry={entry} sessionIndices={sessionIndices} totalSessions={totalSessions} />)}
+    </div>
+  </details>;
 }
 
 function ConflictBanner({ date, local, other }: { date: string; local: DayDoc; other: DayDoc | null }) {

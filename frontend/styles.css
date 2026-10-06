@@ -322,6 +322,26 @@ textarea {
   color: var(--muted);
 }
 
+.training-event {
+  display: block;
+}
+
+.training-event summary {
+  cursor: pointer;
+  font-weight: 700;
+}
+
+.training-event summary:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.event-parts {
+  display: grid;
+  gap: var(--pad);
+  padding-block-start: var(--pad);
+}
+
 .hint {
   font-size: 13px;
   color: var(--muted);

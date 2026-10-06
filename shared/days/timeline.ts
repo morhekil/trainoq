@@ -1,5 +1,5 @@
 import type { Session } from "../sessions/model";
-import { dayActivities, daySessions, type Activity, type DayComment, type DayDoc } from "./model";
+import { dayActivities, daySessions, type Activity, type DayComment, type DayDoc, type TrainingEvent } from "./model";
 
 export type DayRecord =
   | { kind: "session"; s: Session; index: number; time: string }
@@ -24,6 +24,18 @@ export function orderedDayRecords(day: DayDoc, timeZone?: string): DayRecord[] {
   return [
     ...sessions.map((s, index) => ({ kind: "session" as const, s, index, time: localTime(s.startedAt, timeZone) })),
     ...dayActivities(day).map((a) => ({ kind: "activity" as const, a, time: activityTime(a, timeZone) })),
+    ...day.comments.map((comment) => ({ kind: "comment" as const, comment, time: comment.time })),
+  ].sort((a, b) => (a.time ?? "99:99").localeCompare(b.time ?? "99:99"));
+}
+
+export type DayTimelineItem = { kind: "event"; event: TrainingEvent; time: string | null } | { kind: "comment"; comment: DayComment; time: string };
+
+export function orderedDayEvents(day: DayDoc, timeZone?: string): DayTimelineItem[] {
+  return [
+    ...day.events.map((event) => ({
+      kind: "event" as const, event,
+      time: event.entries.map((entry) => entry.kind === "session" ? localTime(entry.session.startedAt, timeZone) : activityTime(entry.activity, timeZone)).filter((time): time is string => time !== null).sort()[0] ?? null,
+    })),
     ...day.comments.map((comment) => ({ kind: "comment" as const, comment, time: comment.time })),
   ].sort((a, b) => (a.time ?? "99:99").localeCompare(b.time ?? "99:99"));
 }
