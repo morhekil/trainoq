@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { normalizeDay } from "../shared/days/migrate";
 import { daySchema } from "../shared/days/schema";
 import { addEventEntry, detachEventEntry, emptyDay, mergeEvents } from "../shared/days/model";
+import { eventMeasurements } from "../shared/days/summary";
 
 describe("training events", () => {
   it("wraps v6 records as stable singleton events without changing their contents", () => {
@@ -59,4 +60,22 @@ it("separates a part without losing its data or the original event note", () => 
   expect(day.events[0]).toMatchObject({ id: event.id, notes: "Visit note", entries: [{ activity: run }] });
   expect(day.events[1]).toMatchObject({ title: null, notes: "", entries: [{ activity: walk }] });
   expect(daySchema.parse(day)).toEqual(day);
+});
+
+it("labels saved rounded minutes separately from one FIT recording's source timer and elapsed span", () => {
+  const day = emptyDay("2026-10-02");
+  const fit = "garmin:123:2026-10-02T06:00:00.000Z";
+  const event = addEventEntry(day, { kind: "activity", activity: { id: "walk", exerciseId: "seed:0033", startedAt: "2026-10-02T06:00:00.000Z", garminSourceKey: `${fit}:0`, comment: "", result: { minutes: 5, calories: 20 } } });
+  event.entries.push({ kind: "activity", activity: { id: "run", exerciseId: "seed:0170", startedAt: "2026-10-02T06:06:00.000Z", garminSourceKey: `${fit}:1`, comment: "", result: { minutes: 7, calories: 25 } } });
+  const source = (index: number, startUtc: string, timerSeconds: number, elapsedSeconds: number, activeCalories: number) => ({ sourceKey: `${fit}:${index}`, sport: "running", subSport: null, title: "Run", startUtc, localDate: "2026-10-02", offsetMinutes: 600, timerSeconds, elapsedSeconds, activeCalories });
+  const sources = new Map([
+    [`${fit}:0`, source(0, "2026-10-02T06:00:00.000Z", 318, 340, 28)],
+    [`${fit}:1`, source(1, "2026-10-02T06:06:00.000Z", 402, 440, 37)],
+  ]);
+  expect(eventMeasurements(event, sources)).toEqual({ savedMinutes: 12, timerSeconds: 720, elapsedSeconds: 800, activeCalories: 65, sourceComplete: true });
+  event.summaryOverrides = { timerSeconds: null, activeCalories: 70 };
+  expect(eventMeasurements(event, sources)).toEqual({ savedMinutes: 12, timerSeconds: null, elapsedSeconds: 800, activeCalories: 70, sourceComplete: true });
+  event.entries.push({ kind: "session", session: { id: "strength", startedAt: "2026-10-02T06:07:00.000Z", endedAt: null, warmup: [], main: [], cooldown: [], calories: 40, notes: "" } });
+  event.summaryOverrides = undefined;
+  expect(eventMeasurements(event, sources)).toEqual({ savedMinutes: null, timerSeconds: null, elapsedSeconds: null, activeCalories: null, sourceComplete: false });
 });

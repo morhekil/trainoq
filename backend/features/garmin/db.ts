@@ -37,6 +37,12 @@ export async function allGarmin(db: D1Database): Promise<GarminActivitySummary[]
   return results.map((row) => summarySchema.parse(JSON.parse(row.summary)));
 }
 
+export async function garminSummariesByKeys(db: D1Database, sourceKeys: string[]): Promise<GarminActivitySummary[]> {
+  const { results } = await db.prepare(`SELECT summary FROM garmin_activities WHERE source_key IN (${sourceKeys.map(() => "?").join(", ")})`)
+    .bind(...sourceKeys).all<{ summary: string }>();
+  return results.map((row) => summarySchema.parse(JSON.parse(row.summary)));
+}
+
 async function hash(summary: string): Promise<string> {
   const bytes = new TextEncoder().encode(summary);
   return Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)), (n) => n.toString(16).padStart(2, "0")).join("");

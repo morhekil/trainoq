@@ -30,6 +30,7 @@ const day = await api.days.get.query("2026-09-26");
 | `exercises.create` | mutation | `{ id: UUID, name: string }` | custom `{ id, name }`; legacy `legacy:<normalized name>` IDs are accepted for migration |
 | `exercises.library` | query | none | `{ catalog, stats: ExerciseStat[], history: Record<string, ExerciseHistoryEntry[]> }` |
 | `garmin.list` | query | `{ from: string, to: string, includeLinked?: boolean, cursor?: { importedAt: string, sourceKey: string } }` | `{ items, nextCursor }`, up to 20 imported summaries per page |
+| `garmin.summaries` | query | `{ sourceKeys: string[] }`, 1 to 100 FIT session keys | Imported summaries for those keys; missing keys are omitted |
 | `garmin.connection` | query | none | Connection status, email, last sync time and error, next backfill offset |
 | `garmin.connect` | mutation | `{ email: string, password: string }` | `{ status: "connected" \| "mfa" }` |
 | `garmin.verifyMfa` | mutation | `{ code: string }` | `{ status: "connected" }` |
@@ -53,6 +54,7 @@ The Garmin screen submits credentials through the authenticated API, clears the 
 Accepting a Garmin record as an activity copies its start time, source UTC offset when present, timer duration rounded to minutes, and active calories into a new editable activity. The offset preserves the Garmin time of day when reviewing a trip from another time zone. Linking a strength recording to a completed session keeps its exercises, sets, time, notes, and any already entered calories; otherwise it fills active calories once. Strength suggestions require the same source local date and a completed session starting within an hour. Multiple matches need an explicit choice. Ignoring stores the source key on the day. Unlinking or restoring removes the decision key while leaving the Trainoq item and its edits intact.
 
 The source key ends with the FIT session's message index. Removing that final index identifies summaries from one FIT recording for grouping suggestions; each child retains its full source key.
+Grouped events with parts from one FIT show saved, rounded part minutes separately from the raw Garmin timer sum and elapsed span. The displayed Garmin active calorie sum comes from imported source fields; it does not set the day-wide manual `totalCalories`. Mixed events do not derive a calorie sum from overlapping session and activity measurements. `garmin.summaries` supplies the source fields to the day view; an offline day still retains its saved parts and values.
 
 Moving a linked activity to a corrected date preserves its ID, exercise, notes, duration, calories and displayed local time. Both day drafts are stored locally first, then the old day syncs before the new one so the unique source link moves in order. If either sync fails, the drafts remain available through the normal sync retry and conflict controls. The saved source offset remains the original FIT offset; edit the start time if the corrected date has another UTC offset.
 

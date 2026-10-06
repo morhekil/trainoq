@@ -511,6 +511,39 @@ test("a grouped visit appears as one expandable event with its original parts", 
   await expect(page.getByTestId("share-text")).toContainText("Run · 5 min · 20 cal");
 });
 
+test("a grouped FIT event labels saved minutes and Garmin source measurements separately", async ({ page }) => {
+  await mockApi(page);
+  const fit = "garmin:123:2026-09-15T06:00:00.000Z";
+  const source = (index: number, startUtc: string, timerSeconds: number, elapsedSeconds: number, activeCalories: number) => ({ sourceKey: `${fit}:${index}`, sport: "running", subSport: null, title: "Run", startUtc, localDate: day, offsetMinutes: 600, timerSeconds, elapsedSeconds, activeCalories });
+  await page.route("**/api/trpc/garmin.summaries**", async (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ result: { data: [
+    source(0, "2026-09-15T06:00:00.000Z", 318, 340, 28), source(1, "2026-09-15T06:06:00.000Z", 402, 440, 37),
+  ] } }) }));
+  const activity = (id: string, exerciseId: string, startedAt: string, index: number, minutes: number) => ({ id, exerciseId, startedAt, garminSourceKey: `${fit}:${index}`, comment: "", result: { minutes, calories: 20 } });
+  const saved = { v: 7, date: day, comments: [], events: [{ id: "fit", title: "Walk-run", notes: "Intervals", entries: [
+    { kind: "activity", activity: activity("walk", "seed:0033", "2026-09-15T06:00:00.000Z", 0, 5) },
+    { kind: "activity", activity: activity("run", "seed:0170", "2026-09-15T06:06:00.000Z", 1, 7) },
+  ] }], ignoredGarminSourceKeys: [], totalCalories: null };
+  await page.addInitScript(({ date, saved }) => {
+    localStorage.setItem("tq:authed", "true");
+    localStorage.setItem(`tq:day:${date}`, JSON.stringify({ doc: saved, base: null, dirty: false, rev: 1 }));
+  }, { date: day, saved });
+  await page.goto(`/#/d/${day}`);
+  const event = page.locator("details.training-event");
+  await event.locator("summary").click();
+  await expect(event).toContainText("Saved parts: 12 min (rounded)");
+  await expect(event).toContainText("Garmin timer: 12 min");
+  await expect(event).toContainText("Elapsed span: 13.3 min");
+  await expect(event).toContainText("Garmin source active calories: 65 cal");
+  for (const width of [320, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const colorScheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme });
+      await checkWidth(page);
+      await expect(page).toHaveScreenshot(`grouped-fit-measurements-${width}-${colorScheme}.png`, { fullPage: true });
+    }
+  }
+});
+
 test("groups existing parts by choice, edits the event, and separates a part", async ({ page }) => {
   await mockApi(page);
   const activity = (id: string, exerciseId: string, startedAt: string) => ({ id, exerciseId, comment: "", startedAt, result: { minutes: 5, calories: 20 } });

@@ -5,7 +5,7 @@ import { authed } from "../auth/router";
 import { dateSchema } from "../../../shared/days/schema";
 import { loginGarmin, verifyGarminMfa } from "./connect";
 import { readGarminConnection, saveGarminConnection, updateGarminConnection } from "./connection";
-import { listGarmin } from "./db";
+import { garminSummariesByKeys, listGarmin } from "./db";
 import { syncGarminPage } from "./sync";
 
 export const garminRouter = t.router({
@@ -46,4 +46,6 @@ export const garminRouter = t.router({
     cursor: z.object({ importedAt: z.iso.datetime(), sourceKey: z.string().min(1) }).optional(),
   }).refine(({ from, to }) => from <= to, "Invalid date range"))
     .query(({ ctx, input }) => listGarmin(ctx.env.DB, input.from, input.to, input.includeLinked, input.cursor)),
+  summaries: authed.input(z.object({ sourceKeys: z.array(z.string().regex(/^garmin:\d+:\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z:\d+$/)).min(1).max(100) }))
+    .query(({ ctx, input }) => garminSummariesByKeys(ctx.env.DB, input.sourceKeys)),
 });

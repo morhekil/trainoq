@@ -43,6 +43,7 @@ it("lists automatically imported Garmin summaries through the authenticated Work
     timerSeconds: 1561.339, elapsedSeconds: 1600, activeCalories: 172,
   };
   await expect(client.garmin.list.query({ from: "2026-09-28", to: "2026-09-28" })).rejects.toMatchObject({ data: { code: "UNAUTHORIZED" } });
+  await expect(client.garmin.summaries.query({ sourceKeys: [source.sourceKey] })).rejects.toMatchObject({ data: { code: "UNAUTHORIZED" } });
   await client.auth.login.mutate({ password: "test-password" });
   const manualImport = await worker.fetch(new Request("https://example.test/api/trpc/garmin.import", {
     method: "POST", headers: { Cookie: cookie, "Content-Type": "application/json" },
@@ -54,6 +55,7 @@ it("lists automatically imported Garmin summaries through the authenticated Work
   const corrected = { ...source, activeCalories: 173 };
   expect(await importGarminSummaries(db, [corrected, { ...source, sourceKey: "bad" }])).toEqual({ inserted: 0, unchanged: 0, updated: 1, rejected: 1 });
   expect(await client.garmin.list.query({ from: "2026-09-28", to: "2026-09-28" })).toMatchObject({ items: [{ ...corrected, status: "pending" }], nextCursor: null });
+  expect(await client.garmin.summaries.query({ sourceKeys: [source.sourceKey, "garmin:999:2026-09-28T07:00:00.000Z:0"] })).toEqual([corrected]);
   sqlite.prepare("INSERT INTO garmin_links VALUES (?, ?, ?, ?)").run(source.sourceKey, "2026-09-28", "activity", "run");
   expect(await client.garmin.list.query({ from: "2026-09-28", to: "2026-09-28" })).toEqual({ items: [], nextCursor: null });
   expect(await client.garmin.list.query({ from: "2026-09-28", to: "2026-09-28", includeLinked: true })).toMatchObject({ items: [{ status: "activity", targetId: "run" }], nextCursor: null });

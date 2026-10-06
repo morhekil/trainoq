@@ -18,17 +18,32 @@ import { useOverlays } from "../../overlays";
 import { Modal } from "../../modal";
 import { SessionCard } from "../sessions/session";
 import { suggestedRecordingGroups } from "../../../shared/garmin/decisions";
+import { eventMeasurements } from "../../../shared/days/summary";
+import type { GarminActivitySummary } from "../../../shared/garmin/fit";
+import { formatNum } from "../../../shared/exercises/format";
+import { request, trpc } from "../../api";
 
 export function DayView({ date }: { date: string }) {
   useSyncExternalStore(subscribeLibrary, libraryVersion);
   const { doc, entry, update, replace } = useDay(date);
   const { openSheet, toast } = useOverlays();
   const [recentVersion, setRecentVersion] = useState(0);
+  const [sources, setSources] = useState<Map<string, GarminActivitySummary>>(new Map());
+  const sourceKeys = doc.events.flatMap((event) => event.entries.map((part) => part.kind === "session" ? part.session.garminSourceKey : part.activity.garminSourceKey).filter((key): key is string => !!key)).sort().join("|");
 
   useEffect(() => {
     void refreshLibrary();
     void loadRecentSessions(date).then((changed) => changed && setRecentVersion((v) => v + 1));
   }, [date]);
+
+  useEffect(() => {
+    let current = true;
+    setSources(new Map());
+    if (sourceKeys) void request(trpc.garmin.summaries.query({ sourceKeys: sourceKeys.split("|") }))
+      .then((items) => { if (current) setSources(new Map(items.map((item) => [item.sourceKey, item]))); })
+      .catch(() => {});
+    return () => { current = false; };
+  }, [sourceKeys]);
 
   const undoable = useCallback(
     (message: string, fn: (d: DayDoc) => void) => {
@@ -82,7 +97,7 @@ export function DayView({ date }: { date: string }) {
       {orderedDayEvents(doc).map((record) => record.kind === "comment"
         ? <CommentCard key={`comment-${record.comment.id}`} comment={record.comment} />
         : record.event.entries.length > 1 || record.event.title || record.event.notes
-          ? <TrainingEventCard key={record.event.id} event={record.event} sessionIndices={sessionIndices} totalSessions={daySessions(doc).length} actionFor={actionFor} />
+          ? <TrainingEventCard key={record.event.id} event={record.event} sources={sources} sessionIndices={sessionIndices} totalSessions={daySessions(doc).length} actionFor={actionFor} />
           : <EventPart key={record.event.id} entry={record.event.entries[0]} sessionIndices={sessionIndices} totalSessions={daySessions(doc).length} action={actionFor(record.event, record.event.entries[0])} />)}
       {!active && (
         <button type="button" className="btn big primary start-btn" onClick={start}>
@@ -112,8 +127,10 @@ function EventPart({ entry, sessionIndices, totalSessions, action }: { entry: Ev
     : <ActivityCard a={entry.activity} eventAction={action} />;
 }
 
-function TrainingEventCard({ event, sessionIndices, totalSessions, actionFor }: { event: TrainingEvent; sessionIndices: Map<string, number>; totalSessions: number; actionFor: (event: TrainingEvent, entry: EventEntry) => EventAction | undefined }) {
+function TrainingEventCard({ event, sources, sessionIndices, totalSessions, actionFor }: { event: TrainingEvent; sources: ReadonlyMap<string, GarminActivitySummary>; sessionIndices: Map<string, number>; totalSessions: number; actionFor: (event: TrainingEvent, entry: EventEntry) => EventAction | undefined }) {
   const { update } = useDayCtx();
+  const measurements = eventMeasurements(event, sources);
+  const minutes = (seconds: number) => formatNum(Math.round(seconds / 6) / 10);
   const change = (fn: (item: TrainingEvent) => void) => update((day) => {
     const item = day.events.find((candidate) => candidate.id === event.id);
     if (item) fn(item);
@@ -121,6 +138,12 @@ function TrainingEventCard({ event, sessionIndices, totalSessions, actionFor }: 
   return <details className="card training-event">
     <summary>{event.title?.trim() || "Training event"} · {event.entries.length} {event.entries.length === 1 ? "part" : "parts"}</summary>
     <div className="event-parts">
+      {(measurements.savedMinutes != null || measurements.timerSeconds != null || measurements.elapsedSeconds != null || measurements.activeCalories != null) && <div className="hint">
+        {measurements.savedMinutes != null && <div>Saved parts: {formatNum(measurements.savedMinutes)} min (rounded)</div>}
+        {measurements.timerSeconds != null && <div>{event.summaryOverrides?.timerSeconds === undefined ? "Garmin timer" : "Event timer (entered)"}: {minutes(measurements.timerSeconds)} min</div>}
+        {measurements.elapsedSeconds != null && <div>{event.summaryOverrides?.elapsedSeconds === undefined ? "Elapsed span" : "Event elapsed (entered)"}: {minutes(measurements.elapsedSeconds)} min</div>}
+        {measurements.activeCalories != null && <div>{event.summaryOverrides?.activeCalories === undefined ? "Garmin source active calories" : "Event active calories (entered)"}: {formatNum(measurements.activeCalories)} cal</div>}
+      </div>}
       <label className="event-field">Event title
         <input className="text" type="text" value={event.title ?? ""} onChange={(changeEvent) => change((item) => (item.title = changeEvent.target.value || null))} />
       </label>
