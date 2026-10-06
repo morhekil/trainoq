@@ -130,6 +130,8 @@ A standalone item owns its ordered `sets`. A superset owns ordered `members` and
 
 There is no `Block` in v8. V2 used `{ id, exercises: [...] }` blocks in all three session sections; v1 used them in `main` and individual legacy items in `warmup` and `cooldown`. [`shared/days/migrate.ts`](shared/days/migrate.ts) converts v1/v2 session data and v1/v2/v3 name-based activities. Old activity `notes` become the performance `comment`; minutes and calories keep their values. V1 through v5 day-level `morning` and `notes` become comments at 08:00 and 23:30 when no more specific audit applies. V6 sessions and activities become singleton events with stable IDs derived from the original item IDs. V7 session records receive weight × reps parameters without changing their values. Get, list, and export return v8 even when an untouched D1 row contains an older version; saving writes v8. An older client cannot overwrite a stored v8 day.
 
+On 7 Oct 2026, the eight existing days with session records were converted to record-specific v8 parameters using [`scripts/migrate_exercise_records.py`](scripts/migrate_exercise_records.py). This one-time conversion kept their original comments and set identities, and rebuilt `exercise_log` from each converted day. Activity-only v7 rows still normalize on read.
+
 ### Storage and read models
 
 | Store | Contents | Role |
