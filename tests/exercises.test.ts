@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SEED_EXERCISES } from "../shared/exercises/catalog";
 import { nameKey, type Section } from "../shared/exercises/model";
-import { searchExercises, suggestedSet, lastTime } from "../frontend/features/exercises/library";
+import { searchExercises, suggestedSet, suggestedSetup, lastTime } from "../frontend/features/exercises/library";
 import { clearPendingParams, hasPendingParams, paramsFor, setExerciseParams } from "../frontend/features/exercises/params";
 import { exerciseHistory, exerciseLibrary } from "../backend/features/exercises/db";
 import { addEventEntry, emptyDay } from "../shared/days/model";
@@ -40,6 +40,24 @@ describe("starter exercise list", () => {
 
 describe("exercise history", () => {
   afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
+
+  it("prefills bench angle from the newest matching entry across sections", () => {
+    const map = new Map<string, string>();
+    vi.stubGlobal("localStorage", {
+      get length() { return map.size; }, key: (i: number) => [...map.keys()][i] ?? null,
+      getItem: (key: string) => map.get(key) ?? null,
+      setItem: (key: string, value: string) => { map.set(key, value); },
+      removeItem: (key: string) => { map.delete(key); },
+    });
+    const params = { setup: ["angle"], perSet: ["weight", "reps"] } as const;
+    const doc = emptyDay("2026-09-22");
+    addEventEntry(doc, { kind: "session", session: { id: "s", startedAt: "2026-09-22T07:00:00Z", endedAt: null, calories: null, notes: "",
+      warmup: [], main: [{ kind: "exercise", id: "e", exerciseId: "seed:0001", comment: "", params: { setup: [...params.setup], perSet: [...params.perSet] }, setup: { angle: 40 }, sets: [{ id: "s", type: "working", weight: 20, reps: 8 }] }], cooldown: [],
+    } });
+    map.set(`tq:day:${doc.date}`, JSON.stringify({ doc, dirty: true, base: null, rev: 1 }));
+    expect(suggestedSetup("seed:0001", "2026-09-23", { setup: [...params.setup], perSet: [...params.perSet] })).toEqual({ angle: 40 });
+    expect(suggestedSetup("seed:0001", "2026-09-23", { perSet: ["weight", "reps"] })).toBeUndefined();
+  });
 
   it("includes a seed's legacy log rows and their weight × reps parameters", async () => {
     let ids: unknown[] = [];

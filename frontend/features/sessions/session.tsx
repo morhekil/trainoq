@@ -1,7 +1,7 @@
 import { useEffect, useState, type CSSProperties, type PointerEvent } from "react";
 import { formatDateShort } from "../../../shared/days/format";
 import { minutesBetween, itemSets } from "../../../shared/sessions/format";
-import { formatSet, formatSets } from "../../../shared/exercises/format";
+import { formatSet, formatSets, formatSetup } from "../../../shared/exercises/format";
 import type { Section, SessionItem, SetType, SessionExercise, Superset, WorkSet } from "../../../shared/exercises/model";
 import { PARAMS, paramsName, sameParams, type Param, type ParamSet } from "../../../shared/exercises/params";
 import type { Session } from "../../../shared/sessions/model";
@@ -159,7 +159,7 @@ function SectionEditor({ s, section, title }: { s: Session; section: Section; ti
         <div className="row-actions">
           <button type="button" className="btn ghost" onClick={addExercise}><Icon name="plus" size={18} />Add exercise</button>
           <button type="button" className={`btn ghost drop-target ${over === "superset:new" ? "drop-over" : ""}`} data-drop-key="superset:new" onClick={addSuperset}><Icon name="plus" size={18} />Superset{drag?.kind === "exercise" && <span className="drop-caption">Drop to create</span>}</button>
-          {s[section].length === 0 && source && <button type="button" className="btn ghost" onClick={() => upItems((items) => items.push(...copyItems(source.items)))}><Icon name="repeat" size={18} />Repeat {when} ({repeatCount})</button>}
+          {s[section].length === 0 && source && <button type="button" className="btn ghost" onClick={() => upItems((items) => items.push(...copyItems(source.items, date)))}><Icon name="repeat" size={18} />Repeat {when} ({repeatCount})</button>}
         </div>
         {drag && <div className="sr-only" role="status">{over ? "Valid drop target" : "Drag to a labelled drop target"}</div>}
       </>}
@@ -170,11 +170,11 @@ function SectionEditor({ s, section, title }: { s: Session; section: Section; ti
 function SupersetCard({ s, section, item, index, count, drag, over, startDrag, join }: {
   s: Session; section: Section; item: Superset; index: number; count: number; drag: Drag | null; over: string | null; startDrag: StartDrag; join: (exerciseId: string, supersetId: string) => void;
 }) {
-  const { update, undoable } = useDayCtx();
+  const { date, update, undoable } = useDayCtx();
   const { openPicker, openSheet } = useOverlays();
   const letter = blockLetter(index);
   const up = (fn: (superset: Superset) => void) => update((d) => fn(findSuperset(findSession(d, s.id), section, item.id)));
-  const add = () => openPicker({ section, title: "Add to superset", onPick: (id) => up((superset) => addMember(superset, newMember(id))) });
+  const add = () => openPicker({ section, title: "Add to superset", onPick: (id) => up((superset) => addMember(superset, newMember(id, date))) });
   const menu = () => {
     const actions: SheetAction[] = [{ label: "Add exercise to superset", icon: "plus", onClick: add }];
     item.rounds.forEach((round, i) => {
@@ -274,7 +274,12 @@ function ExerciseEditor({ s, section, item, member, label, index, count, memberI
         <button type="button" className={`icon-btn ${member.comment ? "on" : ""}`} aria-label="Comment" aria-pressed={noteOpen || !!member.comment} onClick={() => setNoteOpen(!noteOpen)}><Icon name="note" size={18} /></button>
         <button type="button" className="icon-btn" aria-label={`${name} options`} onClick={menu}><Icon name="more" /></button>
       </div>
-      {last && <div className="last-time">Last {formatDateShort(last.date)}{!sameParams(last.params, member.params) ? ` (${paramsName(last.params).toLowerCase()})` : ""}: {formatSets(last.sets, last.params) || "no sets"}</div>}
+      {last && <div className="last-time">Last {formatDateShort(last.date)}{formatSetup(last.setup, last.params) ? ` (${formatSetup(last.setup, last.params)})` : ""}{!sameParams(last.params, member.params) ? ` (${paramsName(last.params).toLowerCase()})` : ""}: {formatSets(last.sets, last.params) || "no sets"}</div>}
+      {member.params.setup?.map((key) => <label key={key} className="setup-field">
+        <span>{PARAMS[key].column}</span>
+        <NumberField value={member.setup?.[key] ?? null} decimal={PARAMS[key].decimal} placeholder="–" ariaLabel={`${name} ${PARAMS[key].spoken}`} onChange={(value) => upMember((target) => { target.setup = { ...target.setup, [key]: value }; })} />
+        <span aria-hidden="true">{PARAMS[key].unit}</span>
+      </label>)}
       {(noteOpen || member.comment) && <AutoTextarea minRows={1} className="comment" placeholder="Comment (form, pain, range…)" aria-label={`${name} comment`} autoFocus={noteOpen && !member.comment} value={member.comment} onChange={(event) => upMember((target) => (target.comment = event.target.value))} />}
       {sets.length > 0 && <div className="sets" style={{ "--cols": member.params.perSet.length } as CSSProperties}>
         <div className="set-head"><span aria-hidden="true">{item.kind === "superset" ? "Round" : "Set"}</span><button type="button" className="params-btn" onClick={changeParams}><span className="sr-only">{name} parameters: </span>{member.params.perSet.map((key) => <span key={key}>{PARAMS[key].column}</span>)}<Icon name="chevronDown" size={14} /></button></div>

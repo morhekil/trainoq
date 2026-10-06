@@ -1,7 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { formatDateShort } from "../../../shared/days/format";
 import { dayActivities, daySessions } from "../../../shared/days/model";
-import { formatSets } from "../../../shared/exercises/format";
+import { formatSets, formatSetup } from "../../../shared/exercises/format";
 import type { ExerciseHistoryEntry } from "../../../shared/exercises/model";
 import { paramsKey, paramsName } from "../../../shared/exercises/params";
 import { itemSets } from "../../../shared/sessions/format";
@@ -99,7 +99,7 @@ export function ExerciseDetail({ id }: { id: string }) {
       {[...grouped].map(([key, group]) => <div className="exercise-history-group" key={key}>
         <h3>{key === "activity" ? "Activity" : paramsName((group[0] as Extract<ExerciseHistoryEntry, { params: unknown }>).params)} <span>{group.length} {group.length === 1 ? "entry" : "entries"}</span></h3>
         {group.map((entry, index) => <div className="exercise-history-entry" key={`${entry.date}-${entry.section}-${index}`}>
-          <strong>{formatDateShort(entry.date)} · {sectionName[entry.section]}</strong>
+          <strong>{formatDateShort(entry.date)} · {sectionName[entry.section]}{entry.section !== "activity" && formatSetup(entry.setup, entry.params) ? ` (${formatSetup(entry.setup, entry.params)})` : ""}</strong>
           <span>{entry.section === "activity"
             ? [entry.result.minutes != null ? `${entry.result.minutes} min` : null, entry.result.calories != null ? `${entry.result.calories} cal` : null].filter(Boolean).join(" · ") || "No values"
             : formatSets(entry.sets, entry.params) || "No values"}</span>

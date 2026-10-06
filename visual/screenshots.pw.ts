@@ -1106,3 +1106,17 @@ test("Exercises lists logged records and groups detail history by parameters", a
   await expect(page.getByRole("heading", { name: /Weight × reps/ })).toBeVisible();
   await expect(page.getByText(/40kg×8/)).toBeVisible();
 });
+
+test("bench angle is recorded once per entry", async ({ page }) => {
+  await mockApi(page);
+  await page.addInitScript(({ date, doc }) => {
+    localStorage.setItem("tq:authed", JSON.stringify(true));
+    localStorage.setItem(`tq:day:${date}`, JSON.stringify({ doc, base: null, dirty: false, rev: 1 }));
+  }, { date: day, doc });
+  await page.goto(`/#/d/${day}`);
+  await page.getByRole("button", { name: /Squat parameters/ }).click();
+  await page.getByRole("radio", { name: /Bench angle, weight × reps/ }).check();
+  await page.getByRole("button", { name: "Use Bench angle, weight × reps" }).click();
+  await page.getByRole("textbox", { name: "Squat bench angle in degrees" }).fill("40");
+  await expect(page.getByRole("textbox", { name: "Squat bench angle in degrees" })).toHaveValue("40");
+});

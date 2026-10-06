@@ -644,6 +644,8 @@ textarea {
 .params-btn > span:not(.sr-only) { text-align: center; }
 .params-btn > svg { justify-self: center; color: var(--muted); }
 .num.compact { min-height: 40px; border-radius: 10px; background: var(--surface-2); text-align: center; }
+.setup-field { display: flex; gap: 8px; align-items: center; margin: 6px 0 4px 38px; color: var(--muted); font-size: 13px; }
+.setup-field .num { width: 72px; min-height: 40px; }
 .set-badge {
   width: 100%;
   height: 40px;

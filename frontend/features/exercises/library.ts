@@ -199,6 +199,28 @@ export function lastTime(exerciseId: string, beforeDate: string, section: Sectio
   return best;
 }
 
+/** Setup values from the newest matching record, including an earlier entry on this day. */
+export function suggestedSetup(exerciseId: string, date: string, params: ParamSet): ParamValues | undefined {
+  if (!params.setup?.length) return undefined;
+  let bestDate = "";
+  let best: ParamValues | undefined;
+  for (const entry of lib.history[exerciseId] ?? []) {
+    if (entry.section === "activity" || entry.date > date || entry.date < bestDate || !sameParams(entry.params, params)) continue;
+    bestDate = entry.date;
+    best = entry.setup;
+  }
+  for (const { doc } of cachedDays()) {
+    if (doc.date > date || doc.date < bestDate) continue;
+    for (const session of daySessions(doc)) for (const section of ["warmup", "main", "cooldown"] as const)
+      for (const item of session[section]) for (const record of item.kind === "exercise" ? [item] : item.members)
+        if (record.exerciseId === exerciseId && sameParams(record.params, params)) {
+          bestDate = doc.date;
+          best = record.setup;
+        }
+  }
+  return best ? Object.fromEntries(params.setup.map((key) => [key, best?.[key] ?? null])) : undefined;
+}
+
 /** Suggested values for a fresh set of the given type, based on last time. */
 export function suggestedSet(
   exerciseId: string,

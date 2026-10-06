@@ -1,7 +1,7 @@
 import type { Section, SessionItem, SetType, StandaloneExercise, Superset, WorkSet } from "../../../shared/exercises/model";
 import { daySessions, type DayDoc } from "../../../shared/days/model";
 import type { Session } from "../../../shared/sessions/model";
-import { suggestedSet } from "../exercises/library";
+import { suggestedSet, suggestedSetup } from "../exercises/library";
 import { uid } from "../../id";
 import { normalizeParams, valuesOf, type ParamValues } from "../../../shared/exercises/params";
 import { paramsFor } from "../exercises/params";
@@ -47,13 +47,15 @@ export function makeSet(exercise: StandaloneExercise, date: string, section: Sec
 }
 
 export function newExercise(exerciseId: string, date: string, section: Section): StandaloneExercise {
-  const exercise: StandaloneExercise = { kind: "exercise", ...newMember(exerciseId), sets: [] };
+  const exercise: StandaloneExercise = { kind: "exercise", ...newMember(exerciseId, date), sets: [] };
   exercise.sets.push(makeSet(exercise, date, section));
   return exercise;
 }
 
-export function newMember(exerciseId: string) {
-  return { id: uid(), exerciseId, comment: "", params: normalizeParams(paramsFor(exerciseId)) };
+export function newMember(exerciseId: string, date?: string) {
+  const params = normalizeParams(paramsFor(exerciseId));
+  const setup = date ? suggestedSetup(exerciseId, date, params) : undefined;
+  return { id: uid(), exerciseId, comment: "", params, ...(setup ? { setup } : {}) };
 }
 
 export function nextSetType(t: SetType): SetType {
@@ -68,12 +70,12 @@ export function setLabels(sets: Pick<WorkSet, "type">[]): string[] {
   });
 }
 
-export function copyItems(items: SessionItem[]): SessionItem[] {
+export function copyItems(items: SessionItem[], date?: string): SessionItem[] {
   return items.map((item) => item.kind === "exercise"
-    ? { ...item, id: uid(), comment: "", params: normalizeParams(paramsFor(item.exerciseId)), setup: undefined, sets: item.sets.map((set) => ({ id: uid(), type: set.type, ...valuesOf(undefined, paramsFor(item.exerciseId)) })) }
+    ? { ...item, ...newMember(item.exerciseId, date), comment: "", sets: item.sets.map((set) => ({ id: uid(), type: set.type, ...valuesOf(undefined, paramsFor(item.exerciseId)) })) }
     : {
       kind: "superset" as const, id: uid(),
-      members: item.members.map((member) => ({ ...member, id: uid(), comment: "", params: normalizeParams(paramsFor(member.exerciseId)), setup: undefined })),
+      members: item.members.map((member) => ({ ...member, ...newMember(member.exerciseId, date), comment: "" })),
       rounds: item.rounds.map((round) => ({ id: uid(), type: round.type })),
       results: [] as Superset["results"],
     }).map((item) => {

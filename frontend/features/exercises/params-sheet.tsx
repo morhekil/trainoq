@@ -17,7 +17,7 @@ export function removalText(lost: { param: Param; count: number }[], noun: "set"
 }
 
 export function ParamsSheet({ state, onClose }: { state: ParamsSheetState; onClose: () => void }) {
-  const options = PARAM_TEMPLATES.slice(0, 8);
+  const options = PARAM_TEMPLATES;
   const list = options.some((option) => sameParams(option, state.current)) ? options : [state.current, ...options];
   const [selected, setSelected] = useState(state.current);
   const lost = state.removed?.(selected) ?? [];
