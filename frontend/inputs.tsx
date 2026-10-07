@@ -28,6 +28,7 @@ export function NumberField({
   decimal = true,
   className = "",
   ariaLabel,
+  max,
 }: {
   value: number | null;
   onChange: (v: number | null) => void;
@@ -35,6 +36,7 @@ export function NumberField({
   decimal?: boolean;
   className?: string;
   ariaLabel?: string;
+  max?: number;
 }) {
   const [draft, setDraft] = useState<string | null>(null);
   // value changed from outside (e.g. stepper tapped while focused): drop the draft
@@ -64,7 +66,7 @@ export function NumberField({
         const raw = decimal ? e.target.value.replace(/[^0-9.,]/g, "") : e.target.value.replace(/[^0-9]/g, "");
         setDraft(raw);
         const n = parseNum(raw);
-        if (raw.trim() === "" || n != null) onChange(n);
+        if (raw.trim() === "" || n != null) onChange(n != null && max != null ? Math.min(n, max) : n);
       }}
     />
   );
@@ -77,6 +79,7 @@ export function Stepper({
   decimal,
   placeholder,
   label,
+  max = Infinity,
 }: {
   value: number | null;
   onChange: (v: number | null) => void;
@@ -84,10 +87,11 @@ export function Stepper({
   decimal?: boolean;
   placeholder?: string;
   label: string;
+  max?: number;
 }) {
   const bump = (dir: 1 | -1) => {
     const base = value ?? 0;
-    const next = Math.max(0, Math.round((base + dir * step) * 100) / 100);
+    const next = Math.min(max, Math.max(0, Math.round((base + dir * step) * 100) / 100));
     onChange(value == null && dir === -1 ? 0 : next);
   };
   return (
@@ -95,7 +99,7 @@ export function Stepper({
       <button type="button" className="step-btn" aria-label={`${label} minus ${step}`} onClick={() => bump(-1)}>
         <Icon name="minus" size={16} />
       </button>
-      <NumberField value={value} onChange={onChange} decimal={decimal} placeholder={placeholder} ariaLabel={label} />
+      <NumberField value={value} onChange={onChange} decimal={decimal} placeholder={placeholder} ariaLabel={label} max={max} />
       <button type="button" className="step-btn" aria-label={`${label} plus ${step}`} onClick={() => bump(1)}>
         <Icon name="plus" size={16} />
       </button>

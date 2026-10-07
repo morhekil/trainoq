@@ -1196,6 +1196,26 @@ test("custom parameters validate, save a template and delete it with Undo", asyn
   await expect(page.getByText("Box reps")).toBeVisible();
 });
 
+test("band values stay within 0 to 5 when typed or stepped", async ({ page }) => {
+  await mockApi(page);
+  await page.addInitScript(({ date, doc }) => {
+    localStorage.setItem("tq:authed", JSON.stringify(true));
+    localStorage.setItem(`tq:day:${date}`, JSON.stringify({ doc, base: null, dirty: false, rev: 1 }));
+  }, { date: day, doc });
+  await page.goto(`/#/d/${day}`);
+  await page.getByRole("button", { name: /Squat parameters/ }).click();
+  const dialog = page.getByRole("dialog", { name: "Squat parameters" });
+  await dialog.getByRole("radio", { name: "Custom" }).check();
+  await dialog.getByRole("checkbox", { name: "kg" }).uncheck();
+  await dialog.getByRole("checkbox", { name: "Band" }).check();
+  await dialog.getByRole("button", { name: "Use Band × reps" }).click();
+  const band = page.getByRole("textbox", { name: "Squat W1 band assistance from 0 to 5" });
+  await band.fill("7");
+  await expect(band).toHaveValue("5");
+  await page.getByRole("button", { name: "Squat W1 band assistance from 0 to 5 plus 1" }).click();
+  await expect(band).toHaveValue("5");
+});
+
 test("a pending template retries on the periodic sync without a day draft", async ({ page }) => {
   await page.clock.install();
   await mockApi(page);

@@ -3,7 +3,7 @@ import { formatDateShort } from "../../../shared/days/format";
 import { minutesBetween, itemSets } from "../../../shared/sessions/format";
 import { formatSet, formatSets, formatSetup } from "../../../shared/exercises/format";
 import type { Section, SessionItem, SetType, SessionExercise, Superset, WorkSet } from "../../../shared/exercises/model";
-import { PARAMS, paramsName, sameParams, type Param, type ParamSet } from "../../../shared/exercises/params";
+import { BAND_MAX, PARAMS, paramsName, sameParams, type Param, type ParamSet } from "../../../shared/exercises/params";
 import type { Session } from "../../../shared/sessions/model";
 import { removeEventEntry } from "../../../shared/days/model";
 import { addMember, addRound, addSet, createSuperset, deleteSuperset, dissolveSuperset, joinPerformance, moveMember, removeMember, removeRound, removeSet, removedValues, reorderRound, setRecordParams, setRoundType, takeOutMember } from "../../../shared/sessions/ops";
@@ -318,8 +318,8 @@ function SetRow({ label, set, name, params, onCycle, onValue, dragHandle, onDrag
   return <div className="set-row">
     <div className="badge-cell"><button type="button" className={`set-badge ${set.type}`} aria-label={`${name} set ${label}, ${TYPE_NAME[set.type]}. Change type`} onClick={() => { setHint(TYPE_NAME[nextSetType(set.type)]); onCycle(); }}>{label}</button><span className="type-hint" role="status">{hint}</span></div>
     {params.perSet.map((key) => params.perSet.length <= 2
-      ? <Stepper key={key} value={set[key] ?? null} onChange={(value) => onValue(key, value)} step={PARAMS[key].step} decimal={PARAMS[key].decimal} placeholder="–" label={`${name} ${label} ${PARAMS[key].spoken}`} />
-      : <NumberField key={key} className="compact" value={set[key] ?? null} onChange={(value) => onValue(key, value)} decimal={PARAMS[key].decimal} placeholder="–" ariaLabel={`${name} ${label} ${PARAMS[key].spoken}`} />)}
+      ? <Stepper key={key} value={set[key] ?? null} onChange={(value) => onValue(key, value)} step={PARAMS[key].step} decimal={PARAMS[key].decimal} max={key === "band" ? BAND_MAX : undefined} placeholder="–" label={`${name} ${label} ${PARAMS[key].spoken}`} />
+      : <NumberField key={key} className="compact" value={set[key] ?? null} onChange={(value) => onValue(key, value)} decimal={PARAMS[key].decimal} max={key === "band" ? BAND_MAX : undefined} placeholder="–" ariaLabel={`${name} ${label} ${PARAMS[key].spoken}`} />)}
     {dragHandle ? <button type="button" className="drag-handle round-handle" aria-label={`Drag round ${label}; activate for options`} onPointerDown={dragHandle} onClick={onDragActivate}>⋮⋮</button> : <span />}
   </div>;
 }
