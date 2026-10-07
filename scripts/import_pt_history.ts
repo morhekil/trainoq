@@ -85,4 +85,4 @@ async function main([url, file]: string[]) {
   console.log(`saved ${result.saved.length}, unchanged ${result.unchanged.length}, conflicts ${result.conflicts.length}${result.conflicts.length ? `: ${result.conflicts.join(", ")}` : ""}`);
 }
 
-if (import.meta.main) await main(process.argv.slice(2));
+if (import.meta.main) await main(process.argv.slice(2)).catch((error: Error) => { console.error(error.message); process.exitCode = 1; });

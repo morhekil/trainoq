@@ -132,6 +132,8 @@ There is no `Block` in v8. V2 used `{ id, exercises: [...] }` blocks in all thre
 
 On 7 Oct 2026, the eight existing days with session records were converted to record-specific v8 parameters using [`scripts/migrate_exercise_records.py`](scripts/migrate_exercise_records.py). This one-time conversion kept their original comments and set identities, and rebuilt `exercise_log` from each converted day. Activity-only v7 rows still normalize on read.
 
+PT history from the Coach Pro export (September 2022 to September 2026) is transcribed by hand into the line format described in [`scripts/import_pt_history.py`](scripts/import_pt_history.py), which maps every note to canonical exercises and parameters and keeps the raw note as the session's notes. [`scripts/import_pt_history.ts`](scripts/import_pt_history.ts) sends the result through `exercises.create`, `exercises.setParams` and `days.save`, so the Worker validates each day and rebuilds `exercise_log` as it does for browser saves. Re-running skips days already holding the same document; any other existing day is reported, not overwritten. The 24 Sep 2026 PT work joins the start of that day's logged session. Note dates are the session dates; a note written between midnight and 06:00 belongs to the previous day.
+
 ### Storage and read models
 
 | Store | Contents | Role |
