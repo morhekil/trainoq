@@ -163,6 +163,7 @@ EXERCISES = {
     "Hindu push-up": (None, WR),
     "Russian push-up": (None, R),
     "Plank to push-up": (None, R),
+    "Push-up hold": (None, T),
     "Pike push-up": ("seed:0121", ("height", "reps")),
     "Handstand push-up negative": (None, R),
     "Dips": ("seed:0044", WR),
@@ -262,6 +263,7 @@ EXERCISES = {
     "Handstand heel and toe pull": (None, R),
     "Chest-to-wall handstand tuck": (None, R),
     "Handstand shoulder tap": (None, R),
+    "Parallette handstand knee tuck": (None, R),
     "Wall walk": ("seed:0149", R),
     "Headstand": (None, T),
     "Box shoulder stand": (None, R),
@@ -288,6 +290,7 @@ EXERCISES = {
     "Plank shoulder tap": (None, R),
     "Bridge shoulder tap": (None, R),
     "Slider knee tuck": (None, R),
+    "Stir the pot": (None, R),
     "Incline crunch": (None, WR),
     "Incline twisting sit-up": (None, WR),
     "Half-kneeling med ball throw": (None, R),
@@ -314,6 +317,9 @@ EXERCISES = {
     "Rower": ("seed:0035", ("distance", "time")),
     "Ski erg": (None, ("distance", "time")),
 }
+
+# Carries default to weight x time; their PT laps are a history-only reading, so the default stays.
+KEEP_DEFAULT = {"Farmer carry", "Suitcase carry"}
 
 STAMP = re.compile(r"^(\d\d-[A-Z][a-z]{2}-\d\d \d\d:\d\d) Hours:.*$", re.M)
 HEADER = re.compile(r"^@ (\d\d-[A-Z][a-z]{2}-\d\d \d\d:\d\d)(?: #(\d+))?$")
@@ -506,7 +512,8 @@ def build(export_text, blocks):
                    **sections, "calories": None, "notes": notes_text}
         day["events"].append({"id": new_id(), "title": None, "notes": "", "entries": [{"kind": "session", "session": session}]})
 
-    exercises = [{"id": exercise_id(name), "name": name, "params": {"perSet": list(EXERCISES[name][1])}, "new": EXERCISES[name][0] is None}
+    exercises = [{"id": exercise_id(name), "name": name, "params": {"perSet": list(EXERCISES[name][1])}, "new": EXERCISES[name][0] is None,
+                  **({"keepDefault": True} if name in KEEP_DEFAULT else {})}
                  for name in EXERCISES if name in used]
     return {"exercises": exercises, "days": [{"date": key, "doc": days[key]} for key in sorted(days)], "merges": merges}
 

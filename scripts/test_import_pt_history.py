@@ -110,6 +110,9 @@ class ImportTest(unittest.TestCase):
         self.assertTrue(sled["new"])
         self.assertRegex(sled["id"], r"^[0-9a-f-]{36}$")
         self.assertEqual(sled["params"], {"perSet": ["weight", "reps"]})
+        self.assertNotIn("keepDefault", sled)
+        carry = build(EXPORT, parse_blocks(DSL.replace("Sled push: 35/4", "Farmer carry: 24/2")))["exercises"]
+        self.assertTrue(next(e for e in carry if e["name"] == "Farmer carry")["keepDefault"])
 
     def test_every_note_must_be_transcribed_once(self):
         with self.assertRaisesRegex(ValueError, "21-Dec-22 09:55"):
