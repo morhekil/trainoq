@@ -10,6 +10,7 @@ export function formatValue(param: Param, value: number): string {
     case "weight": return value === 0 ? "BW" : `${formatNum(value)}kg`;
     case "reps": return `×${formatNum(value)}`;
     case "time": return value < 120 ? `${formatNum(value)}s` : `${Math.floor(value / 60)}:${String(Math.round(value % 60)).padStart(2, "0")}`;
+    case "band": return `band ${formatNum(value)}`;
     case "distance": return value < 1000 ? `${formatNum(value)}m` : `${formatNum(value / 1000)}km`;
     default: return `${formatNum(value)}${PARAMS[param].unit}`;
   }

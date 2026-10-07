@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { DayDoc } from "./model";
 import { normalizeDay, type LegacyDayDoc, type V2DayDoc, type V3DayDoc, type V4DayDoc, type V5DayDoc, type V6DayDoc, type V7DayDoc } from "./migrate";
 import { DATE_RE } from "./model";
-import { PARAMS, PARAM_KEYS, type Param } from "../exercises/params";
+import { BAND_MAX, PARAMS, PARAM_KEYS, type Param } from "../exercises/params";
 
 export const dateSchema = z.string().regex(DATE_RE);
 const setValues = { weight: z.number().finite().nullable(), reps: z.number().finite().nullable() };
@@ -65,7 +65,7 @@ const dayIssues = (day: { events: { id: string; entries: { kind: "session" | "ac
 export const v7DaySchema = z.object({ v: z.literal(7), ...dayFields, comments, events: z.array(event), ignoredGarminSourceKeys: z.array(z.string().min(1)) }).superRefine(dayIssues) satisfies z.ZodType<V7DayDoc>;
 
 const paramKey = z.enum(PARAM_KEYS as [Param, ...Param[]]);
-const valueShape = Object.fromEntries(PARAM_KEYS.map((key) => [key, z.number().finite().nullable().optional()])) as Record<Param, z.ZodOptional<z.ZodNullable<z.ZodNumber>>>;
+const valueShape = Object.fromEntries(PARAM_KEYS.map((key) => [key, (key === "band" ? z.number().int().min(0).max(BAND_MAX) : z.number().finite()).nullable().optional()])) as Record<Param, z.ZodOptional<z.ZodNullable<z.ZodNumber>>>;
 const inOrder = (keys: Param[]) => keys.every((key, index) => index === 0 || PARAM_KEYS.indexOf(keys[index - 1]) < PARAM_KEYS.indexOf(key));
 export const paramSetSchema = z.strictObject({ perSet: z.array(paramKey).min(1).max(3), setup: z.array(paramKey).min(1).max(2).optional() })
   .refine(({ perSet, setup = [] }) => inOrder(perSet) && inOrder(setup), "List parameters once each, in registry order")

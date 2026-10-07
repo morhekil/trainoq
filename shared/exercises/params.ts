@@ -2,6 +2,7 @@
 export const PARAMS = {
   height: { name: "Box height", column: "Box in", unit: "in", spoken: "box height in inches", step: 2, decimal: false, scope: "set" },
   edge: { name: "Edge", column: "Edge mm", unit: "mm", spoken: "edge in millimetres", step: 5, decimal: false, scope: "set" },
+  band: { name: "Band", column: "Band", unit: "", spoken: "band assistance from 0 to 5", step: 1, decimal: false, scope: "set" },
   distance: { name: "Distance", column: "m", unit: "m", spoken: "distance in metres", step: 100, decimal: false, scope: "set" },
   weight: { name: "Weight", column: "kg", unit: "kg", spoken: "weight", step: 2.5, decimal: true, scope: "set" },
   time: { name: "Time", column: "Sec", unit: "s", spoken: "seconds", step: 5, decimal: false, scope: "set" },
@@ -9,6 +10,8 @@ export const PARAMS = {
   angle: { name: "Bench angle", column: "Bench", unit: "°", spoken: "bench angle in degrees", step: 5, decimal: false, scope: "setup" },
 } as const;
 export type Param = keyof typeof PARAMS;
+/** Band assistance runs from 0 (no band) to 5 (most assistance). */
+export const BAND_MAX = 5;
 export const PARAM_KEYS = Object.keys(PARAMS) as Param[];
 export interface ParamSet { perSet: Param[]; setup?: Param[] }
 export type ParamValues = Partial<Record<Param, number | null>>;

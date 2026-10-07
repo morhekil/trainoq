@@ -68,7 +68,7 @@ The saved document is `DayDoc` v8. These shapes are a map for readers; the curre
 
 ```ts
 type SetType = "warmup" | "working" | "backoff";
-type Param = "height" | "edge" | "distance" | "weight" | "time" | "reps" | "angle";
+type Param = "height" | "edge" | "band" | "distance" | "weight" | "time" | "reps" | "angle";
 type ParamSet = { perSet: Param[]; setup?: Param[] };
 type ParamValues = Partial<Record<Param, number | null>>;
 type WorkSet = ParamValues & { id: string; type: SetType };
@@ -120,7 +120,7 @@ interface DayDoc {
 }
 ```
 
-Parameter keys have one canonical order. `height` is box height in inches (step 2); `edge` is millimetres (step 5); `distance` is metres (step 100); `weight` is kilograms (step 2.5, with 0 meaning bodyweight); `time` is seconds (step 5); and `reps` is a count (step 1). These six are per set. `angle` is bench angle in degrees (step 5) and belongs once per entry in `setup`. A parameter set has one to three per-set keys and at most two setup keys, without repeats or keys in the wrong scope. Writers send `null` for empty selected values; readers accept a missing selected key as empty. `paramsName()` derives display names from the keys, so template names are not saved in day records.
+Parameter keys have one canonical order. `height` is box height in inches (step 2); `edge` is millimetres (step 5); `band` is band assistance as a whole number from 0 (no band) to 5 (most assistance); `distance` is metres (step 100); `weight` is kilograms (step 2.5, with 0 meaning bodyweight); `time` is seconds (step 5); and `reps` is a count (step 1). These seven are per set. `angle` is bench angle in degrees (step 5) and belongs once per entry in `setup`. A parameter set has one to three per-set keys and at most two setup keys, without repeats or keys in the wrong scope. Writers send `null` for empty selected values; readers accept a missing selected key as empty. `paramsName()` derives display names from the keys, so template names are not saved in day records.
 
 Each saved session or activity belongs to exactly one event. A lone item has a singleton event; grouping items changes their event membership while retaining their IDs and edits. Entries in a combined event are ordered by start time. Separating a part creates a new singleton and keeps the grouped event's note. Combining refuses event-level totals or secondary titles and notes that would otherwise be lost. Pending Garmin summaries remain outside the day document. `Activity` uses the catalog ID and comment of a session performance, with minutes and calories in `result`. Session calories, activity calories, and the manually entered daily `totalCalories` are separate fields. `Section` locates an item within a session; `ExerciseContext` also includes activities. `SetType` describes a set or superset round independently of its section. A catalog `Exercise.id` identifies the exercise name, while each `PerformedExercise.id` identifies one occurrence. Built-in definitions come from [`shared/exercises/seed.ts`](shared/exercises/seed.ts); custom definitions use UUIDs created on the device and are stored in `exercise_catalog`. The same exercise can be chosen in a session or as an activity.
 
