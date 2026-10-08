@@ -98,3 +98,16 @@ describe("dayToText", () => {
     expect(daySummary(doc, (id) => id === "walk" ? "Walk" : "Run")).toBe("Walk-run (2 parts) · 430 cal total");
   });
 });
+
+it("shares a combined activity as one line with a per-exercise breakdown", () => {
+  const segment = (i: number, exerciseId: string, minutes: number, calories: number) => ({ id: `s${i}`, exerciseId, startedAt: `2026-10-02T16:${String(24 + i * 5).padStart(2, "0")}:00+10:00`, result: { minutes, calories } });
+  const doc: DayDoc = {
+    v: 9, date: "2026-10-02", comments: [], garminLinks: [], totalCalories: null,
+    events: [{ id: "e", title: null, notes: "", entries: [{ kind: "activity", activity: { id: "combined", comment: "Run walk\nHot", effort: "high", segments: [
+      segment(0, "walk", 5, 20), segment(1, "run", 5, 40), segment(2, "walk", 6, 21), segment(3, "run", 5, 40), segment(4, "walk", 5, 20),
+    ] } }] }],
+  };
+  const name = (id: string) => id === "walk" ? "Walk" : "Run";
+  expect(dayToText(doc, name)).toContain("Activities\n- 16:24 Walk/Run · 26 min · 141 cal · RPE high – Run walk; Hot\n  3× Walk 16 min, 2× Run 10 min");
+  expect(daySummary(doc, name)).toBe("Walk/Run");
+});

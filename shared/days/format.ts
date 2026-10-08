@@ -1,4 +1,4 @@
-import { activityName, activityTotals, type Activity, type DayDoc } from "./model";
+import { activityHistory, activityName, activityTotals, type Activity, type DayDoc } from "./model";
 import { countExercises, sessionLines } from "../sessions/format";
 import { formatEffort, formatNum } from "../exercises/format";
 import { seedExercise } from "../exercises/catalog";
@@ -31,13 +31,17 @@ const seedName = (id: string) => seedExercise(id)?.name ?? id;
 /** Plain-text summary of a day, for sending to a PT or physio. */
 export function dayToText(d: DayDoc, name: (id: string) => string = seedName): string {
   const out: string[] = [formatDateLong(d.date)];
-  const activityLine = (a: Activity) => {
+  /** A combined activity adds "  7× Walk 32 min, 6× Run 30 min". */
+  const activityLines = (a: Activity) => {
     const bits = [activityName(a, name)];
     const totals = activityTotals(a);
     if (totals.minutes != null) bits.push(`${formatNum(totals.minutes)} min`);
     if (totals.calories != null) bits.push(`${formatNum(totals.calories)} cal`);
     if (a.effort) bits.push(formatEffort(a.effort));
-    return `- ${activityTime(a)} ${bits.join(" · ")}${a.comment.trim() ? ` – ${a.comment.trim()}` : ""}`;
+    const comment = a.comment.trim().split(/\s*\n\s*/).join("; ");
+    const breakdown = activityHistory(a).filter((item) => item.segments).map((item) =>
+      `${item.segments}× ${name(item.exerciseId)}${item.result.minutes != null ? ` ${formatNum(item.result.minutes)} min` : ""}`);
+    return [`- ${activityTime(a)} ${bits.join(" · ")}${comment ? ` – ${comment}` : ""}`, ...(breakdown.length ? [`  ${breakdown.join(", ")}`] : [])];
   };
   let inActivities = false;
   for (const record of orderedDayEvents(d)) {
@@ -50,7 +54,7 @@ export function dayToText(d: DayDoc, name: (id: string) => string = seedName): s
       if (event.notes.trim()) out.push(event.notes.trim());
       for (const entry of event.entries) {
         if (entry.kind === "session") out.push("", ...sessionLines(entry.session, name));
-        else out.push(activityLine(entry.activity));
+        else out.push(...activityLines(entry.activity));
       }
       inActivities = false;
     } else {
@@ -60,7 +64,7 @@ export function dayToText(d: DayDoc, name: (id: string) => string = seedName): s
         inActivities = false;
       } else {
         if (!inActivities) out.push("", "----", "Activities");
-        out.push(activityLine(entry.activity));
+        out.push(...activityLines(entry.activity));
         inActivities = true;
       }
     }
