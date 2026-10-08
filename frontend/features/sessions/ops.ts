@@ -5,6 +5,7 @@ import { suggestedSet, suggestedSetup } from "../exercises/library";
 import { uid } from "../../id";
 import { normalizeParams, valuesOf, type ParamValues } from "../../../shared/exercises/params";
 import { paramsFor } from "../exercises/params";
+import { nowLocal } from "../../../shared/days/time";
 export { move } from "../../../shared/sessions/ops";
 
 export function findSession(d: DayDoc, sid: string): Session {
@@ -29,7 +30,7 @@ export function findStandalone(session: Session, section: Section, id: string): 
 }
 
 export function newSession(): Session {
-  return { id: uid(), startedAt: new Date().toISOString(), endedAt: null, warmup: [], main: [], cooldown: [], calories: null, notes: "" };
+  return { id: uid(), startedAt: nowLocal(), endedAt: null, warmup: [], main: [], cooldown: [], calories: null, notes: "" };
 }
 
 export function makeSet(exercise: StandaloneExercise, date: string, section: Section, type?: SetType): WorkSet {

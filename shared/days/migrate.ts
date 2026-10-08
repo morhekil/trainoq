@@ -1,9 +1,9 @@
 import { exerciseIdForName } from "../exercises/catalog";
-import type { PerformedExercise, SessionItem, SetType, StandaloneExercise, Superset, WorkSet } from "../exercises/model";
-import type { Activity, DayDoc, TrainingEvent } from "./model";
+import type { ActivityResult, PerformedExercise, SessionItem, SetType, StandaloneExercise, Superset, WorkSet } from "../exercises/model";
+import type { DayDoc, EventEntry, GarminLink, TrainingEvent } from "./model";
 import type { Session } from "../sessions/model";
 import type { ParamSet } from "../exercises/params";
-import { withOffset } from "./time";
+import { atClock, formatOffset, withOffset } from "./time";
 
 // ponytail: v8 saved UTC instants without a zone. One home zone suits this single-user app; other users would need a zone setting.
 const HOME_TIME_ZONE = "Australia/Sydney";
@@ -14,19 +14,24 @@ function homeOffset(instant: string): string {
 }
 export const homeTime = (instant: string): string => withOffset(instant, homeOffset(instant));
 
+export type V8Activity = PerformedExercise & { result: ActivityResult; startedAt?: string; sourceOffsetMinutes?: number; garminSourceKey?: string };
+type V8Session = Session & { garminSourceKey?: string };
+type V8Event = Omit<TrainingEvent, "entries"> & { entries: ({ kind: "session"; session: V8Session } | { kind: "activity"; activity: V8Activity })[] };
+export type V8DayDoc = Omit<DayDoc, "v" | "events" | "garminLinks"> & { v: 8; events: V8Event[]; ignoredGarminSourceKeys: string[] };
+
 type OldValues = { weight: number | null; reps: number | null };
 export type V7SessionItem =
   | (Omit<StandaloneExercise, "params" | "setup" | "sets"> & { sets: ({ id: string; type: SetType } & OldValues)[] })
   | (Omit<Superset, "members" | "results"> & { members: PerformedExercise[]; results: ({ memberId: string; roundId: string } & OldValues)[] });
-type V7Session = Omit<Session, "warmup" | "main" | "cooldown"> & { warmup: V7SessionItem[]; main: V7SessionItem[]; cooldown: V7SessionItem[] };
-type V7Event = Omit<TrainingEvent, "entries"> & { entries: ({ kind: "session"; session: V7Session } | { kind: "activity"; activity: Activity })[] };
-export type V7DayDoc = Omit<DayDoc, "v" | "events"> & { v: 7; events: V7Event[] };
+type V7Session = Omit<V8Session, "warmup" | "main" | "cooldown"> & { warmup: V7SessionItem[]; main: V7SessionItem[]; cooldown: V7SessionItem[] };
+type V7Event = Omit<TrainingEvent, "entries"> & { entries: ({ kind: "session"; session: V7Session } | { kind: "activity"; activity: V8Activity })[] };
+export type V7DayDoc = Omit<V8DayDoc, "v" | "events"> & { v: 7; events: V7Event[] };
 
 export interface LegacyExercise { id: string; name: string; sets: ({ id: string; type: SetType } & OldValues)[]; comment: string }
 export interface LegacyBlock { id: string; exercises: LegacyExercise[] }
 export interface LegacyItem { id: string; name: string; reps: string; comment: string }
 export interface LegacyActivity { id: string; name: string; minutes: number | null; calories: number | null; notes: string }
-export type V6DayDoc = Omit<V7DayDoc, "v" | "events"> & { v: 6; sessions: V7Session[]; activities: Activity[] };
+export type V6DayDoc = Omit<V7DayDoc, "v" | "events"> & { v: 6; sessions: V7Session[]; activities: V8Activity[] };
 export type V5DayDoc = Omit<V6DayDoc, "v" | "comments"> & { v: 5; morning: string; notes: string };
 export type V4DayDoc = Omit<V5DayDoc, "v" | "ignoredGarminSourceKeys"> & { v: 4 };
 export type V3DayDoc = Omit<V4DayDoc, "v" | "activities"> & { v: 3; activities: LegacyActivity[] };
@@ -122,7 +127,7 @@ function itemToV8(item: V7SessionItem): SessionItem {
     : { ...item, members: item.members.map((member) => ({ ...member, params: v7Params() })) };
 }
 
-export function toV8(doc: V7DayDoc): DayDoc {
+export function toV8(doc: V7DayDoc): V8DayDoc {
   return { ...doc, v: 8, events: doc.events.map((event) => ({
     ...event, entries: event.entries.map((entry) => entry.kind === "activity" ? entry : ({
       ...entry, session: { ...entry.session,
@@ -134,8 +139,32 @@ export function toV8(doc: V7DayDoc): DayDoc {
   })) };
 }
 
-export function normalizeDay(doc: DayDoc | V7DayDoc | V6DayDoc | V5DayDoc | V4DayDoc | LegacyDayDoc | V2DayDoc | V3DayDoc): DayDoc {
-  return doc.v === 8 ? doc : toV8(normalizeToV7(doc));
+/** Pre-v5 drafts may lack an activity start; they get noon at the home offset. */
+function activityStartV9(date: string, a: V8Activity): string {
+  if (!a.startedAt) return atClock(date, "12:00", homeOffset(`${date}T02:00:00Z`));
+  return a.sourceOffsetMinutes == null ? homeTime(a.startedAt) : withOffset(a.startedAt, formatOffset(a.sourceOffsetMinutes));
+}
+
+export function toV9(doc: V8DayDoc): DayDoc {
+  const { ignoredGarminSourceKeys, events, ...rest } = doc;
+  const garminLinks: GarminLink[] = [];
+  const entry = (part: V8Event["entries"][number]): EventEntry => {
+    if (part.kind === "session") {
+      const { garminSourceKey, ...session } = part.session;
+      if (garminSourceKey) garminLinks.push({ sourceKey: garminSourceKey, target: { kind: "session", id: session.id } });
+      return { kind: "session", session: { ...session, startedAt: homeTime(session.startedAt), endedAt: session.endedAt && homeTime(session.endedAt) } };
+    }
+    const { id, exerciseId, comment, effort, result, garminSourceKey } = part.activity;
+    if (garminSourceKey) garminLinks.push({ sourceKey: garminSourceKey, target: { kind: "segment", id } });
+    return { kind: "activity", activity: { id, comment, ...(effort ? { effort } : {}), segments: [{ id, exerciseId, startedAt: activityStartV9(doc.date, part.activity), result }] } };
+  };
+  const converted = events.map((event) => ({ ...event, entries: event.entries.map(entry) }));
+  return { ...rest, v: 9, events: converted, garminLinks: [...garminLinks, ...ignoredGarminSourceKeys.map((sourceKey) => ({ sourceKey, target: null }))] };
+}
+
+export function normalizeDay(doc: DayDoc | V8DayDoc | V7DayDoc | V6DayDoc | V5DayDoc | V4DayDoc | LegacyDayDoc | V2DayDoc | V3DayDoc): DayDoc {
+  if (doc.v === 9) return doc;
+  return toV9(doc.v === 8 ? doc : toV8(normalizeToV7(doc)));
 }
 
 export function legacyExerciseNames(doc: LegacyDayDoc | V2DayDoc | V3DayDoc): string[] {

@@ -1,9 +1,12 @@
 // One DayDoc per calendar day; stored as JSON in D1 and localStorage.
 
 import type { Session } from "../sessions/model";
-import type { ActivityResult, PerformedExercise } from "../exercises/model";
+import type { ActivityResult, Effort } from "../exercises/model";
 
-export type Activity = PerformedExercise & { result: ActivityResult; startedAt?: string; sourceOffsetMinutes?: number; garminSourceKey?: string };
+/** One timed part of an activity, such as one walk interval of a Garmin recording. */
+export interface Segment { id: string; exerciseId: string; startedAt: string; result: ActivityResult }
+/** Segments are ordered by time. Name, totals and start are calculated from them. */
+export interface Activity { id: string; comment: string; effort?: Effort; segments: Segment[] }
 
 export interface DayComment { id: string; time: string; text: string }
 
@@ -17,25 +20,28 @@ export interface TrainingEvent {
   summaryOverrides?: { elapsedSeconds?: number | null; timerSeconds?: number | null; activeCalories?: number | null };
 }
 
+/** A Garmin decision: linked to a session or segment, or ignored (`target: null`). */
+export type GarminLink = { sourceKey: string; target: { kind: "session" | "segment"; id: string } | null };
+
 export interface DayDoc {
-  v: 8;
+  v: 9;
   date: string; // YYYY-MM-DD
   comments: DayComment[];
   events: TrainingEvent[];
-  ignoredGarminSourceKeys: string[];
+  garminLinks: GarminLink[];
   /** total daily active calories (e.g. from the watch), entered manually for now */
   totalCalories: number | null;
 }
 
 export function emptyDay(date: string): DayDoc {
-  return { v: 8, date, comments: [], events: [], ignoredGarminSourceKeys: [], totalCalories: null };
+  return { v: 9, date, comments: [], events: [], garminLinks: [], totalCalories: null };
 }
 
 export function isDayEmpty(d: DayDoc): boolean {
   return (
     d.comments.length === 0 &&
     d.events.length === 0 &&
-    d.ignoredGarminSourceKeys.length === 0 &&
+    d.garminLinks.length === 0 &&
     d.totalCalories == null
   );
 }
@@ -46,6 +52,29 @@ export function daySessions(d: DayDoc): Session[] {
 
 export function dayActivities(d: DayDoc): Activity[] {
   return d.events.flatMap((event) => event.entries.flatMap((entry) => entry.kind === "activity" ? [entry.activity] : []));
+}
+
+export const activityStart = (a: Activity): string => a.segments[0].startedAt;
+export const activityExercises = (a: Activity): string[] => [...new Set(a.segments.map((segment) => segment.exerciseId))];
+/** "Walk/Run": distinct exercises in order of first appearance */
+export const activityName = (a: Activity, name: (id: string) => string): string => activityExercises(a).map(name).join("/");
+/** Sums over the segments; null only when every segment's value is null. */
+export function activityTotals(a: Activity): ActivityResult {
+  const total = (key: keyof ActivityResult) => a.segments.every((segment) => segment.result[key] == null)
+    ? null : a.segments.reduce((sum, segment) => sum + (segment.result[key] ?? 0), 0);
+  return { minutes: total("minutes"), calories: total("calories") };
+}
+
+const entryId = (entry: EventEntry) => entry.kind === "session" ? entry.session.id : entry.activity.id;
+const entryStart = (entry: EventEntry) => Date.parse(entry.kind === "session" ? entry.session.startedAt : activityStart(entry.activity));
+
+export type LinkedPart = { event: TrainingEvent; entry: EventEntry; segmentId?: string; sourceKey?: string };
+/** Every session and segment of a day with its Garmin source key, if linked. */
+export function linkedKeys(d: DayDoc): LinkedPart[] {
+  const keys = new Map(d.garminLinks.flatMap((link) => link.target ? [[`${link.target.kind}:${link.target.id}`, link.sourceKey] as const] : []));
+  return d.events.flatMap((event) => event.entries.flatMap((entry): LinkedPart[] => entry.kind === "session"
+    ? [{ event, entry, sourceKey: keys.get(`session:${entry.session.id}`) }]
+    : entry.activity.segments.map((segment) => ({ event, entry, segmentId: segment.id, sourceKey: keys.get(`segment:${segment.id}`) }))));
 }
 
 export function addEventEntry(d: DayDoc, entry: EventEntry): TrainingEvent {
@@ -60,10 +89,7 @@ export function mergeEvents(d: DayDoc, ids: string[]): TrainingEvent {
   const [target, ...others] = selected as TrainingEvent[];
   if (selected.some((event) => event!.summaryOverrides) || others.some((event) => event.title || event.notes))
     throw new Error("Review event notes and totals before combining");
-  target.entries = selected.flatMap((event) => event!.entries).sort((a, b) => {
-    const time = (entry: EventEntry) => entry.kind === "session" ? entry.session.startedAt : entry.activity.startedAt ?? "9999";
-    return time(a).localeCompare(time(b));
-  });
+  target.entries = selected.flatMap((event) => event!.entries).sort((a, b) => entryStart(a) - entryStart(b));
   d.events = d.events.filter((event) => event === target || !ids.includes(event.id));
   return target;
 }
@@ -71,14 +97,18 @@ export function mergeEvents(d: DayDoc, ids: string[]): TrainingEvent {
 export function detachEventEntry(d: DayDoc, eventId: string, kind: EventEntry["kind"], id: string): void {
   const event = d.events.find((item) => item.id === eventId);
   if (!event || event.entries.length < 2) throw new Error("Choose a part of a grouped event");
-  const entry = event.entries.find((item) => item.kind === kind && (item.kind === "session" ? item.session.id : item.activity.id) === id);
+  const entry = event.entries.find((item) => item.kind === kind && entryId(item) === id);
   if (!entry) throw new Error("Event part not found");
   event.entries = event.entries.filter((item) => item !== entry);
   addEventEntry(d, entry);
 }
 
+/** Removes the session or activity and its Garmin links. */
 export function removeEventEntry(d: DayDoc, kind: EventEntry["kind"], id: string): void {
-  for (const event of d.events) event.entries = event.entries.filter((entry) => entry.kind !== kind || (entry.kind === "session" ? entry.session.id : entry.activity.id) !== id);
+  const removed = d.events.flatMap((event) => event.entries.filter((entry) => entry.kind === kind && entryId(entry) === id));
+  const targets = new Set(removed.flatMap((entry) => entry.kind === "session" ? [`session:${entry.session.id}`] : entry.activity.segments.map((segment) => `segment:${segment.id}`)));
+  d.garminLinks = d.garminLinks.filter((link) => !link.target || !targets.has(`${link.target.kind}:${link.target.id}`));
+  for (const event of d.events) event.entries = event.entries.filter((entry) => !removed.includes(entry));
   d.events = d.events.filter((event) => event.entries.length);
 }
 

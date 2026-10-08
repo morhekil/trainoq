@@ -47,6 +47,6 @@ export async function syncDefinitions(doc: DayDoc): Promise<void> {
     for (const section of ["warmup", "main", "cooldown"] as const)
       for (const item of session[section])
         for (const exercise of item.kind === "exercise" ? [item] : item.members) ids.add(exercise.exerciseId);
-  for (const activity of dayActivities(doc)) ids.add(activity.exerciseId);
+  for (const activity of dayActivities(doc)) for (const segment of activity.segments) ids.add(segment.exerciseId);
   for (const id of ids) await syncDefinition(id);
 }

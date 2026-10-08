@@ -101,9 +101,10 @@ describe("Worker tRPC boundary", () => {
     const first = await client.days.save.mutate({ date: old.date, doc: old, base: null });
     expect(first.ok).toBe(true);
     const migrated = (await client.days.get.query(old.date)).doc!;
-    expect(migrated.v).toBe(8);
+    expect(migrated.v).toBe(9);
     expect(daySessions(migrated)[0].warmup[0]).toMatchObject({ kind: "exercise", exerciseId: exerciseIdForName("Row"), comment: "Light band", sets: [{ reps: 10 }, { reps: 10 }] });
-    expect(dayActivities(migrated)).toEqual([{ id: "activity", exerciseId: exerciseIdForName("Trail run"), comment: "Steady", result: { minutes: 35, calories: 280 } }]);
+    expect(daySessions(migrated)[0].startedAt).toBe("2026-09-23T17:00:00+10:00");
+    expect(dayActivities(migrated)).toEqual([{ id: "activity", comment: "Steady", segments: [{ id: "activity", exerciseId: exerciseIdForName("Trail run"), startedAt: "2026-09-23T12:00:00+10:00", result: { minutes: 35, calories: 280 } }] }]);
     expect((await client.days.list.query({ withSessions: true, limit: 10 }))[0].doc).toEqual(migrated);
     expect((await client.backup.export.query()).days[0].doc).toEqual(migrated);
     expect(logRows[0].args[6]).toBe(exerciseIdForName("Row"));
@@ -126,8 +127,8 @@ describe("Worker tRPC boundary", () => {
     const customId = "e164c8eb-a785-4c78-a854-f7a9f0787215";
     const custom = emptyDay("2026-09-24");
     const activityId = "d34437b6-06c3-4b89-a9ed-37825a68822e";
-    addEventEntry(custom, { kind: "activity", activity: { id: "activity-2", exerciseId: activityId, comment: "Doubles", effort: "med", result: { minutes: 60, calories: 400 } } });
-    addEventEntry(custom, { kind: "session", session: { id: "custom", startedAt: "2026-09-24T07:00:00Z", endedAt: null, warmup: [], main: [
+    addEventEntry(custom, { kind: "activity", activity: { id: "activity-2", comment: "Doubles", effort: "med", segments: [{ id: "activity-2", exerciseId: activityId, startedAt: "2026-09-24T09:00:00+10:00", result: { minutes: 60, calories: 400 } }] } });
+    addEventEntry(custom, { kind: "session", session: { id: "custom", startedAt: "2026-09-24T17:00:00+10:00", endedAt: null, warmup: [], main: [
       { kind: "superset", id: "ss", members: [{ id: "member", exerciseId: customId, comment: "", effort: "max", params: { perSet: ["weight", "reps"] } }], rounds: [{ id: "round", type: "working" }], results: [{ memberId: "member", roundId: "round", weight: 0, reps: 8 }] },
     ], cooldown: [], calories: null, notes: "" } });
     await expect(client.days.save.mutate({ date: custom.date, doc: custom, base: null })).rejects.toMatchObject({ data: { code: "BAD_REQUEST" } });

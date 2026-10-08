@@ -10,7 +10,7 @@ export function ShareSheet({ date, onClose }: { date: string; onClose: () => voi
   useSyncExternalStore(subscribeLibrary, libraryVersion);
   const [feedback, setFeedback] = useState<string | null>(null);
   const doc = getEntry(date)?.doc;
-  const text = doc ? dayToText(doc, undefined, exerciseName) : formatDateLong(date);
+  const text = doc ? dayToText(doc, exerciseName) : formatDateLong(date);
   const canShare = typeof navigator.share === "function";
 
   const copy = async () => {

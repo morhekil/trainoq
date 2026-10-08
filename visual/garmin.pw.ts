@@ -107,7 +107,8 @@ test("accepts one FIT recording's thirteen parts as one event and leaves another
   await group.click();
   const draft = await page.evaluate(() => JSON.parse(localStorage.getItem("tq:day:2026-09-28")!).doc);
   expect(draft.events).toHaveLength(1);
-  expect(draft.events[0].entries.map((entry: any) => entry.activity.garminSourceKey)).toEqual(Array.from({ length: 13 }, (_, index) => `${fit}:${index}`));
+  const keyOf = new Map(draft.garminLinks.map((link: any) => [link.target.id, link.sourceKey]));
+  expect(draft.events[0].entries.map((entry: any) => keyOf.get(entry.activity.segments[0].id))).toEqual(Array.from({ length: 13 }, (_, index) => `${fit}:${index}`));
   await expect(page.getByLabel("Earlier walk Garmin recording")).toContainText("Pending");
   await expect(page.getByLabel("Run Garmin recording").first()).toContainText("Added activity");
   await expect(group).toHaveCount(0);
@@ -229,10 +230,10 @@ test("Garmin review can ignore and restore a recording in the local day draft", 
   await page.getByRole("button", { name: "Ignore Run" }).click();
   await expect(page.getByText("Ignored", { exact: true })).toBeVisible();
   const ignored = await page.evaluate(() => JSON.parse(localStorage.getItem("tq:day:2026-09-28")!));
-  expect(ignored.doc.ignoredGarminSourceKeys).toEqual([source.sourceKey]);
+  expect(ignored.doc.garminLinks).toEqual([{ sourceKey: source.sourceKey, target: null }]);
   await page.getByRole("button", { name: "Restore Run" }).click();
   const restored = await page.evaluate(() => JSON.parse(localStorage.getItem("tq:day:2026-09-28")!));
-  expect(restored.doc.ignoredGarminSourceKeys).toEqual([]);
+  expect(restored.doc.garminLinks).toEqual([]);
 });
 
 test("shows only Garmin connection and review controls", async ({ page }) => {
@@ -275,7 +276,7 @@ test("edits an accepted activity's Garmin local start time", async ({ page }) =>
   await expect(page).toHaveScreenshot("garmin-linked-day-dark.png", { fullPage: true });
   await input.fill("12:15");
   const draft = await page.evaluate(() => JSON.parse(localStorage.getItem("tq:day:2026-09-28")!));
-  expect(savedActivities(draft.doc)[0].startedAt).toBe("2026-09-28T06:45:00.000Z");
+  expect(savedActivities(draft.doc)[0].segments[0].startedAt).toBe("2026-09-28T12:15:00+05:30");
 });
 
 test("moves an accepted activity to a corrected Trainoq day", async ({ page }) => {
@@ -320,7 +321,8 @@ test("moves an accepted activity to a corrected Trainoq day", async ({ page }) =
   const drafts = await page.evaluate(() => ["2026-09-28", "2026-09-29"].map((date) => localStorage.getItem(`tq:day:${date}`)));
   const days = drafts.map((value) => JSON.parse(value!).doc);
   expect(savedActivities(days[0])).toEqual([]);
-  expect(savedActivities(days[1])).toMatchObject([{ id: "run", comment: "Corrected", startedAt: "2026-09-29T01:22:05.000Z", result: { minutes: 30, calories: 160 } }]);
+  expect(savedActivities(days[1])).toMatchObject([{ id: "run", comment: "Corrected", segments: [{ startedAt: "2026-09-29T11:22:05+10:00", result: { minutes: 30, calories: 160 } }] }]);
+  expect(days[1].garminLinks).toEqual([{ sourceKey: key, target: { kind: "segment", id: "run" } }]);
   await expect.poll(() => saves.length).toBe(2);
   expect(saves).toEqual(["2026-09-28", "2026-09-29"]);
   expect(newStartedBeforeOldComplete).toBe(false);
@@ -351,8 +353,7 @@ test("requires an explicit session choice when strength matches are ambiguous", 
   await expect(page.getByRole("button", { name: "Link to session" })).toHaveCount(0);
   await chooser.selectOption("second");
   await page.getByRole("button", { name: "Link to session" }).click();
-  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("tq:day:2026-09-28") ?? "null")?.doc?.events?.[1]?.entries?.[0]?.session?.garminSourceKey)).toBe(source.sourceKey);
+  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem("tq:day:2026-09-28") ?? "null")?.doc?.garminLinks)).toEqual([{ sourceKey: source.sourceKey, target: { kind: "session", id: "second" } }]);
   const saved = await page.evaluate(() => JSON.parse(localStorage.getItem("tq:day:2026-09-28")!).doc);
-  expect(savedSessions(saved)[0].garminSourceKey).toBeUndefined();
   expect(savedSessions(saved)[1]).toMatchObject({ id: "second", calories: 362, notes: "Keep sets" });
 });

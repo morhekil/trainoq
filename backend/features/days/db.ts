@@ -33,19 +33,19 @@ function logRows(doc: DayDoc): LogRow[] {
           });
   }
   for (const activity of dayActivities(doc))
-    rows.push({
-      section: "activity", exerciseId: activity.exerciseId, name: seedExercise(activity.exerciseId)?.name ?? "",
-      detail: JSON.stringify({ ...activity.result, ...(activity.effort ? { effort: activity.effort } : {}) }),
-    });
+    for (const segment of activity.segments)
+      rows.push({
+        section: "activity", exerciseId: segment.exerciseId, name: seedExercise(segment.exerciseId)?.name ?? "",
+        detail: JSON.stringify({ ...segment.result, ...(activity.effort ? { effort: activity.effort } : {}) }),
+      });
   return rows;
 }
 
+/** A segment link is indexed against its owning activity, the item the Garmin review opens. */
 function garminLinks(doc: DayDoc): { key: string; kind: string; id: string | null }[] {
-  return [
-    ...daySessions(doc).filter((s) => s.garminSourceKey).map((s) => ({ key: s.garminSourceKey!, kind: "session", id: s.id })),
-    ...dayActivities(doc).filter((a) => a.garminSourceKey).map((a) => ({ key: a.garminSourceKey!, kind: "activity", id: a.id })),
-    ...doc.ignoredGarminSourceKeys.map((key) => ({ key, kind: "ignored", id: null })),
-  ];
+  const owners = new Map(dayActivities(doc).flatMap((activity) => activity.segments.map((segment) => [segment.id, activity.id] as const)));
+  return doc.garminLinks.map(({ sourceKey: key, target }) => !target ? { key, kind: "ignored", id: null }
+    : target.kind === "session" ? { key, kind: "session", id: target.id } : { key, kind: "activity", id: owners.get(target.id) ?? null });
 }
 
 export async function getDay(db: D1Database, date: string): Promise<StoredDay | null> {

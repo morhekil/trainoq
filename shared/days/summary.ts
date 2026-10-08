@@ -1,13 +1,14 @@
-import type { TrainingEvent } from "./model";
+import { linkedKeys, type DayDoc, type TrainingEvent } from "./model";
 import { fitRecordingKey, type GarminActivitySummary } from "../garmin/fit";
 
 /** Source measurements stay separate from the saved, rounded activity values. */
-export function eventMeasurements(event: TrainingEvent, sources: ReadonlyMap<string, GarminActivitySummary>) {
-  const activities = event.entries.flatMap((entry) => entry.kind === "activity" ? [entry.activity] : []);
-  const keys = activities.map((activity) => activity.garminSourceKey);
-  const sameFit = activities.length === event.entries.length && keys.every((key) => key && fitRecordingKey(key) === fitRecordingKey(keys[0]!));
-  const savedMinutes = sameFit && activities.every((activity) => activity.result.minutes != null)
-    ? activities.reduce((total, activity) => total + activity.result.minutes!, 0) : null;
+export function eventMeasurements(day: DayDoc, event: TrainingEvent, sources: ReadonlyMap<string, GarminActivitySummary>) {
+  const parts = linkedKeys(day).filter((part) => part.event.id === event.id);
+  const keys = parts.map((part) => part.sourceKey);
+  const sameFit = parts.length > 0 && parts.every((part) => part.entry.kind === "activity") && keys.every((key) => key && fitRecordingKey(key) === fitRecordingKey(keys[0]!));
+  const segments = event.entries.flatMap((entry) => entry.kind === "activity" ? entry.activity.segments : []);
+  const savedMinutes = sameFit && segments.every((segment) => segment.result.minutes != null)
+    ? segments.reduce((total, segment) => total + segment.result.minutes!, 0) : null;
   const recordings = sameFit ? keys.map((key) => sources.get(key!)) : [];
   const sourceComplete = sameFit && recordings.every((source) => source != null);
   const timerSeconds = sourceComplete && recordings.every((source) => source!.timerSeconds != null)

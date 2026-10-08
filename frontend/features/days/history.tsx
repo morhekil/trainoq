@@ -55,7 +55,7 @@ export function HistoryView() {
               {e?.dirty && <span className="pill">not synced</span>}
             </div>
             {firstComment && <div className="history-morning">{firstComment.text.trim().split("\n")[0]}</div>}
-            <div className="history-summary muted">{daySummary(d, undefined, exerciseName) || "Comments only"}</div>
+            <div className="history-summary muted">{daySummary(d, exerciseName) || "Comments only"}</div>
           </button>
         );
       })}

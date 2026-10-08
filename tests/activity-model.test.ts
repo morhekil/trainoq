@@ -19,16 +19,16 @@ describe("catalog-backed activities", () => {
     };
 
     const migrated = inputDaySchema.parse(old);
-    expect(migrated.v).toBe(8);
+    expect(migrated.v).toBe(9);
     expect(dayActivities(migrated)).toMatchObject([
-      { id: "walk", exerciseId: exerciseIdForName("Walk"), comment: "Hills", result: { minutes: 30, calories: 120 } },
-      { id: "custom", exerciseId: exerciseIdForName("Trail run"), comment: "Easy", result: { minutes: null, calories: 20 } },
-      { id: "blank", exerciseId: exerciseIdForName("Activity"), comment: "Unknown activity", result: { minutes: 5, calories: null } },
+      { id: "walk", comment: "Hills", segments: [{ exerciseId: exerciseIdForName("Walk"), result: { minutes: 30, calories: 120 } }] },
+      { id: "custom", comment: "Easy", segments: [{ exerciseId: exerciseIdForName("Trail run"), result: { minutes: null, calories: 20 } }] },
+      { id: "blank", comment: "Unknown activity", segments: [{ exerciseId: exerciseIdForName("Activity"), result: { minutes: 5, calories: null } }] },
     ]);
     expect(legacyExerciseNames(old)).toContain("Trail run");
     expect(daySchema.parse(migrated)).toEqual(migrated);
     expect(daySchema.safeParse(old).success).toBe(false);
-    expect(dayToText(migrated)).toContain("- Walk · 30 min · 120 cal – Hills");
+    expect(dayToText(migrated)).toContain("- 12:00 Walk · 30 min · 120 cal – Hills");
     expect(daySummary(migrated)).toContain("Walk");
   });
 

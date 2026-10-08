@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { fitRecordingKey, type GarminActivitySummary } from "../../../shared/garmin/fit";
-import { dayActivities, daySessions, emptyDay, mergeEvents } from "../../../shared/days/model";
+import { daySessions, emptyDay, linkedKeys, mergeEvents } from "../../../shared/days/model";
+import { clockTime } from "../../../shared/days/time";
 import { acceptActivity, ignoreGarmin, linkStrengthSession, moveLinkedActivity, strengthMatches, unlinkGarmin } from "../../../shared/garmin/decisions";
 import { request, trpc } from "../../api";
 import { addDays, goToDate, todayLocal } from "../days/dates";
@@ -53,7 +54,7 @@ export function GarminView() {
         const date = sourceDate(source);
         await loadFromServer(date);
         const doc = structuredClone(getEntry(date)?.doc ?? emptyDay(date));
-        if (dayActivities(doc).some((item) => item.garminSourceKey === source.sourceKey) || doc.ignoredGarminSourceKeys.includes(source.sourceKey)) continue;
+        if (doc.garminLinks.some((link) => link.sourceKey === source.sourceKey)) continue;
         acceptActivity(doc, source, createLocalExercise(source.title).id);
         setDoc(date, doc);
         accepted++;
@@ -78,8 +79,8 @@ export function GarminView() {
       await loadFromServer(date);
       const doc = structuredClone(getEntry(date)?.doc ?? emptyDay(date));
       const eventIds = sources.map((source) => {
-        const existing = doc.events.find((event) => event.entries.some((entry) => (entry.kind === "session" ? entry.session.garminSourceKey : entry.activity.garminSourceKey) === source.sourceKey));
-        if (existing) return existing.id;
+        const existing = linkedKeys(doc).find((part) => part.sourceKey === source.sourceKey);
+        if (existing) return existing.event.id;
         acceptActivity(doc, source, createLocalExercise(source.title).id);
         return doc.events.at(-1)!.id;
       });
@@ -224,13 +225,15 @@ function GarminRecord({ source }: { source: Listed }) {
   const [choice, setChoice] = useState("");
   const [error, setError] = useState("");
   const { doc, entry, update } = useDay(date);
-  const localActivity = dayActivities(doc).find((item) => item.garminSourceKey === source.sourceKey);
-  const localSession = daySessions(doc).find((item) => item.garminSourceKey === source.sourceKey);
-  const localStatus = localActivity ? "activity" : localSession ? "session" : doc.ignoredGarminSourceKeys.includes(source.sourceKey) ? "ignored" : null;
+  const parts = linkedKeys(doc);
+  const part = parts.find((item) => item.sourceKey === source.sourceKey);
+  const localSegment = part?.entry.kind === "activity" ? part.entry.activity.segments.find((segment) => segment.id === part.segmentId) : undefined;
+  const localSession = part?.entry.kind === "session" ? part.entry.session : undefined;
+  const localStatus = localSegment ? "activity" : localSession ? "session" : doc.garminLinks.some((link) => link.sourceKey === source.sourceKey) ? "ignored" : null;
   const status = entry?.dirty ? localStatus ?? "pending" : localStatus ?? source.status;
   const matches = strengthMatches(doc, source);
   const selected = choice || (matches.length === 1 ? matches[0] : "");
-  const completed = daySessions(doc).filter((session) => session.endedAt && !session.garminSourceKey);
+  const completed = daySessions(doc).filter((session) => session.endedAt && !parts.some((item) => item.sourceKey && item.entry.kind === "session" && item.entry.session.id === session.id));
 
   const decide = async (action: (day: typeof doc) => void) => {
     try {
@@ -259,7 +262,7 @@ function GarminRecord({ source }: { source: Listed }) {
     } catch (reason) { setError(reason instanceof Error ? reason.message : "Unable to move activity. Retry after syncing."); }
   };
   const recordedMinutes = source.timerSeconds == null ? "unknown duration" : `${Math.round(source.timerSeconds / 60)} min timer`;
-  const saved = localActivity ? `${localActivity.result.minutes ?? "–"} min · ${localActivity.result.calories ?? "–"} active cal` : localSession ? `${localSession.calories ?? "–"} active cal` : null;
+  const saved = localSegment ? `${localSegment.result.minutes ?? "–"} min · ${localSegment.result.calories ?? "–"} active cal` : localSession ? `${localSession.calories ?? "–"} active cal` : null;
   return <section className="card garmin-record" aria-label={`${source.title} Garmin recording`}>
     <div className="garmin-record-head"><h2>{source.title}</h2><span>{status === "pending" ? "Pending" : status === "ignored" ? "Ignored" : status === "session" ? "Linked session" : "Added activity"}</span></div>
     <div className="hint">Garmin: {sourceTime(source)} · {recordedMinutes} · {source.activeCalories} active cal</div>
@@ -273,7 +276,7 @@ function GarminRecord({ source }: { source: Listed }) {
       {isStrength(source) && completed.length > 0 && <label className="garmin-select">Training session
         <select value={selected} onChange={(event) => setChoice(event.target.value)}>
           <option value="">Choose a session</option>
-          {completed.map((session) => <option key={session.id} value={session.id}>{new Date(session.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}{matches.includes(session.id) ? " · close match" : ""}</option>)}
+          {completed.map((session) => <option key={session.id} value={session.id}>{clockTime(session.startedAt)}{matches.includes(session.id) ? " · close match" : ""}</option>)}
         </select>
       </label>}
       <div className="garmin-actions">

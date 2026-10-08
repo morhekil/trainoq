@@ -1,6 +1,6 @@
 import { z } from "zod";
-import type { DayDoc } from "./model";
-import { normalizeDay, type LegacyDayDoc, type V2DayDoc, type V3DayDoc, type V4DayDoc, type V5DayDoc, type V6DayDoc, type V7DayDoc } from "./migrate";
+import { dayActivities, daySessions, type DayDoc } from "./model";
+import { normalizeDay, type LegacyDayDoc, type V2DayDoc, type V3DayDoc, type V4DayDoc, type V5DayDoc, type V6DayDoc, type V7DayDoc, type V8DayDoc } from "./migrate";
 import { DATE_RE } from "./model";
 import { BAND_MAX, PARAMS, PARAM_KEYS, type Param } from "../exercises/params";
 import { EFFORT } from "../exercises/model";
@@ -112,7 +112,33 @@ const v8Event = event.extend({ entries: z.array(z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("session"), session: v8Session }),
   z.object({ kind: z.literal("activity"), activity: linkedActivities.element }),
 ])).min(1) });
-export const daySchema = z.object({ v: z.literal(8), ...dayFields, comments, events: z.array(v8Event), ignoredGarminSourceKeys: z.array(z.string().min(1)) }).superRefine(dayIssues) satisfies z.ZodType<DayDoc>;
+export const v8DaySchema = z.object({ v: z.literal(8), ...dayFields, comments, events: z.array(v8Event), ignoredGarminSourceKeys: z.array(z.string().min(1)) }).superRefine(dayIssues) satisfies z.ZodType<V8DayDoc>;
+
+const timestamp = z.string().regex(/^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])T([01]\d|2[0-3]):[0-5]\d:[0-5]\d[+-]([01]\d|2[0-3]):[0-5]\d$/, "Use YYYY-MM-DDTHH:MM:SS±HH:MM");
+const segment = z.object({ id: z.string().min(1), exerciseId: z.string().min(1), startedAt: timestamp, result: z.object(activityResult) });
+const v9Activity = z.object({ id: z.string().min(1), comment: z.string(), effort: z.enum(EFFORT).optional(), segments: z.array(segment).min(1) })
+  .refine(({ segments }) => segments.every((item, index) => index === 0 || Date.parse(segments[index - 1].startedAt) <= Date.parse(item.startedAt)), "Order segments by time");
+const v9Session = z.object({ ...sessionFields, startedAt: timestamp, endedAt: timestamp.nullable(), warmup: z.array(v8Item), main: z.array(v8Item), cooldown: z.array(v8Item) });
+const v9Event = event.extend({ entries: z.array(z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("session"), session: v9Session }),
+  z.object({ kind: z.literal("activity"), activity: v9Activity }),
+])).min(1) });
+const garminLink = z.object({ sourceKey: z.string().min(1), target: z.object({ kind: z.enum(["session", "segment"]), id: z.string().min(1) }).nullable() });
+const v9Issues = (day: DayDoc, ctx: z.RefinementCtx) => {
+  const issue = (message: string) => ctx.addIssue({ code: "custom", message });
+  const unique = (ids: string[]) => new Set(ids).size === ids.length;
+  const sessions = daySessions(day).map((session) => session.id);
+  const activities = dayActivities(day);
+  const segments = activities.flatMap((activity) => activity.segments.map((item) => item.id));
+  if (!unique(day.events.map((item) => item.id))) issue("Duplicate event ID");
+  if (!unique(sessions) || !unique(activities.map((activity) => activity.id)) || !unique(segments)) issue("Duplicate event entry ID");
+  const targets = day.garminLinks.flatMap((link) => link.target ? [`${link.target.kind}:${link.target.id}`] : []);
+  if (!unique(day.garminLinks.map((link) => link.sourceKey))) issue("Garmin source is used more than once");
+  if (!unique(targets)) issue("Session or segment has more than one Garmin link");
+  const known = new Set([...sessions.map((id) => `session:${id}`), ...segments.map((id) => `segment:${id}`)]);
+  if (targets.some((target) => !known.has(target))) issue("Garmin link target is missing from this day");
+};
+export const daySchema = z.object({ v: z.literal(9), ...dayFields, comments, events: z.array(v9Event), garminLinks: z.array(garminLink) }).superRefine(v9Issues) satisfies z.ZodType<DayDoc>;
 export const v6DaySchema = z.object({ v: z.literal(6), ...dayFields, comments, sessions: z.array(linkedSession), activities: linkedActivities, ignoredGarminSourceKeys: z.array(z.string().min(1)) }) satisfies z.ZodType<V6DayDoc>;
 export const v5DaySchema = z.object({ v: z.literal(5), ...legacyDayFields, sessions: z.array(linkedSession), activities: linkedActivities, ignoredGarminSourceKeys: z.array(z.string().min(1)) }) satisfies z.ZodType<V5DayDoc>;
 export const v4DaySchema = z.object({ v: z.literal(4), ...legacyDayFields, sessions: z.array(session), activities }) satisfies z.ZodType<V4DayDoc>;
@@ -124,5 +150,5 @@ const legacyItem = z.object({ id: z.string(), name: z.string(), reps: z.string()
 const v2Session = z.object({ ...sessionFields, warmup: z.array(block), main: z.array(block), cooldown: z.array(block) });
 export const v2DaySchema = z.object({ v: z.literal(2), ...legacyDayFields, sessions: z.array(v2Session), activities: legacyActivities }) satisfies z.ZodType<V2DayDoc>;
 export const legacyDaySchema = z.object({ v: z.literal(1), ...legacyDayFields, sessions: z.array(v2Session.extend({ warmup: z.array(legacyItem), cooldown: z.array(legacyItem) })), activities: legacyActivities }) satisfies z.ZodType<LegacyDayDoc>;
-export const rawDaySchema = z.union([daySchema, v7DaySchema, v6DaySchema, v5DaySchema, v4DaySchema, v3DaySchema, v2DaySchema, legacyDaySchema]);
+export const rawDaySchema = z.union([daySchema, v8DaySchema, v7DaySchema, v6DaySchema, v5DaySchema, v4DaySchema, v3DaySchema, v2DaySchema, legacyDaySchema]);
 export const inputDaySchema = rawDaySchema.transform(normalizeDay);

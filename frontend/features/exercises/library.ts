@@ -95,7 +95,7 @@ function namesInDoc(d: DayDoc): [string, ExerciseContext][] {
     for (const section of ["warmup", "main", "cooldown"] as const)
       s[section].forEach((item) => (item.kind === "exercise" ? [item] : item.members).forEach((e) => out.push([e.exerciseId, section])));
   }
-  for (const activity of dayActivities(d)) out.push([activity.exerciseId, "activity"]);
+  for (const activity of dayActivities(d)) for (const segment of activity.segments) out.push([segment.exerciseId, "activity"]);
   return out;
 }
 

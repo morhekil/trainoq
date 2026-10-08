@@ -6,7 +6,7 @@ Runs on Cloudflare: a Worker serves the app and a tRPC API, data lives in D1.
 
 ## What it does
 
-- **Day view**, defaults to today. Arrows or tap the date to move around; "Today" jumps back. Training events and day comments appear in start-time order. An event with several parts appears as one expandable card; its original sessions and activities remain editable inside. New manual activities use the current local time on the selected day. Older records without a start time appear after timed records; set their time to place them in the day.
+- **Day view**, defaults to today. Arrows or tap the date to move around; "Today" jumps back. Training events and day comments appear in start-time order. An event with several parts appears as one expandable card; its original sessions and activities remain editable inside. Times show the clock time where they were recorded, without time zone conversion. New sessions, activities and comments use the device's current time and UTC offset on the selected day. Older activities saved without a start time show 12:00; set their time to place them in the day.
 - **Keyboard date navigation** – the date picker shows its focus position, even though the native date input sits over the displayed date.
 - **Day comments** – notes with an editable local time appear beside sessions and activities in time order. Add, edit, delete, or undo them at any time. History previews the earliest nonempty comment. Older morning and day notes convert to timed comments.
 - **Training events** – use a session or activity's options to add it to another event on the same day. Expand a grouped event to name it, add a note, edit its parts, or separate one part again. Grouping and separation retain the original item IDs and Garmin links. History and shared day text show the visit as one event while shared text lists its parts.
@@ -87,7 +87,7 @@ API.md                  procedure and wire contract
 
 ### Data model
 
-One JSON document per day (`days` table) is the source of truth. Each saved session and activity belongs to a training event. On every save the Worker rebuilds `exercise_log`, one row per session performance or activity. See the [data model in API.md](API.md#data-model) for the v8 shapes, exercise IDs, supersets, activities, legacy blocks, D1 tables, and local drafts.
+One JSON document per day (`days` table) is the source of truth. Each saved session and activity belongs to a training event. On every save the Worker rebuilds `exercise_log`, one row per session performance or activity. See the [data model in API.md](API.md#data-model) for the v9 shapes, exercise IDs, supersets, activities, legacy blocks, D1 tables, and local drafts.
 
 ### API seam
 

@@ -18,7 +18,7 @@ describe("session items", () => {
       ] }, { id: "b2", exercises: [{ id: "c", name: "Press", comment: "pause", sets: [] }] }],
     }] };
     const migrated = inputDaySchema.parse(old);
-    expect(migrated.v).toBe(8);
+    expect(migrated.v).toBe(9);
     expect(daySessions(migrated)[0].main).toEqual([
       { kind: "superset", id: "b1", members: [
         { id: "a", exerciseId: exerciseIdForName("Squat"), comment: "depth", params: { perSet: ["weight", "reps"] } },
@@ -36,7 +36,7 @@ describe("session items", () => {
   it("validates exactly one result per member-round pair", () => {
     const doc = emptyDay("2026-09-28");
     const item: Superset = { kind: "superset", id: "ss", members: [{ id: "a", exerciseId: exerciseIdForName("Squat"), comment: "", params: { perSet: ["weight", "reps"] } }], rounds: [{ id: "r", type: "working" }], results: [{ memberId: "a", roundId: "r", weight: 0, reps: 8 }] };
-    addEventEntry(doc, { kind: "session", session: { id: "s", startedAt: "2026-09-28T01:00:00Z", endedAt: null, warmup: [], main: [item], cooldown: [], calories: null, notes: "" } });
+    addEventEntry(doc, { kind: "session", session: { id: "s", startedAt: "2026-09-28T11:00:00+10:00", endedAt: null, warmup: [], main: [item], cooldown: [], calories: null, notes: "" } });
     expect(daySchema.parse(doc)).toEqual(doc);
     const invalid = (replacement: Superset) => ({ ...doc, events: [{ ...doc.events[0], entries: [{ kind: "session" as const, session: { ...daySessions(doc)[0], main: [replacement] } }] }] });
     expect(daySchema.safeParse(invalid({ ...item, results: [] })).success).toBe(false);

@@ -19,14 +19,14 @@ describe("day comments", () => {
 
     const day = inputDaySchema.parse(old);
     expect(day).toEqual({
-      v: 8,
+      v: 9,
       date: old.date,
       comments: [
         { id: "migrated:morning:2026-09-23:0", time: "08:00", text: old.morning },
         { id: "migrated:notes:2026-09-23:0", time: "23:30", text: old.notes },
       ],
       events: [],
-      ignoredGarminSourceKeys: [],
+      garminLinks: [],
       totalCalories: null,
     });
     expect(isDayEmpty(day)).toBe(false);
@@ -39,11 +39,11 @@ it("shares comments, sessions and activities in timeline order", () => {
     { id: "late", time: "23:30", text: "Night reflection" },
     { id: "early", time: "08:00", text: "Morning reflection" },
   ];
-  addEventEntry(day, { kind: "session", session: { id: "s", startedAt: "2026-09-23T02:00:00.000Z", endedAt: null, warmup: [], main: [], cooldown: [], calories: null, notes: "" } });
-  addEventEntry(day, { kind: "activity", activity: { id: "walk", exerciseId: "seed:0033", comment: "", startedAt: "2026-09-23T06:00:00.000Z", sourceOffsetMinutes: 600, result: { minutes: 20, calories: null } } });
-  addEventEntry(day, { kind: "activity", activity: { id: "tennis", exerciseId: "seed:0171", comment: "", result: { minutes: 30, calories: null } } });
+  addEventEntry(day, { kind: "activity", activity: { id: "tennis", comment: "", segments: [{ id: "tennis", exerciseId: "seed:0171", startedAt: "2026-09-23T23:45:00+10:00", result: { minutes: 30, calories: null } }] } });
+  addEventEntry(day, { kind: "session", session: { id: "s", startedAt: "2026-09-23T12:00:00+10:00", endedAt: null, warmup: [], main: [], cooldown: [], calories: null, notes: "" } });
+  addEventEntry(day, { kind: "activity", activity: { id: "walk", comment: "", segments: [{ id: "walk", exerciseId: "seed:0033", startedAt: "2026-09-23T16:00:00+10:00", result: { minutes: 20, calories: null } }] } });
 
-  const summary = dayToText(day, "Australia/Sydney", (id) => id === "seed:0033" ? "Walk" : "Tennis");
+  const summary = dayToText(day, (id) => id === "seed:0033" ? "Walk" : "Tennis");
   const positions = ["Morning reflection", "Session 12:00pm", "Walk", "Night reflection", "Tennis"].map((value) => summary.indexOf(value));
   expect(positions.every((position) => position >= 0)).toBe(true);
   expect(positions).toEqual([...positions].sort((a, b) => a - b));

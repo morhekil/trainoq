@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { addEventEntry, dayActivities, daySessions, detachEventEntry, emptyDay, mergeEvents, removeEventEntry, type Activity, type DayComment, type DayDoc, type EventEntry, type TrainingEvent } from "../../../shared/days/model";
+import { activityName, activityTotals, addEventEntry, dayActivities, daySessions, detachEventEntry, emptyDay, linkedKeys, mergeEvents, removeEventEntry, type Activity, type DayComment, type DayDoc, type EventEntry, type Segment, type TrainingEvent } from "../../../shared/days/model";
 import { dayToText } from "../../../shared/days/format";
 import { activityTime, orderedDayEvents, orderedDayRecords } from "../../../shared/days/timeline";
 import { useDay } from "./hooks";
@@ -9,7 +9,7 @@ import { newSession } from "../sessions/ops";
 import { loadRecentSessions } from "../sessions/recent";
 import { getEntry, resolveConflict } from "./store";
 import { todayLocal } from "./dates";
-import { hhmmToIso, isoToHHMM } from "../sessions/time";
+import { atClock, clockTime, deviceOffset, nowLocal, withClock } from "../../../shared/days/time";
 import { uid } from "../../id";
 import { DayContext, useDayCtx, type DayCtx } from "./context";
 import { Icon } from "../../icons";
@@ -30,7 +30,7 @@ export function DayView({ date }: { date: string }) {
   const { openSheet, toast } = useOverlays();
   const [recentVersion, setRecentVersion] = useState(0);
   const [sources, setSources] = useState<Map<string, GarminActivitySummary>>(new Map());
-  const sourceKeys = doc.events.flatMap((event) => event.entries.map((part) => part.kind === "session" ? part.session.garminSourceKey : part.activity.garminSourceKey).filter((key): key is string => !!key)).sort().join("|");
+  const sourceKeys = linkedKeys(doc).flatMap((part) => part.sourceKey ? [part.sourceKey] : []).sort().join("|");
 
   useEffect(() => {
     void refreshLibrary();
@@ -80,7 +80,8 @@ export function DayView({ date }: { date: string }) {
       const s = newSession();
       if (date !== todayLocal()) {
         // logging a past day: use this time of day on that date, and don't leave it running
-        s.startedAt = hhmmToIso(date, isoToHHMM(s.startedAt));
+        const time = clockTime(s.startedAt);
+        s.startedAt = atClock(date, time, deviceOffset(date, time));
         s.endedAt = s.startedAt;
       }
       addEventEntry(d, { kind: "session", session: s });
@@ -118,8 +119,8 @@ type EventAction = { label: string; onClick: () => void };
 function eventLabel(event: TrainingEvent): string {
   if (event.title?.trim()) return event.title.trim();
   const first = event.entries[0];
-  if (first.kind === "session") return `Session at ${new Date(first.session.startedAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`;
-  return `${exerciseName(first.activity.exerciseId)} at ${activityTime(first.activity) ?? "unknown time"}`;
+  if (first.kind === "session") return `Session at ${clockTime(first.session.startedAt)}`;
+  return `${activityName(first.activity, exerciseName)} at ${activityTime(first.activity)}`;
 }
 
 function EventPart({ entry, sessionIndices, totalSessions, action }: { entry: EventEntry; sessionIndices: Map<string, number>; totalSessions: number; action?: EventAction }) {
@@ -129,8 +130,8 @@ function EventPart({ entry, sessionIndices, totalSessions, action }: { entry: Ev
 }
 
 function TrainingEventCard({ event, sources, sessionIndices, totalSessions, actionFor }: { event: TrainingEvent; sources: ReadonlyMap<string, GarminActivitySummary>; sessionIndices: Map<string, number>; totalSessions: number; actionFor: (event: TrainingEvent, entry: EventEntry) => EventAction | undefined }) {
-  const { update } = useDayCtx();
-  const measurements = eventMeasurements(event, sources);
+  const { doc, update } = useDayCtx();
+  const measurements = eventMeasurements(doc, event, sources);
   const minutes = (seconds: number) => formatNum(Math.round(seconds / 6) / 10);
   const change = (fn: (item: TrainingEvent) => void) => update((day) => {
     const item = day.events.find((candidate) => candidate.id === event.id);
@@ -178,11 +179,11 @@ function ConflictBanner({ date, local, other }: { date: string; local: DayDoc; o
             <div className="conflict-versions">
               <section>
                 <h3>This device</h3>
-                <pre className="share-text" role="region" aria-label="This device's full day" tabIndex={0}>{dayToText(local, undefined, exerciseName)}</pre>
+                <pre className="share-text" role="region" aria-label="This device's full day" tabIndex={0}>{dayToText(local, exerciseName)}</pre>
               </section>
               <section>
                 <h3>Other device</h3>
-                <pre className="share-text" role="region" aria-label="Other device's full day" tabIndex={0}>{other ? dayToText(other, undefined, exerciseName) : "No day saved on the other device."}</pre>
+                <pre className="share-text" role="region" aria-label="Other device's full day" tabIndex={0}>{other ? dayToText(other, exerciseName) : "No day saved on the other device."}</pre>
               </section>
             </div>
             <button type="button" className="sheet-btn cancel" autoFocus onClick={() => setChoice(null)}>Cancel</button>
@@ -223,7 +224,7 @@ function CommentCard({ comment }: { comment: DayComment }) {
 function AddCommentCard() {
   const { update } = useDayCtx();
   const [open, setOpen] = useState(false);
-  const [time, setTime] = useState(() => isoToHHMM(new Date().toISOString()));
+  const [time, setTime] = useState(() => clockTime(nowLocal()));
   const [text, setText] = useState("");
   const add = () => {
     if (!text.trim()) return;
@@ -243,7 +244,7 @@ function AddCommentCard() {
           <button type="button" className="btn ghost" onClick={() => { setOpen(false); setText(""); }}>Cancel</button>
           <button type="button" className="btn primary" disabled={!text.trim() || !time} onClick={add}>Save comment</button>
         </div>
-      </> : <button type="button" className="btn ghost" onClick={() => { setTime(isoToHHMM(new Date().toISOString())); setOpen(true); }}>
+      </> : <button type="button" className="btn ghost" onClick={() => { setTime(clockTime(nowLocal())); setOpen(true); }}>
         <Icon name="plus" size={18} /> Add comment
       </button>}
     </section>
@@ -251,36 +252,37 @@ function AddCommentCard() {
 }
 
 function ActivityCard({ a, eventAction }: { a: Activity; eventAction?: EventAction }) {
-  const { date, update, undoable } = useDayCtx();
+  const { update, undoable } = useDayCtx();
   const { openPicker, openSheet } = useOverlays();
-  const up = (id: string, fn: (a: Activity) => void) =>
+  const segment = a.segments[0];
+  const name = exerciseName(segment.exerciseId);
+  const up = (fn: (a: Activity) => void) =>
     update((d) => {
-      const a = dayActivities(d).find((x) => x.id === id);
-      if (a) fn(a);
+      const item = dayActivities(d).find((x) => x.id === a.id);
+      if (item) fn(item);
     });
+  const upSegment = (fn: (segment: Segment) => void) => up((item) => fn(item.segments[0]));
 
   return (
     <section className="card activity-card">
       <div className="card-title">Other activity</div>
       <div className="activity">
         <label className="activity-time">Start time
-          <input type="time" aria-label={`Start time for ${exerciseName(a.exerciseId)}`}
-            value={activityTime(a) ?? ""}
-            onChange={(event) => event.target.value && up(a.id, (item) => { item.startedAt = item.sourceOffsetMinutes == null
-              ? hhmmToIso(date, event.target.value)
-              : new Date(Date.parse(`${date}T${event.target.value}:00.000Z`) - item.sourceOffsetMinutes * 60_000).toISOString(); })} />
+          <input type="time" aria-label={`Start time for ${name}`}
+            value={clockTime(segment.startedAt)}
+            onChange={(event) => event.target.value && upSegment((item) => { item.startedAt = withClock(item.startedAt, event.target.value); })} />
         </label>
         <div className="activity-row">
-          <button type="button" className="text grow activity-name" aria-label={`Change ${exerciseName(a.exerciseId)}`}
-            onClick={() => openPicker({ section: "activity", title: "Change activity", initial: exerciseName(a.exerciseId), onPick: (id) => up(a.id, (x) => (x.exerciseId = id)) })}>
-            {exerciseName(a.exerciseId)}
+          <button type="button" className="text grow activity-name" aria-label={`Change ${name}`}
+            onClick={() => openPicker({ section: "activity", title: "Change activity", initial: name, onPick: (id) => upSegment((x) => (x.exerciseId = id)) })}>
+            {name}
           </button>
           <label className="unit-field">
-            <NumberField value={a.result.minutes} decimal={false} placeholder="–" ariaLabel="Minutes" onChange={(v) => up(a.id, (x) => (x.result.minutes = v))} />
+            <NumberField value={segment.result.minutes} decimal={false} placeholder="–" ariaLabel="Minutes" onChange={(v) => upSegment((x) => (x.result.minutes = v))} />
             <span>min</span>
           </label>
           <label className="unit-field">
-            <NumberField value={a.result.calories} decimal={false} placeholder="–" ariaLabel="Active calories" onChange={(v) => up(a.id, (x) => (x.result.calories = v))} />
+            <NumberField value={segment.result.calories} decimal={false} placeholder="–" ariaLabel="Active calories" onChange={(v) => upSegment((x) => (x.result.calories = v))} />
             <span>cal</span>
           </label>
           <button
@@ -289,7 +291,7 @@ function ActivityCard({ a, eventAction }: { a: Activity; eventAction?: EventActi
             aria-label="Activity options"
             onClick={() =>
               openSheet({
-                title: exerciseName(a.exerciseId),
+                title: name,
                 actions: [...(eventAction ? [eventAction] : []), {
                   label: "Delete",
                   danger: true,
@@ -301,7 +303,7 @@ function ActivityCard({ a, eventAction }: { a: Activity; eventAction?: EventActi
             <Icon name="more" />
           </button>
         </div>
-        <EffortPicker name={exerciseName(a.exerciseId)} scale="RPE" value={a.effort} onChange={(value) => up(a.id, (x) => { if (value) x.effort = value; else delete x.effort; })} />
+        <EffortPicker name={name} scale="RPE" value={a.effort} onChange={(value) => up((x) => { if (value) x.effort = value; else delete x.effort; })} />
       </div>
     </section>
   );
@@ -321,8 +323,10 @@ function AddActivityCard() {
             section: "activity",
             title: "Add activity",
             onPick: (exerciseId) => {
-              const startedAt = hhmmToIso(date, isoToHHMM(new Date().toISOString()));
-              update((d) => addEventEntry(d, { kind: "activity", activity: { id: uid(), exerciseId, startedAt, comment: "", result: { minutes: null, calories: null } } }));
+              const time = clockTime(nowLocal());
+              const id = uid();
+              const startedAt = atClock(date, time, deviceOffset(date, time));
+              update((d) => addEventEntry(d, { kind: "activity", activity: { id, comment: "", segments: [{ id, exerciseId, startedAt, result: { minutes: null, calories: null } }] } }));
             },
           })}
         >
@@ -336,7 +340,7 @@ function AddActivityCard() {
 
 function TotalsCard() {
   const { doc, update } = useDayCtx();
-  const logged = daySessions(doc).reduce((n, s) => n + (s.calories ?? 0), 0) + dayActivities(doc).reduce((n, a) => n + (a.result.calories ?? 0), 0);
+  const logged = daySessions(doc).reduce((n, s) => n + (s.calories ?? 0), 0) + dayActivities(doc).reduce((n, a) => n + (activityTotals(a).calories ?? 0), 0);
   const mixed = doc.events.some((event) => event.entries.some((entry) => entry.kind === "session") && event.entries.some((entry) => entry.kind === "activity"));
   return (
     <section className="card">

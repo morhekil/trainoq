@@ -44,9 +44,9 @@ describe("exercise parameters", () => {
     expect(formatSet({ band: 3, reps: 5 }, { perSet: ["band", "reps"] })).toBe("band 3×5");
     expect(formatSet({ band: 0, time: 10 }, { perSet: ["band", "time"] })).toBe("band 0 10s");
     const saves = (band: number) => daySchema.safeParse({
-      v: 8, date: "2024-03-06", comments: [], ignoredGarminSourceKeys: [], totalCalories: null,
+      v: 9, date: "2024-03-06", comments: [], garminLinks: [], totalCalories: null,
       events: [{ id: "e", title: null, notes: "", entries: [{ kind: "session", session: {
-        id: "s", startedAt: "2024-03-05T23:00:00.000Z", endedAt: null, calories: null, notes: "", warmup: [], cooldown: [],
+        id: "s", startedAt: "2024-03-06T10:00:00+11:00", endedAt: null, calories: null, notes: "", warmup: [], cooldown: [],
         main: [{ kind: "exercise", id: "x", exerciseId: "seed:0133", comment: "", params: { perSet: ["band", "reps"] },
           sets: [{ id: "1", type: "working", band, reps: 3 }] }],
       } }] }],

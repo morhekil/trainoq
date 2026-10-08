@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from "vitest";
-import { atClock, clockTime, deviceOffset, formatOffset, formatTime, nowLocal, withOffset } from "../shared/days/time";
+import { atClock, clockTime, deviceOffset, formatOffset, formatTime, nowLocal, withClock, withOffset } from "../shared/days/time";
 import { homeTime } from "../shared/days/migrate";
 
 afterEach(() => { vi.unstubAllEnvs(); });
@@ -14,6 +14,7 @@ it("reads and formats the stored clock time without converting time zones", () =
 
 it("builds offset timestamps from a clock time or a UTC instant", () => {
   expect(atClock("2026-10-05", "07:30", "+11:00")).toBe("2026-10-05T07:30:00+11:00");
+  expect(withClock("2026-09-28T16:24:07+05:30", "07:05")).toBe("2026-09-28T07:05:00+05:30");
   expect(withOffset("2026-10-02T06:24:07.000Z", "+10:00")).toBe("2026-10-02T16:24:07+10:00");
   expect(withOffset("2026-10-01T23:30:00.000Z", "-03:30")).toBe("2026-10-01T20:00:00-03:30");
   expect(withOffset("2026-10-01T22:00:00Z", "+05:45")).toBe("2026-10-02T03:45:00+05:45");

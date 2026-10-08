@@ -21,6 +21,8 @@ export function formatOffset(minutes: number): string {
 const offsetMinutes = (offset: string) => (offset[0] === "-" ? -1 : 1) * (Number(offset.slice(1, 3)) * 60 + Number(offset.slice(4, 6)));
 
 export const atClock = (date: string, hhmm: string, offset: string): string => `${date}T${hhmm}:00${offset}`;
+/** An edited time keeps its date and offset. */
+export const withClock = (ts: string, hhmm: string): string => atClock(ts.slice(0, 10), hhmm, ts.slice(19));
 
 /** The same instant, written with the clock digits at `offset`. */
 export function withOffset(utcIso: string, offset: string): string {

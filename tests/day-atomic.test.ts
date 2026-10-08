@@ -42,7 +42,7 @@ describe("atomic day saves", () => {
     const date = "2026-09-28";
     const day = (name: string, calories: number) => ({
       ...emptyDay(date), comments: [{ id: name, time: "08:00", text: name }],
-      events: [{ id: name, title: null, notes: "", entries: [{ kind: "activity" as const, activity: { id: name, exerciseId: "seed:0033", comment: "", result: { minutes: 20, calories } } }] }],
+      events: [{ id: name, title: null, notes: "", entries: [{ kind: "activity" as const, activity: { id: name, comment: "", segments: [{ id: name, exerciseId: "seed:0033", startedAt: `${date}T08:00:00+10:00`, result: { minutes: 20, calories } }] } }] }],
     });
     const writePair = async (base: string | null) => {
       const results = await Promise.all([putDay(db, date, day("first", 20), base), putDay(db, date, day("second", 30), base)]);
@@ -50,7 +50,7 @@ describe("atomic day saves", () => {
       const winner = (await getDay(db, date))!;
       expect(results.find((result) => !result.ok)).toMatchObject({ current: winner });
       const log = sqlite.prepare("SELECT detail FROM exercise_log WHERE date = ?").all(date);
-      expect(log).toEqual([{ detail: JSON.stringify(dayActivities(winner.doc)[0].result) }]);
+      expect(log).toEqual([{ detail: JSON.stringify(dayActivities(winner.doc)[0].segments[0].result) }]);
       return winner;
     };
 
@@ -69,17 +69,18 @@ describe("atomic day saves", () => {
     const { db, sqlite } = testDb();
     const date = "2026-09-28";
     const sourceKey = "garmin:1:2026-09-28T00:00:00.000Z:0";
-    const linked = { ...emptyDay(date), events: [{ id: "run-event", title: null, notes: "", entries: [{ kind: "activity" as const, activity: { id: "run", exerciseId: "seed:0033", comment: "", garminSourceKey: sourceKey, result: { minutes: 20, calories: 172 } } }] }] };
+    const linked = { ...emptyDay(date), garminLinks: [{ sourceKey, target: { kind: "segment" as const, id: "run" } }],
+      events: [{ id: "run-event", title: null, notes: "", entries: [{ kind: "activity" as const, activity: { id: "run", comment: "", segments: [{ id: "run", exerciseId: "seed:0033", startedAt: `${date}T10:00:00+10:00`, result: { minutes: 20, calories: 172 } }] } }] }] };
     const first = await putDay(db, date, linked, null);
     expect(first.ok).toBe(true);
     expect(sqlite.prepare("SELECT * FROM garmin_links").all()).toEqual([{ source_key: sourceKey, date, target_kind: "activity", target_id: "run" }]);
-    const ignored = { ...emptyDay(date), ignoredGarminSourceKeys: [sourceKey] };
+    const ignored = { ...emptyDay(date), garminLinks: [{ sourceKey, target: null }] };
     expect(await putDay(db, date, ignored, null)).toMatchObject({ ok: false });
     expect(sqlite.prepare("SELECT target_kind FROM garmin_links").all()).toEqual([{ target_kind: "activity" }]);
     const second = await putDay(db, date, ignored, first.ok ? first.updatedAt : null);
     expect(second.ok).toBe(true);
     expect(sqlite.prepare("SELECT * FROM garmin_links").all()).toEqual([{ source_key: sourceKey, date, target_kind: "ignored", target_id: null }]);
-    expect((await getDay(db, date))?.doc.ignoredGarminSourceKeys).toEqual([sourceKey]);
+    expect((await getDay(db, date))?.doc.garminLinks).toEqual([{ sourceKey, target: null }]);
     expect(await putDay(db, date, emptyDay(date), second.ok ? second.updatedAt : null)).toEqual({ ok: true, updatedAt: null });
     expect(sqlite.prepare("SELECT * FROM garmin_links").all()).toEqual([]);
     sqlite.close();
@@ -88,9 +89,9 @@ describe("atomic day saves", () => {
   it("rejects a source linked on another day without writing a partial day", async () => {
     const { db, sqlite } = testDb();
     const key = "garmin:1:2026-09-28T00:00:00.000Z:0";
-    const first = { ...emptyDay("2026-09-28"), ignoredGarminSourceKeys: [key] };
+    const first = { ...emptyDay("2026-09-28"), garminLinks: [{ sourceKey: key, target: null }] };
     expect((await putDay(db, first.date, first, null)).ok).toBe(true);
-    const second = { ...emptyDay("2026-09-29"), ignoredGarminSourceKeys: [key] };
+    const second = { ...emptyDay("2026-09-29"), garminLinks: [{ sourceKey: key, target: null }] };
     await expect(putDay(db, second.date, second, null)).rejects.toMatchObject({ code: "BAD_REQUEST" });
     expect(await getDay(db, second.date)).toBeNull();
     expect(sqlite.prepare("SELECT date FROM garmin_links WHERE source_key = ?").get(key)).toEqual({ date: first.date });

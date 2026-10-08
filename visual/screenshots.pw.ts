@@ -475,8 +475,9 @@ test("day records follow their displayed start times and reorder after edits", a
       await expect(page).toHaveScreenshot(`ordered-day-${width}-${colorScheme}.png`, { fullPage: true });
     }
   }
+  await expect(page.getByLabel("Start time for Tennis")).toHaveValue("12:00");
   await page.getByLabel("Start time for Run").fill("13:00");
-  await expect.poll(recordNames).toEqual(["Session 1", "Session 2", "Walk", "Run", "Tennis"]);
+  await expect.poll(recordNames).toEqual(["Session 1", "Session 2", "Walk", "Tennis", "Run"]);
   await page.getByLabel("Start time for Tennis").fill("07:00");
   await expect.poll(recordNames).toEqual(["Tennis", "Session 1", "Session 2", "Walk", "Run"]);
 });
@@ -603,7 +604,8 @@ test("a manual session can join a separate cardio recording", async ({ page }) =
   await page.getByRole("dialog", { name: "Add to training event" }).getByRole("button", { name: /Run at 15:49/ }).click();
   const draft = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!).doc, day);
   expect(draft.events).toHaveLength(1);
-  expect(draft.events[0].entries).toMatchObject([{ kind: "activity", activity: { id: "run", garminSourceKey: "garmin:run:0" } }, { kind: "session", session: { id: "cardio-session", notes: "Manual work", calories: 120 } }]);
+  expect(draft.events[0].entries).toMatchObject([{ kind: "activity", activity: { id: "run" } }, { kind: "session", session: { id: "cardio-session", notes: "Manual work", calories: 120 } }]);
+  expect(draft.garminLinks).toEqual([{ sourceKey: "garmin:run:0", target: { kind: "segment", id: "run" } }]);
   await expect(page.getByText("Logged above: 220 cal")).toHaveCount(0);
   await expect(page.getByText("Session and activity calories may overlap. Enter the daily total separately.")).toBeVisible();
   await expect(page.getByLabel("Total daily active calories")).toBeVisible();
@@ -647,7 +649,7 @@ test("new manual activities use the selected day's current local time", async ({
   await addActivity(page);
   await expect(page.getByLabel("Start time for Walk")).toHaveValue("13:45");
   const draft = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!), day);
-  expect(savedActivities(draft.doc)[0].startedAt).toBe("2026-09-15T03:45:00.000Z");
+  expect(savedActivities(draft.doc)[0].segments[0].startedAt).toBe("2026-09-15T13:45:00+10:00");
 });
 
 test("failed sync can be retried with the keyboard", async ({ page }) => {
@@ -934,7 +936,7 @@ test("touch drag scrolls to the superset target", async ({ page }) => {
   await expect(main.locator(".block.superset")).toHaveCount(1);
 });
 
-test("an offline v1 draft syncs as v8 and preserves its revision base", async ({ page }) => {
+test("an offline v1 draft syncs as v9 and preserves its revision base", async ({ page }) => {
   await mockApi(page);
   const requests: string[] = [];
   page.on("request", (request) => { if (request.url().includes("/api/trpc/")) requests.push(request.url().split("/").at(-1)!); });
@@ -952,14 +954,14 @@ test("an offline v1 draft syncs as v8 and preserves its revision base", async ({
   const payload = request.postDataJSON();
   const input = payload.json ?? payload;
   expect(input.base).toBe("previous-revision");
-  expect(input.doc.v).toBe(8);
+  expect(input.doc.v).toBe(9);
   expect(requests.indexOf("exercises.create")).toBeGreaterThanOrEqual(0);
   expect(requests.indexOf("exercises.create")).toBeLessThan(requests.indexOf("days.save"));
   expect(savedSessions(input.doc)[0].warmup[0].sets.map((set: { reps: number }) => set.reps)).toEqual([15, 15]);
   await expect(page.getByText("Band pull-apart", { exact: true })).toBeVisible();
   const entry = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!), day);
   expect(entry.rev).toBe(7);
-  expect(entry.doc.v).toBe(8);
+  expect(entry.doc.v).toBe(9);
 });
 
 test("v1 conflict copies normalize before either version is chosen", async ({ page }) => {
@@ -977,13 +979,13 @@ test("v1 conflict copies normalize before either version is chosen", async ({ pa
   }, { date: day, legacy });
   await page.goto(`/#/d/${day}`);
   const before = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!), day);
-  expect([before.doc.v, before.conflict.doc.v, before.base, before.dirty, before.rev, before.conflict.updatedAt]).toEqual([8, 8, "old-revision", true, 9, "new-revision"]);
+  expect([before.doc.v, before.conflict.doc.v, before.base, before.dirty, before.rev, before.conflict.updatedAt]).toEqual([9, 9, "old-revision", true, 9, "new-revision"]);
   await page.getByRole("button", { name: "Use other device's" }).click();
   const dialog = page.getByRole("dialog", { name: "Review day versions" });
   await expect(dialog).toContainText("Other device");
   await dialog.getByRole("button", { name: "Replace this device's edits" }).click();
   const after = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!), day);
-  expect([after.doc.v, after.doc.comments[0].text, after.base, after.dirty, after.rev]).toEqual([8, "Other device", "new-revision", false, 10]);
+  expect([after.doc.v, after.doc.comments[0].text, after.base, after.dirty, after.rev]).toEqual([9, "Other device", "new-revision", false, 10]);
 });
 
 test("repeat keeps grouping and set types across every section without recorded values", async ({ page }) => {

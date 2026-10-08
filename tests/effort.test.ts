@@ -12,7 +12,7 @@ import { exerciseLibrary } from "../backend/features/exercises/db";
 function effortDay(): DayDoc {
   const doc = emptyDay("2026-10-08");
   addEventEntry(doc, { kind: "session", session: {
-    id: "s", startedAt: "2026-10-08T07:00:00.000Z", endedAt: "2026-10-08T08:00:00.000Z", calories: null, notes: "", warmup: [], cooldown: [],
+    id: "s", startedAt: "2026-10-08T18:00:00+11:00", endedAt: "2026-10-08T19:00:00+11:00", calories: null, notes: "", warmup: [], cooldown: [],
     main: [
       { kind: "exercise", id: "squat", exerciseId: exerciseIdForName("Squat"), comment: "", effort: "high", params: { perSet: ["weight", "reps"] }, sets: [{ id: "1", type: "working", weight: 80, reps: 5 }] },
       { kind: "superset", id: "ss", members: [
@@ -21,7 +21,7 @@ function effortDay(): DayDoc {
       ], rounds: [{ id: "r", type: "working" }], results: [{ memberId: "plank", roundId: "r", time: 60 }, { memberId: "row", roundId: "r", weight: 20, reps: 10 }] },
     ],
   } });
-  addEventEntry(doc, { kind: "activity", activity: { id: "run", exerciseId: exerciseIdForName("Run"), comment: "", effort: "low", result: { minutes: 30, calories: 250 } } });
+  addEventEntry(doc, { kind: "activity", activity: { id: "run", comment: "", effort: "low", segments: [{ id: "run", exerciseId: exerciseIdForName("Run"), startedAt: "2026-10-08T20:00:00+11:00", result: { minutes: 30, calories: 250 } }] } });
   return doc;
 }
 
@@ -48,7 +48,7 @@ describe("effort", () => {
 
   it("appears in shared day text after each record's values", () => {
     const names: Record<string, string> = { [exerciseIdForName("Squat")]: "Squat", [exerciseIdForName("Plank")]: "Plank", [exerciseIdForName("Row")]: "Row", [exerciseIdForName("Run")]: "Run" };
-    const text = dayToText(effortDay(), "Australia/Sydney", (id) => names[id]);
+    const text = dayToText(effortDay(), (id) => names[id]);
     expect(text).toContain("Squat: 80kg×5 · RIR few");
     expect(text).toContain("- Plank: 60s · RPE max");
     expect(text).toContain("- Row: 20kg×10\n");

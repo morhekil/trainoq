@@ -13,7 +13,7 @@ import { paramsFor, setExerciseParams } from "../exercises/params";
 import { EffortPicker } from "../exercises/effort";
 import { blockLetter, copyItems, findItem, findSession, findStandalone, findSuperset, makeSet, move, newExercise, newMember, nextSetType, setLabels } from "./ops";
 import { findRepeatSource } from "./recent";
-import { hhmmToIso, isoToHHMM } from "./time";
+import { clockTime, nowLocal, withClock } from "../../../shared/days/time";
 import { uid } from "../../id";
 import { useDayCtx } from "../days/context";
 import { Icon } from "../../icons";
@@ -34,7 +34,7 @@ function formatDuration(min: number): string {
 }
 
 export function SessionCard({ s, index, total, eventAction }: { s: Session; index: number; total: number; eventAction?: { label: string; onClick: () => void } }) {
-  const { date, update, undoable } = useDayCtx();
+  const { update, undoable } = useDayCtx();
   const { openSheet } = useOverlays();
   const active = !s.endedAt;
   useTick(15000, active);
@@ -52,12 +52,12 @@ export function SessionCard({ s, index, total, eventAction }: { s: Session; inde
         <div className="session-title">
           <h2 className="session-heading">{active && <span className="live-dot" aria-hidden="true" />}{total > 1 ? `Session ${index + 1}` : "Session"}{active ? " · in progress" : ""}</h2>
           <div className="session-times">
-            <input type="time" className="time-input" aria-label="Start time" value={isoToHHMM(s.startedAt)} onChange={(e) => e.target.value && up((x) => (x.startedAt = hhmmToIso(date, e.target.value)))} />
-            {s.endedAt && <><span className="muted">–</span><input type="time" className="time-input" aria-label="Finish time" value={isoToHHMM(s.endedAt)} onChange={(e) => e.target.value && up((x) => (x.endedAt = hhmmToIso(date, e.target.value)))} /></>}
+            <input type="time" className="time-input" aria-label="Start time" value={clockTime(s.startedAt)} onChange={(e) => e.target.value && up((x) => (x.startedAt = withClock(x.startedAt, e.target.value)))} />
+            {s.endedAt && <><span className="muted">–</span><input type="time" className="time-input" aria-label="Finish time" value={clockTime(s.endedAt)} onChange={(e) => e.target.value && up((x) => (x.endedAt = withClock(x.endedAt!, e.target.value)))} /></>}
             {(active || minutes > 0) && <span className="muted duration">{formatDuration(minutes)}</span>}
           </div>
         </div>
-        {active && <button type="button" className="btn small primary" onClick={() => up((x) => (x.endedAt = new Date().toISOString()))}>Finish</button>}
+        {active && <button type="button" className="btn small primary" onClick={() => up((x) => (x.endedAt = nowLocal()))}>Finish</button>}
         <button type="button" className="icon-btn" aria-label="Session options" onClick={menu}><Icon name="more" /></button>
       </div>
       <SectionEditor s={s} section="warmup" title="Warm-up" />
