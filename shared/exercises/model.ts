@@ -6,7 +6,10 @@ export type WorkSet = ParamValues & { id: string; type: SetType };
 export type ActivityResult = { minutes: number | null; calories: number | null };
 
 export interface Exercise { id: string; name: string }
-export interface PerformedExercise { id: string; exerciseId: string; comment: string }
+/** How hard an entry was, on the RPE scale. Rep-based exercises show it as reps in reserve. */
+export const EFFORT = ["low", "med", "high", "max"] as const;
+export type Effort = (typeof EFFORT)[number];
+export interface PerformedExercise { id: string; exerciseId: string; comment: string; effort?: Effort }
 export type SessionExercise = PerformedExercise & { params: ParamSet; setup?: ParamValues };
 export type StandaloneExercise = SessionExercise & { kind: "exercise"; sets: WorkSet[] };
 export interface Superset {

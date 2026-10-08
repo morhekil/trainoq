@@ -3,11 +3,12 @@ import type { DayDoc } from "./model";
 import { normalizeDay, type LegacyDayDoc, type V2DayDoc, type V3DayDoc, type V4DayDoc, type V5DayDoc, type V6DayDoc, type V7DayDoc } from "./migrate";
 import { DATE_RE } from "./model";
 import { BAND_MAX, PARAMS, PARAM_KEYS, type Param } from "../exercises/params";
+import { EFFORT } from "../exercises/model";
 
 export const dateSchema = z.string().regex(DATE_RE);
 const setValues = { weight: z.number().finite().nullable(), reps: z.number().finite().nullable() };
 const workSet = z.object({ id: z.string().min(1), type: z.enum(["warmup", "working", "backoff"]), ...setValues });
-const performed = { id: z.string().min(1), exerciseId: z.string().min(1), comment: z.string() };
+const performed = { id: z.string().min(1), exerciseId: z.string().min(1), comment: z.string(), effort: z.enum(EFFORT).optional() };
 const exercise = z.object({ kind: z.literal("exercise"), ...performed, sets: z.array(workSet) });
 const superset = z.object({
   kind: z.literal("superset"), id: z.string().min(1),
