@@ -69,6 +69,15 @@ function mergedHistory(exerciseId: string, remote: ExerciseHistoryEntry[]): Exer
 
 const sectionName = { warmup: "Warm-up", main: "Main", cooldown: "Cool-down", activity: "Activity" };
 
+/** "30 min · 240 cal · 6 segments, with Walk" for an exercise that was part of a combined activity */
+function activityValues({ result, segments, with: others = [] }: Extract<ExerciseHistoryEntry, { section: "activity" }>): string {
+  return [
+    result.minutes != null ? `${result.minutes} min` : null,
+    result.calories != null ? `${result.calories} cal` : null,
+    segments ? `${segments} ${segments === 1 ? "segment" : "segments"}${others.length ? `, with ${others.map(exerciseName).join(", ")}` : ""}` : null,
+  ].filter(Boolean).join(" · ");
+}
+
 export function ExerciseDetail({ id }: { id: string }) {
   useLibraryVersion();
   const { openParams, toast } = useOverlays();
@@ -112,9 +121,9 @@ export function ExerciseDetail({ id }: { id: string }) {
         <h3>{key === "activity" ? "Activity" : paramsName((group[0] as Extract<ExerciseHistoryEntry, { params: unknown }>).params)} <span>{group.length} {group.length === 1 ? "entry" : "entries"}</span></h3>
         {group.map((entry, index) => <div className="exercise-history-entry" key={`${entry.date}-${entry.section}-${index}`}>
           <strong>{formatDateShort(entry.date)} · {sectionName[entry.section]}{entry.section !== "activity" && formatSetup(entry.setup, entry.params) ? ` (${formatSetup(entry.setup, entry.params)})` : ""}</strong>
-          <span>{entry.section === "activity"
-            ? [entry.result.minutes != null ? `${entry.result.minutes} min` : null, entry.result.calories != null ? `${entry.result.calories} cal` : null].filter(Boolean).join(" · ") || "No values"
-            : formatSets(entry.sets, entry.params) || "No values"}{entry.effort ? ` · ${formatEffort(entry.effort, entry.section === "activity" ? undefined : entry.params)}` : ""}</span>
+          <span>{(entry.section === "activity" ? activityValues(entry) : formatSets(entry.sets, entry.params)) || "No values"}
+            {entry.effort ? ` · ${formatEffort(entry.effort, entry.section === "activity" ? undefined : entry.params)}` : ""}
+            {entry.section === "activity" && entry.segments && entry.effort ? " for the whole activity" : ""}</span>
         </div>)}
       </div>)}
     </section>

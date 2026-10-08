@@ -617,6 +617,27 @@ test("an event of activities combines into one activity with Undo", async ({ pag
   await expect(event.locator("summary")).toHaveText("Run walk · 3 parts");
 });
 
+test("exercise history marks an entry that was part of a combined activity", async ({ page }) => {
+  await mockApi(page);
+  await page.route("**/api/trpc/exercises.history*", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ result: { data: [
+    { date: "2026-10-02", section: "activity", result: { minutes: 30, calories: 240 }, effort: "high", segments: 6, with: ["seed:0033"] },
+    { date: "2026-09-28", section: "activity", result: { minutes: 26, calories: 172 }, effort: "med" },
+  ] } }) }));
+  await page.addInitScript(() => localStorage.setItem("tq:authed", JSON.stringify(true)));
+  await page.goto(`/#/exercises/${encodeURIComponent("seed:0170")}`);
+  const history = page.locator(".exercise-detail-section").filter({ hasText: "History" });
+  await expect(history.getByText("30 min · 240 cal · 6 segments, with Walk · RPE high for the whole activity")).toBeVisible();
+  await expect(history.getByText("26 min · 172 cal · RPE med", { exact: true })).toBeVisible();
+  for (const width of [320, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const colorScheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme });
+      await checkWidth(page);
+      await expect(history).toHaveScreenshot(`combined-history-${width}-${colorScheme}.png`);
+    }
+  }
+});
+
 test("a grouped FIT event labels saved minutes and Garmin source measurements separately", async ({ page }) => {
   await mockApi(page);
   const fit = "garmin:123:2026-09-15T06:00:00.000Z";
