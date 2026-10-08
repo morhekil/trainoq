@@ -335,7 +335,8 @@ textarea {
   font-weight: 700;
 }
 
-.training-event summary:focus-visible {
+.training-event summary:focus-visible,
+.segments summary:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: 3px;
 }
@@ -785,6 +786,36 @@ textarea {
   display: flex;
   gap: 6px;
   align-items: center;
+}
+
+.combined-activity {
+  display: grid;
+  gap: 8px;
+}
+.combined-activity h2 {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+.activity-totals,
+.segment-list {
+  font-variant-numeric: tabular-nums;
+}
+.segments summary {
+  cursor: pointer;
+  padding-block: 10px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--accent);
+}
+.segment-list {
+  display: grid;
+  gap: 4px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 14px;
 }
 .activity-row .grow {
   flex: 1;

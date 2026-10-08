@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { activityName, activityTotals, addEventEntry, dayActivities, daySessions, detachEventEntry, emptyDay, linkedKeys, mergeEvents, removeEventEntry, type Activity, type DayComment, type DayDoc, type EventEntry, type Segment, type TrainingEvent } from "../../../shared/days/model";
+import { activityName, activityStart, activityTotals, addEventEntry, dayActivities, daySessions, detachEventEntry, emptyDay, linkedKeys, mergeEvents, removeEventEntry, splitActivity, type Activity, type DayComment, type DayDoc, type EventEntry, type Segment, type TrainingEvent } from "../../../shared/days/model";
 import { dayToText } from "../../../shared/days/format";
 import { activityTime, orderedDayEvents, orderedDayRecords } from "../../../shared/days/timeline";
 import { useDay } from "./hooks";
@@ -21,6 +21,7 @@ import { suggestedRecordingGroups } from "../../../shared/garmin/decisions";
 import { eventMeasurements } from "../../../shared/days/summary";
 import type { GarminActivitySummary } from "../../../shared/garmin/fit";
 import { formatNum } from "../../../shared/exercises/format";
+import type { ActivityResult } from "../../../shared/exercises/model";
 import { EffortPicker } from "../exercises/effort";
 import { request, trpc } from "../../api";
 
@@ -100,7 +101,7 @@ export function DayView({ date }: { date: string }) {
         ? <CommentCard key={`comment-${record.comment.id}`} comment={record.comment} />
         : record.event.entries.length > 1 || record.event.title || record.event.notes
           ? <TrainingEventCard key={record.event.id} event={record.event} sources={sources} sessionIndices={sessionIndices} totalSessions={daySessions(doc).length} actionFor={actionFor} />
-          : <EventPart key={record.event.id} entry={record.event.entries[0]} sessionIndices={sessionIndices} totalSessions={daySessions(doc).length} action={actionFor(record.event, record.event.entries[0])} />)}
+          : <EventPart key={record.event.id} eventId={record.event.id} entry={record.event.entries[0]} sessionIndices={sessionIndices} totalSessions={daySessions(doc).length} action={actionFor(record.event, record.event.entries[0])} />)}
       {!active && (
         <button type="button" className="btn big primary start-btn" onClick={start}>
           <Icon name="play" size={18} />
@@ -123,9 +124,13 @@ function eventLabel(event: TrainingEvent): string {
   return `${activityName(first.activity, exerciseName)} at ${activityTime(first.activity)}`;
 }
 
-function EventPart({ entry, sessionIndices, totalSessions, action }: { entry: EventEntry; sessionIndices: Map<string, number>; totalSessions: number; action?: EventAction }) {
-  return entry.kind === "session"
-    ? <SessionCard s={entry.session} index={sessionIndices.get(entry.session.id) ?? 0} total={totalSessions} eventAction={action} />
+/** Moves focus once the change has rendered, e.g. to the card that replaced the one acted on. */
+const focusLater = (id: string) => requestAnimationFrame(() => document.getElementById(id)?.focus());
+
+function EventPart({ eventId, entry, sessionIndices, totalSessions, action }: { eventId: string; entry: EventEntry; sessionIndices: Map<string, number>; totalSessions: number; action?: EventAction }) {
+  if (entry.kind === "session") return <SessionCard s={entry.session} index={sessionIndices.get(entry.session.id) ?? 0} total={totalSessions} eventAction={action} />;
+  return entry.activity.segments.length > 1
+    ? <CombinedActivityCard a={entry.activity} eventId={eventId} eventAction={action} />
     : <ActivityCard a={entry.activity} eventAction={action} />;
 }
 
@@ -138,7 +143,7 @@ function TrainingEventCard({ event, sources, sessionIndices, totalSessions, acti
     if (item) fn(item);
   });
   return <details className="card training-event">
-    <summary>{event.title?.trim() || "Training event"} · {event.entries.length} {event.entries.length === 1 ? "part" : "parts"}</summary>
+    <summary id={`event-${event.id}`}>{event.title?.trim() || "Training event"} · {event.entries.length} {event.entries.length === 1 ? "part" : "parts"}</summary>
     <div className="event-parts">
       {(measurements.savedMinutes != null || measurements.timerSeconds != null || measurements.elapsedSeconds != null || measurements.activeCalories != null) && <div className="hint">
         {measurements.savedMinutes != null && <div>Saved parts: {formatNum(measurements.savedMinutes)} min (rounded)</div>}
@@ -151,7 +156,7 @@ function TrainingEventCard({ event, sources, sessionIndices, totalSessions, acti
       </label>
       <label className="event-field" htmlFor={`event-notes-${event.id}`}>Event notes</label>
       <AutoTextarea id={`event-notes-${event.id}`} minRows={2} value={event.notes} onChange={(changeEvent) => change((item) => (item.notes = changeEvent.target.value))} />
-      {event.entries.map((entry) => <EventPart key={entry.kind === "session" ? `session-${entry.session.id}` : `activity-${entry.activity.id}`} entry={entry} sessionIndices={sessionIndices} totalSessions={totalSessions} action={actionFor(event, entry)} />)}
+      {event.entries.map((entry) => <EventPart key={entry.kind === "session" ? `session-${entry.session.id}` : `activity-${entry.activity.id}`} eventId={event.id} entry={entry} sessionIndices={sessionIndices} totalSessions={totalSessions} action={actionFor(event, entry)} />)}
     </div>
   </details>;
 }
@@ -304,6 +309,50 @@ function ActivityCard({ a, eventAction }: { a: Activity; eventAction?: EventActi
           </button>
         </div>
         <EffortPicker name={name} scale="RPE" value={a.effort} onChange={(value) => up((x) => { if (value) x.effort = value; else delete x.effort; })} />
+      </div>
+    </section>
+  );
+}
+
+const resultText = (result: ActivityResult) =>
+  [result.minutes != null && `${formatNum(result.minutes)} min`, result.calories != null && `${formatNum(result.calories)} cal`].filter(Boolean).join(" · ");
+
+/** An activity of several segments: totals are read-only; split it to edit a segment. */
+function CombinedActivityCard({ a, eventId, eventAction }: { a: Activity; eventId: string; eventAction?: EventAction }) {
+  const { update, undoable } = useDayCtx();
+  const { openSheet } = useOverlays();
+  const name = activityName(a, exerciseName);
+  const up = (fn: (a: Activity) => void) => update((d) => {
+    const item = dayActivities(d).find((x) => x.id === a.id);
+    if (item) fn(item);
+  });
+  const menu = () => openSheet({ title: name, actions: [
+    { label: "Split into separate activities", onClick: () => {
+      undoable(`${name} split into ${a.segments.length} activities`, (d) => splitActivity(d, a.id, exerciseName));
+      focusLater(`event-${eventId}`);
+    } },
+    ...(eventAction ? [eventAction] : []),
+    { label: "Delete", danger: true, onClick: () => undoable("Activity deleted", (d) => removeEventEntry(d, "activity", a.id)) },
+  ] });
+  return (
+    <section className="card activity-card" aria-labelledby={`activity-${a.id}`}>
+      <div className="card-title">Other activity</div>
+      <div className="combined-activity">
+        <div className="activity-time">Start time <time dateTime={activityStart(a)}>{activityTime(a)}</time></div>
+        <div className="activity-row">
+          <h2 className="grow activity-name" id={`activity-${a.id}`} tabIndex={-1}>{name}</h2>
+          <button type="button" className="icon-btn" aria-label={`${name} options`} onClick={menu}><Icon name="more" /></button>
+        </div>
+        <div className="activity-totals">{resultText(activityTotals(a)) || "No minutes or calories"}</div>
+        <EffortPicker name={name} scale="RPE" value={a.effort} onChange={(value) => up((x) => { if (value) x.effort = value; else delete x.effort; })} />
+        <label className="card-title" htmlFor={`activity-comment-${a.id}`}>Comment</label>
+        <AutoTextarea id={`activity-comment-${a.id}`} aria-label={`${name} comment`} minRows={1} value={a.comment} onChange={(event) => up((x) => (x.comment = event.target.value))} />
+        <details className="segments">
+          <summary>{a.segments.length} segments</summary>
+          <ol className="segment-list">
+            {a.segments.map((segment) => <li key={segment.id}>{clockTime(segment.startedAt)} {exerciseName(segment.exerciseId)}{resultText(segment.result) && ` · ${resultText(segment.result)}`}</li>)}
+          </ol>
+        </details>
       </div>
     </section>
   );

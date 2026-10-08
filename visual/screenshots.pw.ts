@@ -521,6 +521,60 @@ test("a grouped visit appears as one expandable event with its original parts", 
   await expect(page.getByTestId("share-text")).toContainText("Run · 5 min · 20 cal");
 });
 
+const clock = (minutes: number) => `${String(Math.floor(minutes / 60)).padStart(2, "0")}:${String(minutes % 60).padStart(2, "0")}`;
+/** The 2 Oct shape: 13 alternating walk and run segments from one recording, combined into one activity. */
+function combinedDay() {
+  const segments = Array.from({ length: 13 }, (_, i) => ({ id: `part-${i}`, exerciseId: i % 2 ? "seed:0170" : "seed:0033",
+    startedAt: `${day}T${clock(16 * 60 + 24 + i * 5)}:00+10:00`, result: { minutes: 5, calories: i % 2 ? 40 : 30 } }));
+  return { v: 9, date: day, comments: [], totalCalories: null,
+    events: [{ id: "run-walk", title: null, notes: "", entries: [{ kind: "activity", activity: { id: "combined", comment: "Run walk", effort: "high", segments } }] }],
+    garminLinks: segments.map((segment, i) => ({ sourceKey: `garmin:123:${day}T06:24:00.000Z:${i}`, target: { kind: "segment", id: segment.id } })) };
+}
+
+test("a combined activity shows its totals and segments and splits back into parts", async ({ page }) => {
+  await mockApi(page);
+  await page.addInitScript(({ date, doc }) => {
+    localStorage.setItem("tq:authed", JSON.stringify(true));
+    localStorage.setItem(`tq:day:${date}`, JSON.stringify({ doc, base: null, dirty: false, rev: 1 }));
+  }, { date: day, doc: combinedDay() });
+  await page.goto(`/#/d/${day}`);
+  const card = page.getByRole("region", { name: "Walk/Run" });
+  await expect(card).toContainText("Start time 16:24");
+  await expect(card).toContainText("65 min · 450 cal");
+  await expect(card.getByLabel("Walk/Run comment")).toHaveValue("Run walk");
+  await expect(card.getByRole("group", { name: "Walk/Run effort (RPE)" }).getByRole("button", { name: "high" })).toHaveAttribute("aria-pressed", "true");
+  const segments = card.getByText("13 segments");
+  await expect(card.getByRole("listitem").first()).toBeHidden();
+  for (const state of ["collapsed", "expanded"]) {
+    for (const width of [320, 1280]) {
+      await page.setViewportSize({ width, height: 844 });
+      for (const colorScheme of ["light", "dark"] as const) {
+        await page.emulateMedia({ colorScheme });
+        await checkWidth(page);
+        await expect(card).toHaveScreenshot(`combined-activity-${state}-${width}-${colorScheme}.png`);
+      }
+    }
+    if (state === "collapsed") {
+      await segments.focus();
+      expect(await segments.evaluate((summary) => getComputedStyle(summary).outlineStyle)).not.toBe("none");
+      await page.keyboard.press("Enter");
+      await expect(card.getByRole("listitem")).toHaveCount(13);
+      await expect(card.getByRole("listitem").first()).toHaveText("16:24 Walk · 5 min · 30 cal");
+      await expect(card.getByRole("listitem").last()).toHaveText("17:24 Walk · 5 min · 30 cal");
+    }
+  }
+  await card.getByRole("button", { name: "Walk/Run options" }).click();
+  await page.getByRole("button", { name: "Split into separate activities" }).click();
+  const summary = page.locator("details.training-event summary");
+  await expect(summary).toHaveText("Walk/Run · 13 parts");
+  await expect(summary).toBeFocused();
+  const draft = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!).doc, day);
+  expect(draft.events).toMatchObject([{ id: "run-walk", title: "Walk/Run", notes: "Run walk" }]);
+  expect(savedActivities(draft).map((activity: { id: string }) => activity.id)).toEqual(Array.from({ length: 13 }, (_, i) => `part-${i}`));
+  await page.getByRole("button", { name: "Undo" }).click();
+  await expect(page.getByRole("region", { name: "Walk/Run" })).toContainText("65 min · 450 cal");
+});
+
 test("a grouped FIT event labels saved minutes and Garmin source measurements separately", async ({ page }) => {
   await mockApi(page);
   const fit = "garmin:123:2026-09-15T06:00:00.000Z";
