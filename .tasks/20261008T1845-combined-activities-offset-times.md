@@ -160,4 +160,6 @@ After deploying, read Oct 2 and Oct 5 back through the API. Confirm the v9 shape
 
 Built on the `combined-activities` branch: delivery steps 1–7, with gates green (127 unit tests, typecheck, build, 69 screenshot tests). Beyond the spec, the combined card shows its comment (combining moves the event title and notes there) and the Garmin timer and elapsed span from its linked segments, because combining removes the event card that showed them. Splitting a part of a visit keeps the visit's own title and appends the combined comment to its notes.
 
-Remaining: deploy, then read 2 and 5 October back through the API (v9 shape, `+10:00` and `+11:00` times, link count) and combine "Run walk" in the app.
+Deployed on 8 October as Worker version `987bdaa3` from `master` at `b33a4bf`, after a D1 export and a dry run that converted all 178 production days (173 v8, 5 v7) with no failures. Read back through the API: 2 October is v9 with 14 segment links and `+10:00` times; 5 October is v9 with 5 links (1 session, 4 segments) and `+11:00` times. Neither D1 row has been rewritten yet.
+
+Remaining: combine "Run walk" (2 October, 13 parts) in the app. The expanded event shows 62 min saved and a 64.3 min Garmin timer.
