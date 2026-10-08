@@ -1,4 +1,4 @@
-import type { Section, SessionItem, SetType, StandaloneExercise, Superset, WorkSet } from "../../../shared/exercises/model";
+import type { Section, SessionExercise, SessionItem, SetType, StandaloneExercise, Superset, WorkSet } from "../../../shared/exercises/model";
 import { daySessions, type DayDoc } from "../../../shared/days/model";
 import type { Session } from "../../../shared/sessions/model";
 import { suggestedSet, suggestedSetup } from "../exercises/library";
@@ -71,11 +71,13 @@ export function setLabels(sets: Pick<WorkSet, "type">[]): string[] {
 }
 
 export function copyItems(items: SessionItem[], date?: string): SessionItem[] {
+  // A repeated entry starts without the comment and effort of the one it copies.
+  const fresh = <T extends SessionExercise>({ effort: _effort, ...record }: T) => ({ ...record, ...newMember(record.exerciseId, date), comment: "" });
   return items.map((item) => item.kind === "exercise"
-    ? { ...item, ...newMember(item.exerciseId, date), comment: "", sets: item.sets.map((set) => ({ id: uid(), type: set.type, ...valuesOf(undefined, paramsFor(item.exerciseId)) })) }
+    ? { ...fresh(item), sets: item.sets.map((set) => ({ id: uid(), type: set.type, ...valuesOf(undefined, paramsFor(item.exerciseId)) })) }
     : {
       kind: "superset" as const, id: uid(),
-      members: item.members.map((member) => ({ ...member, ...newMember(member.exerciseId, date), comment: "" })),
+      members: item.members.map((member) => fresh(member)),
       rounds: item.rounds.map((round) => ({ id: uid(), type: round.type })),
       results: [] as Superset["results"],
     }).map((item) => {

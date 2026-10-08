@@ -4,6 +4,9 @@ import { addEventEntry, emptyDay, type DayDoc } from "../shared/days/model";
 import { exerciseIdForName } from "../shared/exercises/catalog";
 import { dayToText } from "../shared/days/format";
 import { formatEffort } from "../shared/exercises/format";
+import { createSuperset, dissolveSuperset } from "../shared/sessions/ops";
+import { copyItems } from "../frontend/features/sessions/ops";
+import { daySessions } from "../shared/days/model";
 
 function effortDay(): DayDoc {
   const doc = emptyDay("2026-10-08");
@@ -49,5 +52,20 @@ describe("effort", () => {
     expect(text).toContain("- Plank: 60s · RPE max");
     expect(text).toContain("- Row: 20kg×10\n");
     expect(text).toContain("Run · 30 min · 250 cal · RPE low");
+  });
+
+  it("stays with an entry moved into and out of a superset", () => {
+    const items = daySessions(effortDay())[0].main;
+    const superset = createSuperset(items, "squat", "new");
+    expect(superset.members[0].effort).toBe("high");
+    dissolveSuperset(items, "new");
+    expect(items[0]).toMatchObject({ kind: "exercise", id: "squat", effort: "high" });
+  });
+
+  it("is not copied when a section is repeated", () => {
+    const copy = copyItems(daySessions(effortDay())[0].main);
+    expect(copy[0]).not.toHaveProperty("effort");
+    if (copy[1].kind !== "superset") throw new Error("expected superset");
+    expect(copy[1].members[0]).not.toHaveProperty("effort");
   });
 });

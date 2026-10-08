@@ -9,12 +9,12 @@ export function move<T>(items: T[], from: number, to: number): void {
 export function createSuperset(items: SessionItem[], exerciseId: string, supersetId: string): Superset {
   const index = items.findIndex((item) => item.id === exerciseId && item.kind === "exercise");
   if (index < 0) throw new Error("Standalone exercise not found");
-  const exercise = items[index] as StandaloneExercise;
+  const { kind: _kind, sets, ...member } = items[index] as StandaloneExercise;
   const superset: Superset = {
     kind: "superset", id: supersetId,
-    members: [{ id: exercise.id, exerciseId: exercise.exerciseId, comment: exercise.comment, params: exercise.params, ...(exercise.setup ? { setup: exercise.setup } : {}) }],
-    rounds: exercise.sets.map(({ id, type }) => ({ id, type })),
-    results: exercise.sets.map(({ id, ...set }) => ({ memberId: exercise.id, roundId: id, ...valuesOf(set, exercise.params) })),
+    members: [member],
+    rounds: sets.map(({ id, type }) => ({ id, type })),
+    results: sets.map(({ id, ...set }) => ({ memberId: member.id, roundId: id, ...valuesOf(set, member.params) })),
   };
   items.splice(index, 1, superset);
   return superset;
