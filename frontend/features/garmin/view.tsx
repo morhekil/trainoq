@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { fitRecordingKey, type GarminActivitySummary } from "../../../shared/garmin/fit";
-import { daySessions, emptyDay, linkedKeys, mergeEvents } from "../../../shared/days/model";
+import { activityName, daySessions, emptyDay, linkedKeys, mergeEvents } from "../../../shared/days/model";
 import { clockTime } from "../../../shared/days/time";
 import { acceptActivity, ignoreGarmin, linkStrengthSession, moveLinkedActivity, strengthMatches, unlinkGarmin } from "../../../shared/garmin/decisions";
 import { request, trpc } from "../../api";
 import { addDays, goToDate, todayLocal } from "../days/dates";
 import { useDay } from "../days/hooks";
 import { getEntry, loadFromServer, registerGarminMove, setDoc, sync } from "../days/store";
-import { createLocalExercise } from "../exercises/catalog";
+import { createLocalExercise, exerciseName } from "../exercises/catalog";
 
 type Listed = GarminActivitySummary & { importedAt: string; status: string; targetId: string | null; decisionDate: string | null };
 type Cursor = { importedAt: string; sourceKey: string };
@@ -229,6 +229,8 @@ function GarminRecord({ source }: { source: Listed }) {
   const part = parts.find((item) => item.sourceKey === source.sourceKey);
   const localSegment = part?.entry.kind === "activity" ? part.entry.activity.segments.find((segment) => segment.id === part.segmentId) : undefined;
   const localSession = part?.entry.kind === "session" ? part.entry.session : undefined;
+  const combined = part?.entry.kind === "activity" && part.entry.activity.segments.length > 1 ? part.entry.activity : undefined;
+  const moveReason = `move-reason-${source.sourceKey}`;
   const localStatus = localSegment ? "activity" : localSession ? "session" : doc.garminLinks.some((link) => link.sourceKey === source.sourceKey) ? "ignored" : null;
   const status = entry?.dirty ? localStatus ?? "pending" : localStatus ?? source.status;
   const matches = strengthMatches(doc, source);
@@ -286,9 +288,10 @@ function GarminRecord({ source }: { source: Listed }) {
       </div>
     </> : <>
       {status === "activity" && <div className="garmin-fields">
-        <label>Correct Trainoq date<input type="date" value={moveDate} onChange={(event) => setMoveDate(event.target.value)} /></label>
-        <button type="button" className="btn small secondary" disabled={moveDate === date} onClick={() => void moveActivity()}>Move activity</button>
+        <label>Correct Trainoq date<input type="date" value={moveDate} disabled={!!combined} onChange={(event) => setMoveDate(event.target.value)} /></label>
+        <button type="button" className="btn small secondary" disabled={moveDate === date || !!combined} aria-describedby={combined ? moveReason : undefined} onClick={() => void moveActivity()}>Move activity</button>
       </div>}
+      {combined && <p className="hint" id={moveReason}>Part of {activityName(combined, exerciseName)}. Split it on its day to move this part.</p>}
       <div className="garmin-actions">
         {status !== "ignored" && <button type="button" className="btn small secondary" onClick={() => goToDate(date)}>Edit saved day</button>}
         <button type="button" className="btn small ghost" aria-label={`${status === "ignored" ? "Restore" : "Unlink"} ${source.title}`} onClick={() => void decide((day) => unlinkGarmin(day, source.sourceKey))}>{status === "ignored" ? "Restore" : "Unlink"}</button>

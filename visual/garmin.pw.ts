@@ -328,6 +328,42 @@ test("moves an accepted activity to a corrected Trainoq day", async ({ page }) =
   expect(newStartedBeforeOldComplete).toBe(false);
 });
 
+test("a segment of a combined activity shows as added and explains why it cannot move", async ({ page }) => {
+  const fit = "garmin:123:2026-09-28T01:22:05.000Z";
+  const source = { sourceKey: `${fit}:1`, sport: "running", subSport: "generic", title: "Run", startUtc: "2026-09-28T01:27:05.000Z", localDate: "2026-09-28", offsetMinutes: 600, timerSeconds: 300, elapsedSeconds: 300, activeCalories: 40, importedAt: "2026-09-28T08:00:00.000Z", status: "activity", targetId: "combined", decisionDate: "2026-09-28" };
+  const segment = (i: number, exerciseId: string, startedAt: string, calories: number) => ({ id: `part-${i}`, exerciseId, startedAt, result: { minutes: 5, calories } });
+  const doc = { v: 9, date: "2026-09-28", comments: [], totalCalories: null,
+    events: [{ id: "e", title: null, notes: "", entries: [{ kind: "activity", activity: { id: "combined", comment: "", segments: [segment(0, "seed:0033", "2026-09-28T11:22:05+10:00", 30), segment(1, "seed:0170", "2026-09-28T11:27:05+10:00", 40)] } }] }],
+    garminLinks: [0, 1].map((i) => ({ sourceKey: `${fit}:${i}`, target: { kind: "segment", id: `part-${i}` } })) };
+  await page.route("**/api/trpc/**", async (route) => {
+    const procedure = new URL(route.request().url()).pathname.split("/").at(-1);
+    const data = procedure === "auth.me" ? { ok: true }
+      : procedure === "garmin.connection" ? disconnected
+      : procedure === "garmin.list" ? { items: [source], nextCursor: null }
+      : procedure === "days.get" ? { date: doc.date, doc, updatedAt: "base" }
+      : procedure === "exercises.library" ? { catalog: [], stats: [], history: {} }
+      : null;
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify({ result: { data } }) });
+  });
+  await page.addInitScript(() => localStorage.setItem("tq:authed", "true"));
+  await page.goto("/#/garmin");
+  await page.getByRole("button", { name: "Show all" }).click();
+  const record = page.getByLabel("Run Garmin recording");
+  await expect(record).toContainText("Added activity");
+  await expect(record).toContainText("Trainoq: 5 min · 40 active cal");
+  const move = record.getByRole("button", { name: "Move activity" });
+  await expect(move).toBeDisabled();
+  await expect(move).toHaveAccessibleDescription("Part of Walk/Run. Split it on its day to move this part.");
+  for (const width of [320, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const colorScheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme });
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      await expect(record).toHaveScreenshot(`garmin-combined-segment-${width}-${colorScheme}.png`);
+    }
+  }
+});
+
 test("requires an explicit session choice when strength matches are ambiguous", async ({ page }) => {
   const source = { sourceKey: "garmin:123:2026-09-28T06:00:00.000Z:0", sport: "training", subSport: "strengthTraining", title: "Strength", startUtc: "2026-09-28T06:00:00.000Z", localDate: "2026-09-28", offsetMinutes: 600, timerSeconds: 3600, elapsedSeconds: 3700, activeCalories: 362, importedAt: "2026-09-28T08:00:00.000Z", status: "pending", targetId: null, decisionDate: null };
   const session = (id: string, startedAt: string) => ({ id, startedAt, endedAt: "2026-09-28T07:00:00.000Z", warmup: [], main: [], cooldown: [], calories: null, notes: "Keep sets" });
