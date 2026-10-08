@@ -741,7 +741,24 @@ textarea {
   letter-spacing: 0.05em;
   color: var(--muted);
 }
-.effort button {
+.score-picker {
+  display: flex;
+  gap: 4px;
+}
+.score-picker button {
+  flex: 1;
+  font-variant-numeric: tabular-nums;
+}
+.add-comment-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+.add-comment-actions > * {
+  flex: 1 1 auto;
+}
+.effort button,
+.score-picker button {
   min-height: 36px;
   padding: 0 10px;
   border-radius: 10px;
@@ -750,7 +767,8 @@ textarea {
   font-size: 14px;
   font-weight: 600;
 }
-.effort button[aria-pressed="true"] {
+.effort button[aria-pressed="true"],
+.score-picker button[aria-pressed="true"] {
   background: var(--accent);
   color: var(--on-accent);
   font-weight: 800;

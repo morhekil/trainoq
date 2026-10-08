@@ -7,13 +7,19 @@ import { cachedDays, ingestServerDays } from "../days/store";
 
 const fetched = new Set<string>();
 
-/** Pull recent days with sessions into the local cache (once per date per page load). */
-export async function loadRecentSessions(beforeDate: string): Promise<boolean> {
+/**
+ * Pull recent days into the local cache (once per date per page load): the last 14 days with sessions for "Repeat",
+ * and the last 14 days of any kind, which hold comment scores from rest days.
+ */
+export async function loadRecentDays(beforeDate: string): Promise<boolean> {
   if (fetched.has(beforeDate)) return false;
   fetched.add(beforeDate);
   try {
-    const days = await request(trpc.days.list.query({ before: beforeDate, withSessions: true, limit: 14 }));
-    ingestServerDays(days);
+    const days = await Promise.all([
+      request(trpc.days.list.query({ before: beforeDate, withSessions: true, limit: 14 })),
+      request(trpc.days.list.query({ before: beforeDate, limit: 14 })),
+    ]);
+    ingestServerDays(days.flat());
     return true;
   } catch {
     fetched.delete(beforeDate);

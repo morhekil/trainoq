@@ -1363,6 +1363,76 @@ test("effort is one tap per entry, clears on a second tap, and reaches shared te
   await expect(page.getByRole("group", { name: "Squat effort (RPE)" }).getByRole("button", { name: "max" })).toHaveAttribute("aria-pressed", "true");
 });
 
+test("comment scores start from a recent metric or a new name and reach shared text and history", async ({ page }) => {
+  await mockApi(page);
+  const scoredDay = { v: 9, date: day, comments: [{ id: "old", time: "08:00", text: "", score: { metric: "Back", value: 2 } }], events: [], garminLinks: [], totalCalories: null };
+  await page.addInitScript((doc) => {
+    localStorage.setItem("tq:authed", JSON.stringify(true));
+    localStorage.setItem(`tq:day:${doc.date}`, JSON.stringify({ doc, base: null, dirty: false, rev: 1 }));
+  }, scoredDay);
+  await page.goto(`/#/d/${emptyDay}`);
+
+  await page.getByRole("button", { name: "Back score" }).click();
+  const save = page.getByRole("button", { name: "Save score" });
+  await expect(save).toBeDisabled();
+  const newScore = page.getByRole("group", { name: "Back score" });
+  await expect(newScore.getByRole("button")).toHaveText(["0", "1", "2", "3", "4", "5"]);
+  await newScore.getByRole("button", { name: "3" }).click();
+  await page.getByLabel("New comment time").fill("17:05");
+  await page.locator("#new-day-comment").fill("Stiff after driving");
+  for (const width of [320, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const colorScheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme });
+      await checkWidth(page);
+      await expect(page.locator(".add-comment")).toHaveScreenshot(`score-form-${width}-${colorScheme}.png`);
+    }
+  }
+  await save.click();
+
+  const card = page.locator("[data-comment-time='17:05']");
+  const score = card.getByRole("group", { name: "Back score" });
+  await expect(score.getByRole("button", { name: "3" })).toHaveAttribute("aria-pressed", "true");
+  await expect(card.getByRole("textbox", { name: "Back comment" })).toHaveValue("Stiff after driving");
+  await expect(card.getByText("Comment", { exact: true })).toBeVisible();
+  await score.getByRole("button", { name: "1" }).click();
+  await expect(score.getByRole("button", { name: "1" })).toHaveAttribute("aria-pressed", "true");
+  await page.keyboard.press("Tab");
+  const two = score.getByRole("button", { name: "2" });
+  await expect(two).toBeFocused();
+  expect(await two.evaluate((button) => getComputedStyle(button).outlineStyle)).not.toBe("none");
+  await page.keyboard.press("Enter");
+  await expect(two).toHaveAttribute("aria-pressed", "true");
+  for (const width of [320, 1280]) {
+    await page.setViewportSize({ width, height: 844 });
+    for (const colorScheme of ["light", "dark"] as const) {
+      await page.emulateMedia({ colorScheme });
+      await checkWidth(page);
+      await expect(card).toHaveScreenshot(`score-card-${width}-${colorScheme}.png`);
+    }
+  }
+
+  await page.getByRole("button", { name: "Add comment" }).click();
+  await page.getByRole("button", { name: "Add score" }).click();
+  await page.getByLabel("Metric").fill("Hip");
+  await page.getByLabel("New comment time").fill("09:00");
+  await page.getByRole("group", { name: "Hip score" }).getByRole("button", { name: "0" }).click();
+  await page.getByRole("button", { name: "Save score" }).click();
+  await expect(page.locator("[data-comment-time='09:00']").getByRole("group", { name: "Hip score" }).getByRole("button", { name: "0" })).toHaveAttribute("aria-pressed", "true");
+
+  await page.getByRole("button", { name: "Share day with PT / physio" }).click();
+  await expect(page.getByTestId("share-text")).toContainText("Comment 09:00 · Hip 0/5\n\nComment 17:05 · Back 2/5\nStiff after driving");
+  await page.keyboard.press("Escape");
+
+  await page.goto("/#/history");
+  await expect(page.locator(".history-item", { hasText: "Wed 16 Sep 2026" }).locator(".history-summary")).toHaveText("Hip 0 · Back 2");
+  await expect(page.locator(".history-item", { hasText: "Tue 15 Sep 2026" }).locator(".history-summary")).toHaveText("Back 2");
+
+  await page.goto("/#/d/2026-10-01");
+  await expect(page.getByRole("button", { name: "Add comment" })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Back score" })).toHaveCount(0);
+});
+
 test("band values stay within 0 to 5 when typed or stepped", async ({ page }) => {
   await mockApi(page);
   await page.addInitScript(({ date, doc }) => {

@@ -1,14 +1,14 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { activityName, activityStart, activityTotals, addEventEntry, combineActivities, dayActivities, daySessions, detachEventEntry, emptyDay, linkedKeys, mergeEvents, removeEventEntry, splitActivity, type Activity, type DayComment, type DayDoc, type EventEntry, type Segment, type TrainingEvent } from "../../../shared/days/model";
+import { activityName, activityStart, activityTotals, addEventEntry, combineActivities, dayActivities, daySessions, detachEventEntry, emptyDay, linkedKeys, mergeEvents, recentMetrics, removeEventEntry, SCORE_MAX, splitActivity, type Activity, type DayComment, type DayDoc, type EventEntry, type Segment, type TrainingEvent } from "../../../shared/days/model";
 import { dayToText } from "../../../shared/days/format";
 import { activityTime, orderedDayEvents, orderedDayRecords } from "../../../shared/days/timeline";
 import { useDay } from "./hooks";
 import { libraryVersion, refreshLibrary, subscribeLibrary } from "../exercises/library";
 import { exerciseName } from "../exercises/catalog";
 import { newSession } from "../sessions/ops";
-import { loadRecentSessions } from "../sessions/recent";
-import { getEntry, resolveConflict } from "./store";
-import { todayLocal } from "./dates";
+import { loadRecentDays } from "../sessions/recent";
+import { cachedDays, getEntry, resolveConflict } from "./store";
+import { addDays, todayLocal } from "./dates";
 import { atClock, clockTime, deviceOffset, nowLocal, withClock } from "../../../shared/days/time";
 import { uid } from "../../id";
 import { DayContext, useDayCtx, type DayCtx } from "./context";
@@ -35,7 +35,7 @@ export function DayView({ date }: { date: string }) {
 
   useEffect(() => {
     void refreshLibrary();
-    void loadRecentSessions(date).then((changed) => changed && setRecentVersion((v) => v + 1));
+    void loadRecentDays(date).then((changed) => changed && setRecentVersion((v) => v + 1));
   }, [date]);
 
   useEffect(() => {
@@ -215,6 +215,13 @@ function ConflictBanner({ date, local, other }: { date: string; local: DayDoc; o
   );
 }
 
+/** One tap records a score from 0 (no issues) to 5 (the worst). */
+function ScorePicker({ metric, value, onChange, autoFocus, describedBy }: { metric: string; value?: number; onChange: (value: number) => void; autoFocus?: boolean; describedBy?: string }) {
+  return <div className="score-picker" role="group" aria-label={`${metric || "New"} score`} aria-describedby={describedBy}>
+    {Array.from({ length: SCORE_MAX + 1 }, (_, level) => <button key={level} type="button" aria-pressed={value === level} autoFocus={autoFocus && level === 0} onClick={() => onChange(level)}>{level}</button>)}
+  </div>;
+}
+
 function CommentCard({ comment }: { comment: DayComment }) {
   const { update, undoable } = useDayCtx();
   const { openSheet } = useOverlays();
@@ -222,49 +229,86 @@ function CommentCard({ comment }: { comment: DayComment }) {
     const item = day.comments.find((entry) => entry.id === comment.id);
     if (item) fn(item);
   });
+  const { score } = comment;
   return (
     <section className="card comment-card" data-comment-time={comment.time}>
       <label className="activity-time">Time
         <input type="time" aria-label="Comment time" value={comment.time} onChange={(event) => event.target.value && change((item) => (item.time = event.target.value))} />
       </label>
       <div className="activity-row">
-        <label className="card-title" htmlFor={`comment-${comment.id}`}>Comment</label>
+        {score
+          ? <span className="card-title">{score.metric}</span>
+          : <label className="card-title" htmlFor={`comment-${comment.id}`}>Comment</label>}
         <button type="button" className="icon-btn" aria-label="Comment options" onClick={() => openSheet({
           title: "Comment", actions: [{ label: "Delete", danger: true,
             onClick: () => undoable("Comment deleted", (day) => (day.comments = day.comments.filter((item) => item.id !== comment.id))) }],
         })}><Icon name="more" /></button>
       </div>
-      <AutoTextarea id={`comment-${comment.id}`} minRows={2} value={comment.text} onChange={(event) => change((item) => (item.text = event.target.value))} />
+      {score && <>
+        <ScorePicker metric={score.metric} value={score.value} onChange={(value) => change((item) => { if (item.score) item.score.value = value; })} />
+        <label className="event-field" htmlFor={`comment-${comment.id}`}>Comment</label>
+      </>}
+      <AutoTextarea id={`comment-${comment.id}`} aria-label={score ? `${score.metric} comment` : undefined} minRows={2} value={comment.text} onChange={(event) => change((item) => (item.text = event.target.value))} />
     </section>
   );
 }
 
+/** Adds a comment, optionally with a score. Metrics scored in the last 14 days get a quick button. */
 function AddCommentCard() {
-  const { update } = useDayCtx();
+  const { date, doc, update, recentVersion } = useDayCtx();
   const [open, setOpen] = useState(false);
   const [time, setTime] = useState(() => clockTime(nowLocal()));
   const [text, setText] = useState("");
-  const add = () => {
-    if (!text.trim()) return;
-    update((day) => day.comments.push({ id: uid(), time, text }));
-    setText("");
+  const [score, setScore] = useState<{ metric: string; value?: number } | null>(null);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const days = useMemo(() => cachedDays().map((entry) => entry.doc), [doc, recentVersion]);
+  const metric = score?.metric.trim() ?? "";
+  const ready = !!time && (score ? !!metric && score.value != null : !!text.trim());
+  const start = (scored: string | null) => {
+    setTime(clockTime(nowLocal()));
+    setScore(scored == null ? null : { metric: scored });
+    setOpen(true);
+  };
+  const close = () => {
     setOpen(false);
+    setText("");
+    setScore(null);
+  };
+  const add = () => {
+    if (!ready) return;
+    update((day) => day.comments.push({ id: uid(), time, text, ...(score ? { score: { metric, value: score.value! } } : {}) }));
+    close();
   };
   return (
-    <section className="card">
+    <section className="card add-comment">
       {open ? <>
         <label className="activity-time">Time
           <input type="time" aria-label="New comment time" value={time} onChange={(event) => setTime(event.target.value)} />
         </label>
-        <label className="card-title" htmlFor="new-day-comment">Comment</label>
-        <AutoTextarea id="new-day-comment" minRows={2} placeholder="What happened?" autoFocus value={text} onChange={(event) => setText(event.target.value)} />
+        {score ? <>
+          <label className="event-field">Metric
+            <input className="text" type="text" list="score-metrics" autoFocus={!score.metric} value={score.metric} onChange={(event) => setScore({ ...score, metric: event.target.value })} />
+          </label>
+          <datalist id="score-metrics">{recentMetrics(days, "", date).map((name) => <option key={name} value={name} />)}</datalist>
+          <ScorePicker metric={metric} value={score.value} autoFocus={!!score.metric} describedBy="score-scale" onChange={(value) => setScore({ ...score, value })} />
+          <p className="hint" id="score-scale">0 no issues, 5 worst</p>
+        </> : <button type="button" className="link-btn" onClick={() => setScore({ metric: "" })}>
+          <Icon name="plus" size={16} /> Add score
+        </button>}
+        <label className={score ? "event-field" : "card-title"} htmlFor="new-day-comment">Comment</label>
+        <AutoTextarea id="new-day-comment" minRows={2} placeholder={score ? "How does it feel?" : "What happened?"} autoFocus={!score} value={text} onChange={(event) => setText(event.target.value)} />
         <div className="row-actions">
-          <button type="button" className="btn ghost" onClick={() => { setOpen(false); setText(""); }}>Cancel</button>
-          <button type="button" className="btn primary" disabled={!text.trim() || !time} onClick={add}>Save comment</button>
+          <button type="button" className="btn ghost" onClick={close}>Cancel</button>
+          <button type="button" className="btn primary" disabled={!ready} onClick={add}>{score ? "Save score" : "Save comment"}</button>
         </div>
-      </> : <button type="button" className="btn ghost" onClick={() => { setTime(clockTime(nowLocal())); setOpen(true); }}>
-        <Icon name="plus" size={18} /> Add comment
-      </button>}
+      </> : <div className="add-comment-actions">
+        <button type="button" className="btn ghost" onClick={() => start(null)}>
+          <Icon name="plus" size={18} /> Add comment
+        </button>
+        {recentMetrics(days, addDays(date, -13), date).map((name) => <button key={name} type="button" className="btn ghost" onClick={() => start(name)}>
+          <Icon name="plus" size={18} /> {name} score
+        </button>)}
+      </div>}
     </section>
   );
 }
