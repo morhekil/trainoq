@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { normalizeDay } from "../shared/days/migrate";
 import { daySchema } from "../shared/days/schema";
 import { addEventEntry, detachEventEntry, emptyDay, mergeEvents, type Activity } from "../shared/days/model";
-import { eventMeasurements } from "../shared/days/summary";
+import { activityMeasurements, eventMeasurements } from "../shared/days/summary";
 
 const activity = (id: string, exerciseId: string, startedAt: string, minutes: number | null, calories: number | null, comment = ""): Activity =>
   ({ id, comment, segments: [{ id, exerciseId, startedAt, result: { minutes, calories } }] });
@@ -85,4 +85,17 @@ it("labels saved rounded minutes separately from one FIT recording's source time
   event.entries.push({ kind: "session", session: { id: "strength", startedAt: "2026-10-02T16:07:00+10:00", endedAt: null, warmup: [], main: [], cooldown: [], calories: 40, notes: "" } });
   event.summaryOverrides = undefined;
   expect(eventMeasurements(day, event, sources)).toEqual({ savedMinutes: null, timerSeconds: null, elapsedSeconds: null, activeCalories: null, sourceComplete: false });
+});
+
+it("measures a combined activity's linked segments the same way as an event of separate parts", () => {
+  const day = emptyDay("2026-10-02");
+  const fit = "garmin:123:2026-10-02T06:00:00.000Z";
+  const combined: Activity = { id: "combined", comment: "", segments: [...activity("walk", "seed:0033", "2026-10-02T16:00:00+10:00", 5, 20).segments, ...activity("run", "seed:0170", "2026-10-02T16:06:00+10:00", 7, 25).segments] };
+  addEventEntry(day, { kind: "activity", activity: combined });
+  day.garminLinks = [{ sourceKey: `${fit}:0`, target: { kind: "segment", id: "walk" } }, { sourceKey: `${fit}:1`, target: { kind: "segment", id: "run" } }];
+  const source = (index: number, startUtc: string, timerSeconds: number, elapsedSeconds: number, activeCalories: number) => ({ sourceKey: `${fit}:${index}`, sport: "running", subSport: null, title: "Run", startUtc, localDate: "2026-10-02", offsetMinutes: 600, timerSeconds, elapsedSeconds, activeCalories });
+  const sources = new Map([[`${fit}:0`, source(0, "2026-10-02T06:00:00.000Z", 318, 340, 28)], [`${fit}:1`, source(1, "2026-10-02T06:06:00.000Z", 402, 440, 37)]]);
+  expect(activityMeasurements(day, combined, sources)).toEqual({ savedMinutes: 12, timerSeconds: 720, elapsedSeconds: 800, activeCalories: 65, sourceComplete: true });
+  day.garminLinks.pop();
+  expect(activityMeasurements(day, combined, sources)).toMatchObject({ timerSeconds: null, sourceComplete: false });
 });

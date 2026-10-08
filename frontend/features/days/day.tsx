@@ -18,7 +18,7 @@ import { useOverlays } from "../../overlays";
 import { Modal } from "../../modal";
 import { SessionCard } from "../sessions/session";
 import { suggestedRecordingGroups } from "../../../shared/garmin/decisions";
-import { eventMeasurements } from "../../../shared/days/summary";
+import { activityMeasurements, eventMeasurements } from "../../../shared/days/summary";
 import type { GarminActivitySummary } from "../../../shared/garmin/fit";
 import { formatNum } from "../../../shared/exercises/format";
 import type { ActivityResult } from "../../../shared/exercises/model";
@@ -101,7 +101,7 @@ export function DayView({ date }: { date: string }) {
         ? <CommentCard key={`comment-${record.comment.id}`} comment={record.comment} />
         : record.event.entries.length > 1 || record.event.title || record.event.notes
           ? <TrainingEventCard key={record.event.id} event={record.event} sources={sources} sessionIndices={sessionIndices} totalSessions={daySessions(doc).length} actionFor={actionFor} />
-          : <EventPart key={record.event.id} eventId={record.event.id} entry={record.event.entries[0]} sessionIndices={sessionIndices} totalSessions={daySessions(doc).length} action={actionFor(record.event, record.event.entries[0])} />)}
+          : <EventPart key={record.event.id} eventId={record.event.id} entry={record.event.entries[0]} sources={sources} sessionIndices={sessionIndices} totalSessions={daySessions(doc).length} action={actionFor(record.event, record.event.entries[0])} />)}
       {!active && (
         <button type="button" className="btn big primary start-btn" onClick={start}>
           <Icon name="play" size={18} />
@@ -127,10 +127,10 @@ function eventLabel(event: TrainingEvent): string {
 /** Moves focus once the change has rendered, e.g. to the card that replaced the one acted on. */
 const focusLater = (id: string) => requestAnimationFrame(() => document.getElementById(id)?.focus());
 
-function EventPart({ eventId, entry, sessionIndices, totalSessions, action }: { eventId: string; entry: EventEntry; sessionIndices: Map<string, number>; totalSessions: number; action?: EventAction }) {
+function EventPart({ eventId, entry, sources, sessionIndices, totalSessions, action }: { eventId: string; entry: EventEntry; sources: ReadonlyMap<string, GarminActivitySummary>; sessionIndices: Map<string, number>; totalSessions: number; action?: EventAction }) {
   if (entry.kind === "session") return <SessionCard s={entry.session} index={sessionIndices.get(entry.session.id) ?? 0} total={totalSessions} eventAction={action} />;
   return entry.activity.segments.length > 1
-    ? <CombinedActivityCard a={entry.activity} eventId={eventId} eventAction={action} />
+    ? <CombinedActivityCard a={entry.activity} eventId={eventId} sources={sources} eventAction={action} />
     : <ActivityCard a={entry.activity} eventAction={action} />;
 }
 
@@ -143,7 +143,6 @@ function TrainingEventCard({ event, sources, sessionIndices, totalSessions, acti
     undoable("Parts combined into one activity", (day) => { id = combineActivities(day, event.id).id; });
     focusLater(`activity-${id}`);
   };
-  const minutes = (seconds: number) => formatNum(Math.round(seconds / 6) / 10);
   const change = (fn: (item: TrainingEvent) => void) => update((day) => {
     const item = day.events.find((candidate) => candidate.id === event.id);
     if (item) fn(item);
@@ -151,21 +150,28 @@ function TrainingEventCard({ event, sources, sessionIndices, totalSessions, acti
   return <details className="card training-event">
     <summary id={`event-${event.id}`}>{event.title?.trim() || "Training event"} · {event.entries.length} {event.entries.length === 1 ? "part" : "parts"}</summary>
     <div className="event-parts">
-      {(measurements.savedMinutes != null || measurements.timerSeconds != null || measurements.elapsedSeconds != null || measurements.activeCalories != null) && <div className="hint">
-        {measurements.savedMinutes != null && <div>Saved parts: {formatNum(measurements.savedMinutes)} min (rounded)</div>}
-        {measurements.timerSeconds != null && <div>{event.summaryOverrides?.timerSeconds === undefined ? "Garmin timer" : "Event timer (entered)"}: {minutes(measurements.timerSeconds)} min</div>}
-        {measurements.elapsedSeconds != null && <div>{event.summaryOverrides?.elapsedSeconds === undefined ? "Elapsed span" : "Event elapsed (entered)"}: {minutes(measurements.elapsedSeconds)} min</div>}
-        {measurements.activeCalories != null && <div>{event.summaryOverrides?.activeCalories === undefined ? "Garmin source active calories" : "Event active calories (entered)"}: {formatNum(measurements.activeCalories)} cal</div>}
-      </div>}
+      <MeasurementsHint measurements={measurements} overrides={event.summaryOverrides} />
       {combinable && <button type="button" className="btn secondary" onClick={combine}>Combine into one activity</button>}
       <label className="event-field">Event title
         <input className="text" type="text" value={event.title ?? ""} onChange={(changeEvent) => change((item) => (item.title = changeEvent.target.value || null))} />
       </label>
       <label className="event-field" htmlFor={`event-notes-${event.id}`}>Event notes</label>
       <AutoTextarea id={`event-notes-${event.id}`} minRows={2} value={event.notes} onChange={(changeEvent) => change((item) => (item.notes = changeEvent.target.value))} />
-      {event.entries.map((entry) => <EventPart key={entry.kind === "session" ? `session-${entry.session.id}` : `activity-${entry.activity.id}`} eventId={event.id} entry={entry} sessionIndices={sessionIndices} totalSessions={totalSessions} action={actionFor(event, entry)} />)}
+      {event.entries.map((entry) => <EventPart key={entry.kind === "session" ? `session-${entry.session.id}` : `activity-${entry.activity.id}`} eventId={event.id} entry={entry} sources={sources} sessionIndices={sessionIndices} totalSessions={totalSessions} action={actionFor(event, entry)} />)}
     </div>
   </details>;
+}
+
+/** Garmin source values, labelled apart from the saved, rounded minutes. */
+function MeasurementsHint({ measurements: m, overrides }: { measurements: Omit<ReturnType<typeof eventMeasurements>, "sourceComplete">; overrides?: TrainingEvent["summaryOverrides"] }) {
+  const minutes = (seconds: number) => formatNum(Math.round(seconds / 6) / 10);
+  if (m.savedMinutes == null && m.timerSeconds == null && m.elapsedSeconds == null && m.activeCalories == null) return null;
+  return <div className="hint">
+    {m.savedMinutes != null && <div>Saved parts: {formatNum(m.savedMinutes)} min (rounded)</div>}
+    {m.timerSeconds != null && <div>{overrides?.timerSeconds === undefined ? "Garmin timer" : "Event timer (entered)"}: {minutes(m.timerSeconds)} min</div>}
+    {m.elapsedSeconds != null && <div>{overrides?.elapsedSeconds === undefined ? "Elapsed span" : "Event elapsed (entered)"}: {minutes(m.elapsedSeconds)} min</div>}
+    {m.activeCalories != null && <div>{overrides?.activeCalories === undefined ? "Garmin source active calories" : "Event active calories (entered)"}: {formatNum(m.activeCalories)} cal</div>}
+  </div>;
 }
 
 function ConflictBanner({ date, local, other }: { date: string; local: DayDoc; other: DayDoc | null }) {
@@ -325,8 +331,8 @@ const resultText = (result: ActivityResult) =>
   [result.minutes != null && `${formatNum(result.minutes)} min`, result.calories != null && `${formatNum(result.calories)} cal`].filter(Boolean).join(" · ");
 
 /** An activity of several segments: totals are read-only; split it to edit a segment. */
-function CombinedActivityCard({ a, eventId, eventAction }: { a: Activity; eventId: string; eventAction?: EventAction }) {
-  const { update, undoable } = useDayCtx();
+function CombinedActivityCard({ a, eventId, sources, eventAction }: { a: Activity; eventId: string; sources: ReadonlyMap<string, GarminActivitySummary>; eventAction?: EventAction }) {
+  const { doc, update, undoable } = useDayCtx();
   const { openSheet } = useOverlays();
   const name = activityName(a, exerciseName);
   const up = (fn: (a: Activity) => void) => update((d) => {
@@ -351,6 +357,7 @@ function CombinedActivityCard({ a, eventId, eventAction }: { a: Activity; eventI
           <button type="button" className="icon-btn" aria-label={`${name} options`} onClick={menu}><Icon name="more" /></button>
         </div>
         <div className="activity-totals">{resultText(activityTotals(a)) || "No minutes or calories"}</div>
+        <MeasurementsHint measurements={{ ...activityMeasurements(doc, a, sources), savedMinutes: null }} />
         <EffortPicker name={name} scale="RPE" value={a.effort} onChange={(value) => up((x) => { if (value) x.effort = value; else delete x.effort; })} />
         <label className="card-title" htmlFor={`activity-comment-${a.id}`}>Comment</label>
         <AutoTextarea id={`activity-comment-${a.id}`} aria-label={`${name} comment`} minRows={1} value={a.comment} onChange={(event) => up((x) => (x.comment = event.target.value))} />

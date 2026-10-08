@@ -533,6 +533,10 @@ function combinedDay() {
 
 test("a combined activity shows its totals and segments and splits back into parts", async ({ page }) => {
   await mockApi(page);
+  await page.route("**/api/trpc/garmin.summaries*", (route) => route.fulfill({ contentType: "application/json", body: JSON.stringify({ result: { data: combinedDay().garminLinks.map((link, i) => ({
+    sourceKey: link.sourceKey, sport: i % 2 ? "running" : "walking", subSport: null, title: i % 2 ? "Run" : "Walk", startUtc: new Date(Date.parse(`${day}T06:24:00.000Z`) + i * 300_000).toISOString(),
+    localDate: day, offsetMinutes: 600, timerSeconds: 296.77, elapsedSeconds: 300, activeCalories: i % 2 ? 40 : 30,
+  })) } }) }));
   await page.addInitScript(({ date, doc }) => {
     localStorage.setItem("tq:authed", JSON.stringify(true));
     localStorage.setItem(`tq:day:${date}`, JSON.stringify({ doc, base: null, dirty: false, rev: 1 }));
@@ -541,6 +545,8 @@ test("a combined activity shows its totals and segments and splits back into par
   const card = page.getByRole("region", { name: "Walk/Run" });
   await expect(card).toContainText("Start time 16:24");
   await expect(card).toContainText("65 min · 450 cal");
+  await expect(card).toContainText("Garmin timer: 64.3 min");
+  await expect(card).toContainText("Elapsed span: 65 min");
   await expect(card.getByLabel("Walk/Run comment")).toHaveValue("Run walk");
   await expect(card.getByRole("group", { name: "Walk/Run effort (RPE)" }).getByRole("button", { name: "high" })).toHaveAttribute("aria-pressed", "true");
   const segments = card.getByText("13 segments");
