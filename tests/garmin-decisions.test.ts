@@ -1,4 +1,4 @@
-import { expect, it } from "vitest";
+import { afterEach, expect, it, vi } from "vitest";
 import { addEventEntry, dayActivities, daySessions, emptyDay } from "../shared/days/model";
 import type { GarminActivitySummary } from "../shared/garmin/fit";
 import type { Session } from "../shared/sessions/model";
@@ -55,4 +55,25 @@ it("moves an accepted activity to another day without replacing corrected values
   expect(dayActivities(newDay)).toEqual([{ id: activity.id, comment: "Corrected name and notes", segments: [{ id: activity.id, exerciseId: "seed:0170", startedAt: "2026-09-29T16:00:00+10:00", result: { minutes: 60, calories: 350 } }] }]);
   expect(newDay.garminLinks).toEqual([{ sourceKey: source.sourceKey, target: { kind: "segment", id: activity.id } }]);
   expect(daySchema.parse(newDay)).toEqual(newDay);
+});
+
+afterEach(() => { vi.unstubAllEnvs(); });
+
+it("uses the device offset for a recording whose FIT has no offset", () => {
+  vi.stubEnv("TZ", "America/New_York");
+  const doc = emptyDay("2026-09-28");
+  const activity = acceptActivity(doc, { ...source, offsetMinutes: null, localDate: null }, "seed:0170");
+  expect(activity.segments[0].startedAt).toBe("2026-09-28T02:00:00-04:00");
+});
+
+it("refuses to move one segment of a combined activity", () => {
+  const day = emptyDay("2026-10-02");
+  const segment = (id: string, startedAt: string) => ({ id, exerciseId: "seed:0033", startedAt, result: { minutes: 5, calories: 20 } });
+  addEventEntry(day, { kind: "activity", activity: { id: "combined", comment: "", segments: [segment("walk", "2026-10-02T16:24:07+10:00"), segment("run", "2026-10-02T16:29:30+10:00")] } });
+  day.garminLinks.push({ sourceKey: source.sourceKey, target: { kind: "segment", id: "run" } });
+  const before = structuredClone(day);
+  const target = emptyDay("2026-10-03");
+  expect(() => moveLinkedActivity(day, target, source.sourceKey)).toThrow("Split the combined activity first");
+  expect(day).toEqual(before);
+  expect(target).toEqual(emptyDay("2026-10-03"));
 });

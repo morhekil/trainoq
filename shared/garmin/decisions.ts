@@ -65,8 +65,9 @@ export function moveLinkedActivity(from: DayDoc, to: DayDoc, key: string): void 
   const link = from.garminLinks.find((item) => item.sourceKey === key && item.target?.kind === "segment");
   const activity = dayActivities(from).find((item) => item.segments.some((segment) => segment.id === link?.target?.id));
   if (!link?.target || !activity) throw new Error("Linked activity is missing from this day");
+  if (activity.segments.length > 1) throw new Error("Split the combined activity first");
   removeEventEntry(from, "activity", activity.id);
-  for (const segment of activity.segments) segment.startedAt = to.date + segment.startedAt.slice(10);
+  activity.segments[0].startedAt = to.date + activity.segments[0].startedAt.slice(10);
   addEventEntry(to, { kind: "activity", activity });
   to.garminLinks.push({ sourceKey: key, target: link.target });
 }
