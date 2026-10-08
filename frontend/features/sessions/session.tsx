@@ -1,7 +1,7 @@
 import { useEffect, useState, type CSSProperties, type PointerEvent } from "react";
 import { formatDateShort } from "../../../shared/days/format";
 import { minutesBetween, itemSets } from "../../../shared/sessions/format";
-import { formatSet, formatSets, formatSetup } from "../../../shared/exercises/format";
+import { effortScale, formatEffort, formatSet, formatSets, formatSetup } from "../../../shared/exercises/format";
 import type { Section, SessionItem, SetType, SessionExercise, Superset, WorkSet } from "../../../shared/exercises/model";
 import { BAND_MAX, PARAMS, paramsName, sameParams, type Param, type ParamSet } from "../../../shared/exercises/params";
 import type { Session } from "../../../shared/sessions/model";
@@ -10,6 +10,7 @@ import { addMember, addRound, addSet, createSuperset, deleteSuperset, dissolveSu
 import { exerciseName } from "../exercises/catalog";
 import { lastTime, suggestedSetup } from "../exercises/library";
 import { paramsFor, setExerciseParams } from "../exercises/params";
+import { EffortPicker } from "../exercises/effort";
 import { blockLetter, copyItems, findItem, findSession, findStandalone, findSuperset, makeSet, move, newExercise, newMember, nextSetType, setLabels } from "./ops";
 import { findRepeatSource } from "./recent";
 import { hhmmToIso, isoToHHMM } from "./time";
@@ -275,7 +276,7 @@ function ExerciseEditor({ s, section, item, member, label, index, count, memberI
         <button type="button" className={`icon-btn ${member.comment ? "on" : ""}`} aria-label="Comment" aria-pressed={noteOpen || !!member.comment} onClick={() => setNoteOpen(!noteOpen)}><Icon name="note" size={18} /></button>
         <button type="button" className="icon-btn" aria-label={`${name} options`} onClick={menu}><Icon name="more" /></button>
       </div>
-      {last && <div className="last-time">Last {formatDateShort(last.date)}{formatSetup(last.setup, last.params) ? ` (${formatSetup(last.setup, last.params)})` : ""}{!sameParams(last.params, member.params) ? ` (${paramsName(last.params).toLowerCase()})` : ""}: {formatSets(last.sets, last.params) || "no sets"}</div>}
+      {last && <div className="last-time">Last {formatDateShort(last.date)}{formatSetup(last.setup, last.params) ? ` (${formatSetup(last.setup, last.params)})` : ""}{!sameParams(last.params, member.params) ? ` (${paramsName(last.params).toLowerCase()})` : ""}: {formatSets(last.sets, last.params) || "no sets"}{last.effort ? ` · ${formatEffort(last.effort, last.params)}` : ""}</div>}
       {member.params.setup?.map((key) => <label key={key} className="setup-field">
         <span>{PARAMS[key].column}</span>
         <NumberField value={member.setup?.[key] ?? null} decimal={PARAMS[key].decimal} placeholder="–" ariaLabel={`${name} ${PARAMS[key].spoken}`} onChange={(value) => upMember((target) => { target.setup = { ...target.setup, [key]: value }; })} />
@@ -295,7 +296,10 @@ function ExerciseEditor({ s, section, item, member, label, index, count, memberI
           {item.kind === "superset" && memberIndex === 0 && drag?.kind === "round" && drag.supersetId === item.id && <RoundDrop item={item} index={i + 1} over={over} />}
         </div>)}
       </div>}
-      {item.kind === "exercise" && <button type="button" className="btn ghost add-set-button" onClick={() => update((d) => { const ex = findStandalone(findSession(d, s.id), section, item.id); addSet(ex, makeSet(ex, date, section)); })}><Icon name="plus" size={18} />Set</button>}
+      <div className="exercise-foot">
+        {item.kind === "exercise" && <button type="button" className="btn ghost" onClick={() => update((d) => { const ex = findStandalone(findSession(d, s.id), section, item.id); addSet(ex, makeSet(ex, date, section)); })}><Icon name="plus" size={18} />Set</button>}
+        <EffortPicker name={name} scale={effortScale(member.params)} value={member.effort} onChange={(value) => upMember((target) => { if (value) target.effort = value; else delete target.effort; })} />
+      </div>
     </div>
   );
 }

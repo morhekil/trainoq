@@ -1196,6 +1196,48 @@ test("custom parameters validate, save a template and delete it with Undo", asyn
   await expect(page.getByText("Box reps")).toBeVisible();
 });
 
+test("effort is one tap per entry, clears on a second tap, and reaches shared text and history", async ({ page }) => {
+  await mockApi(page);
+  await page.route("**/api/trpc/days.save", (route) => route.abort("failed"));
+  await page.addInitScript(({ date, doc }) => {
+    localStorage.setItem("tq:authed", JSON.stringify(true));
+    localStorage.setItem(`tq:day:${date}`, JSON.stringify({ doc, base: null, dirty: false, rev: 1 }));
+  }, { date: day, doc });
+  await page.goto(`/#/d/${day}`);
+  const squat = page.getByRole("group", { name: "Squat reps in reserve" });
+  await expect(squat.getByRole("button")).toHaveText(["many", "few", "none"]);
+  const few = squat.getByRole("button", { name: "few" });
+  await few.click();
+  await expect(few).toHaveAttribute("aria-pressed", "true");
+  await expect(squat).toHaveScreenshot("effort-selected.png");
+  await page.getByRole("group", { name: "Walk effort (RPE)" }).getByRole("button", { name: "high" }).click();
+  await page.getByRole("button", { name: "Share day with PT / physio" }).click();
+  await expect(page.getByTestId("share-text")).toContainText("back-off 65kg×8 · RIR few");
+  await expect(page.getByTestId("share-text")).toContainText("Walk · 25 min · 95 cal · RPE high");
+  await page.keyboard.press("Escape");
+
+  await page.getByRole("button", { name: "Menu" }).click();
+  await page.getByRole("button", { name: "Exercises", exact: true }).click();
+  await page.getByRole("searchbox", { name: "Search exercises" }).fill("Squat");
+  await page.getByRole("link", { name: /Squat/ }).click();
+  await expect(page.getByText(/65kg×8 · RIR few/)).toBeVisible();
+  await page.goBack();
+  await page.goBack();
+
+  await few.click();
+  await expect(few).toHaveAttribute("aria-pressed", "false");
+  await page.keyboard.press("Tab");
+  const none = squat.getByRole("button", { name: "none" });
+  await expect(none).toBeFocused();
+  expect(await none.evaluate((button) => getComputedStyle(button).outlineStyle)).not.toBe("none");
+  await page.keyboard.press("Enter");
+  await expect(none).toHaveAttribute("aria-pressed", "true");
+  await page.getByRole("button", { name: /Squat parameters/ }).click();
+  await page.getByRole("radio", { name: "Time", exact: true }).check();
+  await page.getByRole("button", { name: "Use Time" }).click();
+  await expect(page.getByRole("group", { name: "Squat effort (RPE)" }).getByRole("button", { name: "max" })).toHaveAttribute("aria-pressed", "true");
+});
+
 test("band values stay within 0 to 5 when typed or stepped", async ({ page }) => {
   await mockApi(page);
   await page.addInitScript(({ date, doc }) => {

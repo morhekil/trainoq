@@ -204,7 +204,7 @@ export function lastTime(exerciseId: string, beforeDate: string, section: Sectio
       for (const item of s[section])
         for (const ex of item.kind === "exercise" ? [item] : item.members)
           if (ex.exerciseId === exerciseId && (!params || sameParams(ex.params, params)) && itemSets(item, ex.id).length && (!best || d.date > best.date)) {
-            best = { date: d.date, section, params: ex.params, ...(ex.setup ? { setup: ex.setup } : {}), sets: itemSets(item, ex.id).map(({ id: _id, type, ...values }) => ({ type, ...values })) };
+            best = { date: d.date, section, params: ex.params, ...(ex.setup ? { setup: ex.setup } : {}), sets: itemSets(item, ex.id).map(({ id: _id, type, ...values }) => ({ type, ...values })), ...(ex.effort ? { effort: ex.effort } : {}) };
           }
   }
   return best;

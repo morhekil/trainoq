@@ -21,6 +21,7 @@ import { suggestedRecordingGroups } from "../../../shared/garmin/decisions";
 import { eventMeasurements } from "../../../shared/days/summary";
 import type { GarminActivitySummary } from "../../../shared/garmin/fit";
 import { formatNum } from "../../../shared/exercises/format";
+import { EffortPicker } from "../exercises/effort";
 import { request, trpc } from "../../api";
 
 export function DayView({ date }: { date: string }) {
@@ -300,6 +301,7 @@ function ActivityCard({ a, eventAction }: { a: Activity; eventAction?: EventActi
             <Icon name="more" />
           </button>
         </div>
+        <EffortPicker name={exerciseName(a.exerciseId)} scale="RPE" value={a.effort} onChange={(value) => up(a.id, (x) => { if (value) x.effort = value; else delete x.effort; })} />
       </div>
     </section>
   );

@@ -1,7 +1,7 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { formatDateShort } from "../../../shared/days/format";
 import { dayActivities, daySessions } from "../../../shared/days/model";
-import { formatSets, formatSetup } from "../../../shared/exercises/format";
+import { formatEffort, formatSets, formatSetup } from "../../../shared/exercises/format";
 import type { ExerciseHistoryEntry } from "../../../shared/exercises/model";
 import { PARAMS, paramsKey, paramsName } from "../../../shared/exercises/params";
 import { itemSets } from "../../../shared/sessions/format";
@@ -54,9 +54,9 @@ function localHistory(exerciseId: string): ExerciseHistoryEntry[] {
   for (const { doc } of cachedDays().filter((entry) => entry.dirty)) {
     for (const session of daySessions(doc)) for (const section of ["warmup", "main", "cooldown"] as const)
       for (const item of session[section]) for (const record of item.kind === "exercise" ? [item] : item.members)
-        if (record.exerciseId === exerciseId) entries.push({ date: doc.date, section, params: record.params, ...(record.setup ? { setup: record.setup } : {}), sets: itemSets(item, record.id).map(({ id: _id, ...set }) => set) });
+        if (record.exerciseId === exerciseId) entries.push({ date: doc.date, section, params: record.params, ...(record.setup ? { setup: record.setup } : {}), sets: itemSets(item, record.id).map(({ id: _id, ...set }) => set), ...(record.effort ? { effort: record.effort } : {}) });
     for (const activity of dayActivities(doc)) if (activity.exerciseId === exerciseId)
-      entries.push({ date: doc.date, section: "activity", result: activity.result });
+      entries.push({ date: doc.date, section: "activity", result: activity.result, ...(activity.effort ? { effort: activity.effort } : {}) });
   }
   return entries;
 }
@@ -114,7 +114,7 @@ export function ExerciseDetail({ id }: { id: string }) {
           <strong>{formatDateShort(entry.date)} · {sectionName[entry.section]}{entry.section !== "activity" && formatSetup(entry.setup, entry.params) ? ` (${formatSetup(entry.setup, entry.params)})` : ""}</strong>
           <span>{entry.section === "activity"
             ? [entry.result.minutes != null ? `${entry.result.minutes} min` : null, entry.result.calories != null ? `${entry.result.calories} cal` : null].filter(Boolean).join(" · ") || "No values"
-            : formatSets(entry.sets, entry.params) || "No values"}</span>
+            : formatSets(entry.sets, entry.params) || "No values"}{entry.effort ? ` · ${formatEffort(entry.effort, entry.section === "activity" ? undefined : entry.params)}` : ""}</span>
         </div>)}
       </div>)}
     </section>
