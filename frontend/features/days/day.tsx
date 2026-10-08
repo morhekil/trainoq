@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, useSyncExternalStore } from "react";
-import { activityName, activityStart, activityTotals, addEventEntry, dayActivities, daySessions, detachEventEntry, emptyDay, linkedKeys, mergeEvents, removeEventEntry, splitActivity, type Activity, type DayComment, type DayDoc, type EventEntry, type Segment, type TrainingEvent } from "../../../shared/days/model";
+import { activityName, activityStart, activityTotals, addEventEntry, combineActivities, dayActivities, daySessions, detachEventEntry, emptyDay, linkedKeys, mergeEvents, removeEventEntry, splitActivity, type Activity, type DayComment, type DayDoc, type EventEntry, type Segment, type TrainingEvent } from "../../../shared/days/model";
 import { dayToText } from "../../../shared/days/format";
 import { activityTime, orderedDayEvents, orderedDayRecords } from "../../../shared/days/timeline";
 import { useDay } from "./hooks";
@@ -135,8 +135,14 @@ function EventPart({ eventId, entry, sessionIndices, totalSessions, action }: { 
 }
 
 function TrainingEventCard({ event, sources, sessionIndices, totalSessions, actionFor }: { event: TrainingEvent; sources: ReadonlyMap<string, GarminActivitySummary>; sessionIndices: Map<string, number>; totalSessions: number; actionFor: (event: TrainingEvent, entry: EventEntry) => EventAction | undefined }) {
-  const { doc, update } = useDayCtx();
+  const { doc, update, undoable } = useDayCtx();
   const measurements = eventMeasurements(doc, event, sources);
+  const combinable = !event.summaryOverrides && event.entries.every((entry) => entry.kind === "activity");
+  const combine = () => {
+    let id = "";
+    undoable("Parts combined into one activity", (day) => { id = combineActivities(day, event.id).id; });
+    focusLater(`activity-${id}`);
+  };
   const minutes = (seconds: number) => formatNum(Math.round(seconds / 6) / 10);
   const change = (fn: (item: TrainingEvent) => void) => update((day) => {
     const item = day.events.find((candidate) => candidate.id === event.id);
@@ -151,6 +157,7 @@ function TrainingEventCard({ event, sources, sessionIndices, totalSessions, acti
         {measurements.elapsedSeconds != null && <div>{event.summaryOverrides?.elapsedSeconds === undefined ? "Elapsed span" : "Event elapsed (entered)"}: {minutes(measurements.elapsedSeconds)} min</div>}
         {measurements.activeCalories != null && <div>{event.summaryOverrides?.activeCalories === undefined ? "Garmin source active calories" : "Event active calories (entered)"}: {formatNum(measurements.activeCalories)} cal</div>}
       </div>}
+      {combinable && <button type="button" className="btn secondary" onClick={combine}>Combine into one activity</button>}
       <label className="event-field">Event title
         <input className="text" type="text" value={event.title ?? ""} onChange={(changeEvent) => change((item) => (item.title = changeEvent.target.value || null))} />
       </label>
