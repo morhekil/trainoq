@@ -356,14 +356,18 @@ function CombinedActivityCard({ a, eventId, sources, eventAction }: { a: Activit
           <h2 className="grow activity-name" id={`activity-${a.id}`} tabIndex={-1}>{name}</h2>
           <button type="button" className="icon-btn" aria-label={`${name} options`} onClick={menu}><Icon name="more" /></button>
         </div>
-        <div className="activity-totals">{resultText(activityTotals(a)) || "No minutes or calories"}</div>
-        <MeasurementsHint measurements={{ ...activityMeasurements(doc, a, sources), savedMinutes: null }} />
+        <div className="activity-totals">
+          <div>{resultText(activityTotals(a)) || "No minutes or calories"}</div>
+          <MeasurementsHint measurements={{ ...activityMeasurements(doc, a, sources), savedMinutes: null }} />
+        </div>
         <EffortPicker name={name} scale="RPE" value={a.effort} onChange={(value) => up((x) => { if (value) x.effort = value; else delete x.effort; })} />
-        <label className="card-title" htmlFor={`activity-comment-${a.id}`}>Comment</label>
-        <AutoTextarea id={`activity-comment-${a.id}`} aria-label={`${name} comment`} minRows={1} value={a.comment} onChange={(event) => up((x) => (x.comment = event.target.value))} />
+        <div className="event-field">
+          <label htmlFor={`activity-comment-${a.id}`}>Comment</label>
+          <AutoTextarea id={`activity-comment-${a.id}`} aria-label={`${name} comment`} minRows={1} value={a.comment} onChange={(event) => up((x) => (x.comment = event.target.value))} />
+        </div>
         <details className="segments">
           <summary>{a.segments.length} segments</summary>
-          <ol className="segment-list">
+          <ol className="segment-list" role="list">
             {a.segments.map((segment) => <li key={segment.id}>{clockTime(segment.startedAt)} {exerciseName(segment.exerciseId)}{resultText(segment.result) && ` · ${resultText(segment.result)}`}</li>)}
           </ol>
         </details>

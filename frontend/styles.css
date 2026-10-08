@@ -798,6 +798,10 @@ textarea {
   font-weight: 700;
   overflow-wrap: anywhere;
 }
+.activity-totals {
+  display: grid;
+  gap: 4px;
+}
 .activity-totals,
 .segment-list {
   font-variant-numeric: tabular-nums;
