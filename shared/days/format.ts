@@ -1,6 +1,6 @@
 import type { Activity, DayDoc } from "./model";
 import { countExercises, formatTime, sessionLines } from "../sessions/format";
-import { formatNum } from "../exercises/format";
+import { formatEffort, formatNum } from "../exercises/format";
 import { seedExercise } from "../exercises/catalog";
 import { activityTime, orderedDayEvents } from "./timeline";
 
@@ -34,6 +34,7 @@ export function dayToText(d: DayDoc, timeZone?: string, resolveName?: (id: strin
     const bits = [name(a.exerciseId)];
     if (a.result.minutes != null) bits.push(`${formatNum(a.result.minutes)} min`);
     if (a.result.calories != null) bits.push(`${formatNum(a.result.calories)} cal`);
+    if (a.effort) bits.push(formatEffort(a.effort));
     const time = activityTime(a, timeZone);
     return `- ${time ? `${time} ` : ""}${bits.join(" · ")}${a.comment.trim() ? ` – ${a.comment.trim()}` : ""}`;
   };

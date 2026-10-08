@@ -1,6 +1,6 @@
 import type { Section, SessionItem, WorkSet } from "../exercises/model";
 import { seedExercise } from "../exercises/catalog";
-import { formatNum, formatSets, formatSetup } from "../exercises/format";
+import { formatEffort, formatNum, formatSets, formatSetup } from "../exercises/format";
 import { DEFAULT_PARAMS, valuesOf } from "../exercises/params";
 import type { Session } from "./model";
 
@@ -35,7 +35,7 @@ function itemLines(item: SessionItem, resolveName: (id: string) => string): stri
     const e = exs[0];
     const sets = formatSets(item.sets, e.params);
     const setup = formatSetup(e.setup, e.params);
-    lines.push(`${resolveName(e.exerciseId)}${setup ? ` (${setup})` : ""}${sets ? `: ${sets}` : ""}`);
+    lines.push(`${resolveName(e.exerciseId)}${setup ? ` (${setup})` : ""}${sets ? `: ${sets}` : ""}${e.effort ? ` · ${formatEffort(e.effort, e.params)}` : ""}`);
     if (e.comment.trim()) lines.push(`  – ${e.comment.trim()}`);
     return lines;
   }
@@ -43,7 +43,7 @@ function itemLines(item: SessionItem, resolveName: (id: string) => string): stri
   for (const e of exs) {
     const sets = formatSets(itemSets(item, e.id), e.params);
     const setup = formatSetup(e.setup, e.params);
-    lines.push(`- ${resolveName(e.exerciseId)}${setup ? ` (${setup})` : ""}${sets ? `: ${sets}` : ""}`);
+    lines.push(`- ${resolveName(e.exerciseId)}${setup ? ` (${setup})` : ""}${sets ? `: ${sets}` : ""}${e.effort ? ` · ${formatEffort(e.effort, e.params)}` : ""}`);
     if (e.comment.trim()) lines.push(`  – ${e.comment.trim()}`);
   }
   return lines;

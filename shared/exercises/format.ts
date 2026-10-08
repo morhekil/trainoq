@@ -1,4 +1,4 @@
-import type { SetType } from "./model";
+import type { Effort, SetType } from "./model";
 import { DEFAULT_PARAMS, PARAMS, type Param, type ParamSet, type ParamValues } from "./params";
 
 export function formatNum(n: number): string {
@@ -25,6 +25,15 @@ export function formatSet(set: ParamValues, params: ParamSet = DEFAULT_PARAMS): 
 export function formatSetup(setup: ParamValues | undefined, params: ParamSet): string {
   return (params.setup ?? []).filter((key) => setup?.[key] != null)
     .map((key) => `${PARAMS[key].column.toLowerCase()} ${formatValue(key, setup![key]!)}`).join(", ");
+}
+
+const RIR_LABEL: Record<Effort, string> = { low: "a lot", med: "many", high: "few", max: "none" };
+/** Rep-based records show effort as reps in reserve; rep-less records and activities as RPE. */
+export const effortScale = (params?: ParamSet): "RIR" | "RPE" => params?.perSet.includes("reps") ? "RIR" : "RPE";
+export const effortLabel = (effort: Effort, scale: "RIR" | "RPE"): string => scale === "RIR" ? RIR_LABEL[effort] : effort;
+export function formatEffort(effort: Effort, params?: ParamSet): string {
+  const scale = effortScale(params);
+  return `${scale} ${effortLabel(effort, scale)}`;
 }
 
 const TYPE_LABEL: Record<SetType, string> = { warmup: "warm-up", working: "working", backoff: "back-off" };

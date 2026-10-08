@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import { daySchema } from "../shared/days/schema";
 import { addEventEntry, emptyDay, type DayDoc } from "../shared/days/model";
 import { exerciseIdForName } from "../shared/exercises/catalog";
+import { dayToText } from "../shared/days/format";
+import { formatEffort } from "../shared/exercises/format";
 
 function effortDay(): DayDoc {
   const doc = emptyDay("2026-10-08");
@@ -31,5 +33,21 @@ describe("effort", () => {
     if (activity.kind !== "activity") throw new Error("expected activity");
     (activity.activity as { effort: string }).effort = "many";
     expect(daySchema.safeParse(doc).success).toBe(false);
+  });
+
+  it("reads as reps in reserve for rep-based records and RPE otherwise", () => {
+    const reps = { perSet: ["weight" as const, "reps" as const] };
+    expect(["low", "med", "high", "max"].map((effort) => formatEffort(effort as "low", reps))).toEqual(["RIR a lot", "RIR many", "RIR few", "RIR none"]);
+    expect(formatEffort("high", { perSet: ["time"] })).toBe("RPE high");
+    expect(formatEffort("med")).toBe("RPE med");
+  });
+
+  it("appears in shared day text after each record's values", () => {
+    const names: Record<string, string> = { [exerciseIdForName("Squat")]: "Squat", [exerciseIdForName("Plank")]: "Plank", [exerciseIdForName("Row")]: "Row", [exerciseIdForName("Run")]: "Run" };
+    const text = dayToText(effortDay(), "Australia/Sydney", (id) => names[id]);
+    expect(text).toContain("Squat: 80kg×5 · RIR few");
+    expect(text).toContain("- Plank: 60s · RPE max");
+    expect(text).toContain("- Row: 20kg×10\n");
+    expect(text).toContain("Run · 30 min · 250 cal · RPE low");
   });
 });
