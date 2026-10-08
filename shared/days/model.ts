@@ -1,7 +1,7 @@
 // One DayDoc per calendar day; stored as JSON in D1 and localStorage.
 
 import type { Session } from "../sessions/model";
-import { EFFORT, type ActivityResult, type Effort, type ExerciseHistoryEntry } from "../exercises/model";
+import { EFFORT, nameKey, type ActivityResult, type Effort, type ExerciseHistoryEntry } from "../exercises/model";
 
 /** One timed part of an activity, such as one walk interval of a Garmin recording. */
 export interface Segment { id: string; exerciseId: string; startedAt: string; result: ActivityResult }
@@ -35,6 +35,15 @@ export interface DayDoc {
   garminLinks: GarminLink[];
   /** total daily active calories (e.g. from the watch), entered manually for now */
   totalCalories: number | null;
+}
+
+/** Metric names scored from `from` to `to` (inclusive dates), latest first; capitalisation variants count once. */
+export function recentMetrics(days: DayDoc[], from: string, to: string): string[] {
+  const scores = days.filter((day) => day.date >= from && day.date <= to).flatMap((day) =>
+    day.comments.flatMap((comment) => comment.score ? [{ at: `${day.date}T${comment.time}`, metric: comment.score.metric }] : []));
+  const names = new Map<string, string>();
+  for (const { metric } of scores.sort((a, b) => b.at.localeCompare(a.at))) if (!names.has(nameKey(metric))) names.set(nameKey(metric), metric);
+  return [...names.values()];
 }
 
 export function emptyDay(date: string): DayDoc {

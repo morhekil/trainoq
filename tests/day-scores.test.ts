@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { daySchema } from "../shared/days/schema";
-import { emptyDay, type DayDoc } from "../shared/days/model";
+import { emptyDay, recentMetrics, type DayDoc } from "../shared/days/model";
 import { dayToText } from "../shared/days/format";
 
 function backDay(): DayDoc {
@@ -33,5 +33,19 @@ describe("comment scores", () => {
       "Comment 17:05 · Back 3/5", "Hurt on both sides after 30 minutes", "",
       "Comment 20:00", "Plain comment",
     ].join("\n"));
+  });
+
+  it("offers each metric scored between two dates once, latest first", () => {
+    const day = (date: string, ...metrics: [string, string][]): DayDoc => ({ ...emptyDay(date),
+      comments: metrics.map(([time, metric], i) => ({ id: `${date}-${i}`, time, text: "", score: { metric, value: 1 } })) });
+    const days = [
+      day("2026-10-08", ["08:00", "Back"]),
+      day("2026-09-24", ["08:00", "Knee"]),
+      day("2026-10-07", ["21:00", "Neck"], ["08:00", "back"]),
+      day("2026-09-25", ["08:00", "Hip"]),
+      day("2026-10-09", ["08:00", "Shoulder"]),
+      { ...emptyDay("2026-10-06"), comments: [{ id: "plain", time: "08:00", text: "No score" }] },
+    ];
+    expect(recentMetrics(days, "2026-09-25", "2026-10-08")).toEqual(["Back", "Neck", "Hip"]);
   });
 });
