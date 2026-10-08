@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { daySchema } from "../shared/days/schema";
 import { emptyDay, recentMetrics, type DayDoc } from "../shared/days/model";
-import { dayToText } from "../shared/days/format";
+import { daySummary, dayToText } from "../shared/days/format";
 
 function backDay(): DayDoc {
   const day = emptyDay("2026-10-02");
@@ -47,5 +47,12 @@ describe("comment scores", () => {
       { ...emptyDay("2026-10-06"), comments: [{ id: "plain", time: "08:00", text: "No score" }] },
     ];
     expect(recentMetrics(days, "2026-09-25", "2026-10-08")).toEqual(["Back", "Neck", "Hip"]);
+  });
+
+  it("summarises each metric's range for the history list", () => {
+    const day = backDay();
+    expect(daySummary(day)).toBe("Back 1–3");
+    day.comments.push({ id: "hip", time: "07:00", text: "", score: { metric: "Hip", value: 0 } }, { id: "late", time: "22:00", text: "", score: { metric: "back", value: 2 } });
+    expect(daySummary(day)).toBe("Hip 0 · Back 1–3");
   });
 });

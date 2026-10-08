@@ -2,6 +2,7 @@ import { activityHistory, activityName, activityTotals, SCORE_MAX, type Activity
 import { countExercises, sessionLines } from "../sessions/format";
 import { formatEffort, formatNum } from "../exercises/format";
 import { seedExercise } from "../exercises/catalog";
+import { nameKey } from "../exercises/model";
 import { activityTime, orderedDayEvents } from "./timeline";
 import { formatTime } from "./time";
 
@@ -78,9 +79,24 @@ export function dayToText(d: DayDoc, name: (id: string) => string = seedName): s
   return out.join("\n");
 }
 
+/** "Back 1–3" per metric, in order of its first score that day. */
+function scoreRanges(d: DayDoc): string[] {
+  const ranges = new Map<string, { metric: string; values: number[] }>();
+  for (const { score } of [...d.comments].sort((a, b) => a.time.localeCompare(b.time))) {
+    if (!score) continue;
+    const key = nameKey(score.metric);
+    if (!ranges.has(key)) ranges.set(key, { metric: score.metric, values: [] });
+    ranges.get(key)!.values.push(score.value);
+  }
+  return [...ranges.values()].map(({ metric, values }) => {
+    const [low, high] = [Math.min(...values), Math.max(...values)];
+    return `${metric} ${low === high ? low : `${low}–${high}`}`;
+  });
+}
+
 /** One-line summary for the history list. */
 export function daySummary(d: DayDoc, resolveName: (id: string) => string = seedName): string {
-  const bits: string[] = [];
+  const bits = scoreRanges(d);
   for (const record of orderedDayEvents(d)) {
     if (record.kind === "comment") continue;
     const event = record.event;
