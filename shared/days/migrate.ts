@@ -3,6 +3,16 @@ import type { PerformedExercise, SessionItem, SetType, StandaloneExercise, Super
 import type { Activity, DayDoc, TrainingEvent } from "./model";
 import type { Session } from "../sessions/model";
 import type { ParamSet } from "../exercises/params";
+import { withOffset } from "./time";
+
+// ponytail: v8 saved UTC instants without a zone. One home zone suits this single-user app; other users would need a zone setting.
+const HOME_TIME_ZONE = "Australia/Sydney";
+function homeOffset(instant: string): string {
+  const zone = new Intl.DateTimeFormat("en-AU", { timeZone: HOME_TIME_ZONE, timeZoneName: "longOffset" })
+    .formatToParts(new Date(instant)).find((part) => part.type === "timeZoneName")!.value;
+  return zone === "GMT" ? "+00:00" : zone.slice(3);
+}
+export const homeTime = (instant: string): string => withOffset(instant, homeOffset(instant));
 
 type OldValues = { weight: number | null; reps: number | null };
 export type V7SessionItem =
