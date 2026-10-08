@@ -1,7 +1,7 @@
 // One DayDoc per calendar day; stored as JSON in D1 and localStorage.
 
 import type { Session } from "../sessions/model";
-import type { ActivityResult, Effort } from "../exercises/model";
+import type { ActivityResult, Effort, ExerciseHistoryEntry } from "../exercises/model";
 
 /** One timed part of an activity, such as one walk interval of a Garmin recording. */
 export interface Segment { id: string; exerciseId: string; startedAt: string; result: ActivityResult }
@@ -63,6 +63,22 @@ export function activityTotals(a: Activity): ActivityResult {
   const total = (key: keyof ActivityResult) => a.segments.every((segment) => segment.result[key] == null)
     ? null : a.segments.reduce((sum, segment) => sum + (segment.result[key] ?? 0), 0);
   return { minutes: total("minutes"), calories: total("calories") };
+}
+
+type ActivityHistory = Omit<Extract<ExerciseHistoryEntry, { section: "activity" }>, "date" | "section">;
+/**
+ * One history record per distinct exercise, totalled over that exercise's segments.
+ * `segments` and `with` (the other exercise IDs) appear only for a combined activity, so a plain one reads as before.
+ */
+export function activityHistory(a: Activity): (ActivityHistory & { exerciseId: string })[] {
+  const exercises = activityExercises(a);
+  return exercises.map((exerciseId) => {
+    const segments = a.segments.filter((segment) => segment.exerciseId === exerciseId);
+    return {
+      exerciseId, result: activityTotals({ ...a, segments }), ...(a.effort ? { effort: a.effort } : {}),
+      ...(a.segments.length > 1 ? { segments: segments.length, with: exercises.filter((id) => id !== exerciseId) } : {}),
+    };
+  });
 }
 
 const entryId = (entry: EventEntry) => entry.kind === "session" ? entry.session.id : entry.activity.id;

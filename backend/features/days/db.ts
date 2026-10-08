@@ -1,4 +1,4 @@
-import { dayActivities, daySessions, type DayDoc } from "../../../shared/days/model";
+import { activityHistory, dayActivities, daySessions, type DayDoc } from "../../../shared/days/model";
 import type { ExerciseContext } from "../../../shared/exercises/model";
 import { isDayEmpty } from "../../../shared/days/model";
 import { nameKey } from "../../../shared/exercises/model";
@@ -33,11 +33,8 @@ function logRows(doc: DayDoc): LogRow[] {
           });
   }
   for (const activity of dayActivities(doc))
-    for (const segment of activity.segments)
-      rows.push({
-        section: "activity", exerciseId: segment.exerciseId, name: seedExercise(segment.exerciseId)?.name ?? "",
-        detail: JSON.stringify({ ...segment.result, ...(activity.effort ? { effort: activity.effort } : {}) }),
-      });
+    for (const { exerciseId, result, ...rest } of activityHistory(activity))
+      rows.push({ section: "activity", exerciseId, name: seedExercise(exerciseId)?.name ?? "", detail: JSON.stringify({ ...result, ...rest }) });
   return rows;
 }
 
@@ -59,12 +56,14 @@ export type PutResult = { ok: true; updatedAt: string | null } | { ok: false; cu
  * Save a day. `base` is the updatedAt the client last saw from the server (null if it never saw one).
  * If the server copy has moved on since then, nothing is written and the current copy is returned.
  */
-export async function putDay(db: D1Database, date: string, doc: DayDoc, base: string | null, sourceVersion = 8, legacyNames: string[] = []): Promise<PutResult> {
+export async function putDay(db: D1Database, date: string, doc: DayDoc, base: string | null, sourceVersion = 9, legacyNames: string[] = []): Promise<PutResult> {
   const links = garminLinks(doc);
   if (new Set(links.map((link) => link.key)).size !== links.length)
     throw new TRPCError({ code: "BAD_REQUEST", message: "Garmin source is used more than once" });
   const existing = await db.prepare("SELECT updated_at, doc FROM days WHERE date = ?").bind(date).first<{ updated_at: string; doc: string }>();
-  if (sourceVersion < 8 && existing && JSON.parse(existing.doc).v >= 8)
+  // A cached app (service worker) may still send an older document; it must not replace a newer one.
+  const storedVersion: number = existing ? JSON.parse(existing.doc).v : 0;
+  if (storedVersion >= 8 && sourceVersion < storedVersion)
     throw new TRPCError({ code: "PRECONDITION_FAILED", message: "Refresh this client before saving a newer day" });
   if (existing && existing.updated_at !== base) {
     return { ok: false, current: await getDay(db, date) };

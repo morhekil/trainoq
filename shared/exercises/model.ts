@@ -32,7 +32,7 @@ export interface ExerciseStat {
 export type SessionHistoryEntry = { date: string; section: Section; params: ParamSet; setup?: ParamValues; sets: (Pick<WorkSet, "type"> & ParamValues)[]; effort?: Effort };
 export type ExerciseHistoryEntry =
   | SessionHistoryEntry
-  | { date: string; section: "activity"; result: ActivityResult; effort?: Effort };
+  | { date: string; section: "activity"; result: ActivityResult; effort?: Effort; segments?: number; with?: string[] };
 export interface ExerciseLibrary {
   catalog: (Exercise & { section: ExerciseContext | "any" | null; aliases: string })[];
   stats: ExerciseStat[];

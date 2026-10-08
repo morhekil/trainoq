@@ -1,6 +1,6 @@
 import { useEffect, useState, useSyncExternalStore } from "react";
 import { formatDateShort } from "../../../shared/days/format";
-import { dayActivities, daySessions } from "../../../shared/days/model";
+import { activityHistory, dayActivities, daySessions } from "../../../shared/days/model";
 import { formatEffort, formatSets, formatSetup } from "../../../shared/exercises/format";
 import type { ExerciseHistoryEntry } from "../../../shared/exercises/model";
 import { PARAMS, paramsKey, paramsName } from "../../../shared/exercises/params";
@@ -55,8 +55,8 @@ function localHistory(exerciseId: string): ExerciseHistoryEntry[] {
     for (const session of daySessions(doc)) for (const section of ["warmup", "main", "cooldown"] as const)
       for (const item of session[section]) for (const record of item.kind === "exercise" ? [item] : item.members)
         if (record.exerciseId === exerciseId) entries.push({ date: doc.date, section, params: record.params, ...(record.setup ? { setup: record.setup } : {}), sets: itemSets(item, record.id).map(({ id: _id, ...set }) => set), ...(record.effort ? { effort: record.effort } : {}) });
-    for (const activity of dayActivities(doc)) for (const segment of activity.segments) if (segment.exerciseId === exerciseId)
-      entries.push({ date: doc.date, section: "activity", result: segment.result, ...(activity.effort ? { effort: activity.effort } : {}) });
+    for (const activity of dayActivities(doc)) for (const { exerciseId: id, ...record } of activityHistory(activity))
+      if (id === exerciseId) entries.push({ date: doc.date, section: "activity", ...record });
   }
   return entries;
 }

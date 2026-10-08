@@ -1,5 +1,5 @@
 import { SEED_EXERCISES, exerciseIdForName, seedExercise } from "../../../shared/exercises/catalog";
-import { nameKey, type ActivityResult, type Effort, type ExerciseContext, type ExerciseHistoryEntry, type ExerciseLibrary, type ExerciseStat, type ParamTemplate, type WorkSet } from "../../../shared/exercises/model";
+import { nameKey, type Effort, type ExerciseContext, type ExerciseHistoryEntry, type ExerciseLibrary, type ExerciseStat, type ParamTemplate, type WorkSet } from "../../../shared/exercises/model";
 import { migrateLegacyItem } from "../../../shared/days/migrate";
 import { DEFAULT_PARAMS, normalizeParams, valuesOf, type ParamSet, type ParamValues } from "../../../shared/exercises/params";
 import { SEED_PARAMS } from "../../../shared/exercises/seed";
@@ -8,8 +8,8 @@ import { TRPCError } from "@trpc/server";
 type LogHistoryRow = { name: string; date: string; section: ExerciseContext; detail: string };
 function historyEntry(row: LogHistoryRow): ExerciseHistoryEntry {
   if (row.section === "activity") {
-    const { effort, ...result } = JSON.parse(row.detail) as ActivityResult & { effort?: Effort };
-    return { date: row.date, section: "activity", result, ...(effort ? { effort } : {}) };
+    const { minutes, calories, ...rest } = JSON.parse(row.detail);
+    return { date: row.date, section: "activity", result: { minutes, calories }, ...rest };
   }
   const detail = JSON.parse(row.detail) as { params?: ParamSet; setup?: ParamValues; sets?: (Pick<WorkSet, "type"> & ParamValues)[]; reps?: string; effort?: Effort };
   const params = detail.params ?? DEFAULT_PARAMS;
