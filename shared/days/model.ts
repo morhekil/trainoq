@@ -8,7 +8,11 @@ export interface Segment { id: string; exerciseId: string; startedAt: string; re
 /** Segments are ordered by time. Name, totals and start are calculated from them. */
 export interface Activity { id: string; comment: string; effort?: Effort; segments: Segment[] }
 
-export interface DayComment { id: string; time: string; text: string }
+/** How a tracked metric, such as back pain, felt: 0 is no issues, 5 the worst. */
+export const SCORE_MAX = 5;
+export type CommentScore = { metric: string; value: number };
+/** A timed note. With a score, the text is optional. */
+export interface DayComment { id: string; time: string; text: string; score?: CommentScore }
 
 export type EventEntry = { kind: "session"; session: Session } | { kind: "activity"; activity: Activity };
 

@@ -1,7 +1,7 @@
 import { z } from "zod";
 import { dayActivities, daySessions, type DayDoc } from "./model";
 import { normalizeDay, type LegacyDayDoc, type V2DayDoc, type V3DayDoc, type V4DayDoc, type V5DayDoc, type V6DayDoc, type V7DayDoc, type V8DayDoc } from "./migrate";
-import { DATE_RE } from "./model";
+import { DATE_RE, SCORE_MAX } from "./model";
 import { BAND_MAX, PARAMS, PARAM_KEYS, type Param } from "../exercises/params";
 import { EFFORT } from "../exercises/model";
 
@@ -42,7 +42,8 @@ const activityResult = { minutes: z.number().finite().nullable(), calories: z.nu
 const activities = z.array(z.object({ ...performed, result: z.object(activityResult) }));
 const linkedActivities = z.array(z.object({ ...performed, result: z.object(activityResult), startedAt: z.iso.datetime().optional(), sourceOffsetMinutes: z.number().int().min(-720).max(840).optional(), garminSourceKey: z.string().min(1).optional() }));
 const legacyActivities = z.array(z.object({ id: z.string(), name: z.string(), ...activityResult, notes: z.string() }));
-const comments = z.array(z.object({ id: z.string().min(1), time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/), text: z.string() })).superRefine((items, ctx) => {
+const score = z.object({ metric: z.string().trim().min(1), value: z.number().int().min(0).max(SCORE_MAX) });
+const comments = z.array(z.object({ id: z.string().min(1), time: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/), text: z.string(), score: score.optional() })).superRefine((items, ctx) => {
   if (new Set(items.map((item) => item.id)).size !== items.length) ctx.addIssue({ code: "custom", message: "Duplicate comment ID" });
 });
 const event = z.object({

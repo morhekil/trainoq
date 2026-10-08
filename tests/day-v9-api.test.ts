@@ -41,6 +41,7 @@ function oct2(): DayDoc {
   addEventEntry(day, { kind: "activity", activity: { id: "walk-run", comment: "Hot", effort: "high", segments } });
   addEventEntry(day, { kind: "activity", activity: { id: "tennis", comment: "", segments: [{ id: "tennis", exerciseId: tennis, startedAt: "2026-10-02T18:00:00+10:00", result: { minutes: 60, calories: null } }] } });
   day.garminLinks = segments.map((segment, i) => ({ sourceKey: `${fit}:${i}`, target: { kind: "segment", id: segment.id } }));
+  day.comments = [{ id: "back", time: "17:05", text: "Hurt on both sides", score: { metric: "Back", value: 3 } }];
   return day;
 }
 

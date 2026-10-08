@@ -102,7 +102,7 @@ interface Session {
 }
 interface Segment { id: string; exerciseId: string; startedAt: string; result: ActivityResult }
 interface Activity { id: string; comment: string; effort?: Effort; segments: Segment[] } // at least one segment, ordered by time
-interface DayComment { id: string; time: string; text: string }
+interface DayComment { id: string; time: string; text: string; score?: { metric: string; value: number } } // value: whole number 0–5
 type EventEntry = { kind: "session"; session: Session } | { kind: "activity"; activity: Activity };
 interface TrainingEvent {
   id: string;
@@ -130,7 +130,7 @@ Each saved session or activity belongs to exactly one event. A lone item has a s
 
 `effort` records how hard one exercise entry, superset member, or activity was, once per entry. It uses the RPE scale. Records whose parameters include `reps` display it as reps in reserve: `low` is "a lot", `med` is "many", `high` is "few", and `max` is "none". Changing parameters relabels the stored value without converting it. A missing `effort` means none was recorded.
 
-Session and segment times have the form `YYYY-MM-DDTHH:MM:SS±HH:MM`: the clock time where they were recorded and that place's UTC offset. A `Z` suffix, fractional seconds or a missing offset is rejected. Display reads the clock digits and never converts time zones. Each `DayComment.time` is a local 24-hour `HH:mm` time on the document's date. The day view and shared text order comments and events by clock time; parts inside an event and segments inside an activity are ordered by instant, and durations use the instant. Editing a time replaces `HH:MM` and keeps the date and offset. New sessions, activities and comments use the device's offset. Editing a comment's time moves it within the timeline.
+Session and segment times have the form `YYYY-MM-DDTHH:MM:SS±HH:MM`: the clock time where they were recorded and that place's UTC offset. A `Z` suffix, fractional seconds or a missing offset is rejected. Display reads the clock digits and never converts time zones. Each `DayComment.time` is a local 24-hour `HH:mm` time on the document's date. The day view and shared text order comments and events by clock time; parts inside an event and segments inside an activity are ordered by instant, and durations use the instant. Editing a time replaces `HH:MM` and keeps the date and offset. New sessions, activities and comments use the device's offset. Editing a comment's time moves it within the timeline. A comment can carry one score for a tracked metric, such as `{ metric: "Back", value: 2 }`: 0 means no issues and 5 the worst. Its text may be empty. The metric is a name, not a catalog ID, so a temporary metric needs no setup; names with different capitalisation count as one metric.
 
 `garminLinks` holds every Garmin decision for the day: a link to a session, a link to one segment of an activity, or `target: null` for an ignored recording. A source key appears once, each session or segment has at most one link, and every target exists in the day. Session IDs, activity IDs and segment IDs are each unique within the day, in separate namespaces.
 
