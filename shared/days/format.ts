@@ -1,4 +1,4 @@
-import { activityHistory, activityName, activityTotals, type Activity, type DayDoc } from "./model";
+import { activityHistory, activityName, activityTotals, SCORE_MAX, type Activity, type CommentScore, type DayDoc } from "./model";
 import { countExercises, sessionLines } from "../sessions/format";
 import { formatEffort, formatNum } from "../exercises/format";
 import { seedExercise } from "../exercises/catalog";
@@ -26,6 +26,9 @@ export function formatDateShort(date: string): string {
   return `${WEEKDAYS[weekday]} ${d} ${MONTHS[m - 1]}`;
 }
 
+/** "Back 2/5" */
+export const formatScore = (score: CommentScore): string => `${score.metric} ${score.value}/${SCORE_MAX}`;
+
 const seedName = (id: string) => seedExercise(id)?.name ?? id;
 
 /** Plain-text summary of a day, for sending to a PT or physio. */
@@ -46,7 +49,8 @@ export function dayToText(d: DayDoc, name: (id: string) => string = seedName): s
   let inActivities = false;
   for (const record of orderedDayEvents(d)) {
     if (record.kind === "comment") {
-      out.push("", `Comment ${record.time}`, record.comment.text.trim());
+      const { score, text } = record.comment;
+      out.push("", `Comment ${record.time}${score ? ` · ${formatScore(score)}` : ""}`, ...(text.trim() ? [text.trim()] : []));
       inActivities = false;
     } else if (record.event.entries.length > 1 || record.event.title || record.event.notes) {
       const event = record.event;

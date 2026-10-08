@@ -29,7 +29,7 @@ Runs on Cloudflare: a Worker serves the app and a tRPC API, data lives in D1.
 - **Repeat** – an empty section offers "Repeat <last date>" to copy exercise references, superset grouping, and set types. Copied records use each exercise's current parameters with recorded values, comments and effort cleared.
 - **Calories** – per session, per extra activity (walk etc.), and a daily total.
 - **Narrow screens** – activity name and numeric fields use two compact rows when a single row would hide the name.
-- **Share day with PT / physio** – plain-text summary in timeline order via the phone share sheet (WhatsApp, SMS, email) or copy. A combined activity is one line with its name, totals and effort, followed by its segments per exercise: `- 16:24 Walk/Run · 62 min · 433 cal · RPE high`, then `  7× Walk 32 min, 6× Run 30 min`.
+- **Share day with PT / physio** – plain-text summary in timeline order via the phone share sheet (WhatsApp, SMS, email) or copy. A combined activity is one line with its name, totals and effort, followed by its segments per exercise: `- 16:24 Walk/Run · 62 min · 433 cal · RPE high`, then `  7× Walk 32 min, 6× Run 30 min`. A scored comment shows its score after the time: `Comment 08:00 · Back 2/5`.
 - **Copy feedback** – the copy result stays visible in the share sheet until it closes.
 - **Undo and errors** – each Undo action and error message stays visible until used or dismissed. Undoing an earlier deletion also clears later Undo actions because their snapshots no longer match the restored day.
 - **Keyboard overlays** – action sheets, exercise search, and sharing keep focus inside while open. Escape closes them and returns focus to the button that opened them.

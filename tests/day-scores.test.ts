@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { daySchema } from "../shared/days/schema";
 import { emptyDay, type DayDoc } from "../shared/days/model";
+import { dayToText } from "../shared/days/format";
 
 function backDay(): DayDoc {
   const day = emptyDay("2026-10-02");
@@ -23,5 +24,14 @@ describe("comment scores", () => {
       day.comments[0].score = score;
       expect(daySchema.safeParse(day).success, JSON.stringify(score)).toBe(false);
     }
+  });
+
+  it("shares each score after the comment time, out of 5", () => {
+    expect(dayToText(backDay())).toBe([
+      "Fri 2 Oct 2026", "",
+      "Comment 08:00 · Back 1/5", "",
+      "Comment 17:05 · Back 3/5", "Hurt on both sides after 30 minutes", "",
+      "Comment 20:00", "Plain comment",
+    ].join("\n"));
   });
 });
