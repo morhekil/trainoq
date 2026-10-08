@@ -1,5 +1,6 @@
 ---
 title: Combine interval activities and store offset timestamps (DayDoc v9)
+status: in-progress
 created_at: 2026-10-08T18:45:50+11:00
 ---
 
@@ -154,3 +155,9 @@ Capture baseline screenshots before the UI work. Then run `npm run screenshots:c
 Gates: focused tests, `npm run typecheck`, `npm test` and `npm run build`.
 
 After deploying, read Oct 2 and Oct 5 back through the API. Confirm the v9 shape, `+10:00` and `+11:00` times, and the link count. Then combine "Run walk" in the app.
+
+## Progress (8 October)
+
+Built on the `combined-activities` branch: delivery steps 1–7, with gates green (127 unit tests, typecheck, build, 69 screenshot tests). Beyond the spec, the combined card shows its comment (combining moves the event title and notes there) and the Garmin timer and elapsed span from its linked segments, because combining removes the event card that showed them. Splitting a part of a visit keeps the visit's own title and appends the combined comment to its notes.
+
+Remaining: deploy, then read 2 and 5 October back through the API (v9 shape, `+10:00` and `+11:00` times, link count) and combine "Run walk" in the app.
