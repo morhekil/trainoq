@@ -1,7 +1,7 @@
 // One DayDoc per calendar day; stored as JSON in D1 and localStorage.
 
 import type { Session } from "../sessions/model";
-import type { ActivityResult, Effort, ExerciseHistoryEntry } from "../exercises/model";
+import { EFFORT, type ActivityResult, type Effort, type ExerciseHistoryEntry } from "../exercises/model";
 
 /** One timed part of an activity, such as one walk interval of a Garmin recording. */
 export interface Segment { id: string; exerciseId: string; startedAt: string; result: ActivityResult }
@@ -117,6 +117,42 @@ export function detachEventEntry(d: DayDoc, eventId: string, kind: EventEntry["k
   if (!entry) throw new Error("Event part not found");
   event.entries = event.entries.filter((item) => item !== entry);
   addEventEntry(d, entry);
+}
+
+const joinText = (...texts: (string | null)[]) => texts.map((text) => text?.trim()).filter(Boolean).join("\n");
+
+/**
+ * Turns an event whose parts are all activities into one activity: every segment in time order,
+ * the highest part effort, and the event's title and notes kept in the comment. Links stay on their segments.
+ */
+export function combineActivities(d: DayDoc, eventId: string): Activity {
+  const event = d.events.find((item) => item.id === eventId);
+  const parts = event?.entries.flatMap((entry) => entry.kind === "activity" ? [entry.activity] : []) ?? [];
+  if (!event || parts.length < 2 || parts.length !== event.entries.length || event.summaryOverrides)
+    throw new Error("Choose an event of two or more activities without entered totals");
+  const effort = parts.map((part) => part.effort).filter((value) => value != null).sort((a, b) => EFFORT.indexOf(b) - EFFORT.indexOf(a))[0];
+  const activity: Activity = {
+    id: crypto.randomUUID(),
+    comment: joinText(event.title, event.notes, ...parts.map((part) => part.comment)),
+    ...(effort ? { effort } : {}),
+    segments: parts.flatMap((part) => part.segments).sort((a, b) => Date.parse(a.startedAt) - Date.parse(b.startedAt)),
+  };
+  event.title = null;
+  event.notes = "";
+  event.entries = [{ kind: "activity", activity }];
+  return activity;
+}
+
+/** One activity per segment in place of a combined one. The event keeps the name and comment; the effort is dropped. */
+export function splitActivity(d: DayDoc, activityId: string, name: (id: string) => string): void {
+  const event = d.events.find((item) => item.entries.some((entry) => entry.kind === "activity" && entry.activity.id === activityId));
+  const index = event?.entries.findIndex((entry) => entry.kind === "activity" && entry.activity.id === activityId) ?? -1;
+  const entry = event?.entries[index];
+  if (!event || entry?.kind !== "activity" || entry.activity.segments.length < 2) throw new Error("Choose a combined activity");
+  const { activity } = entry;
+  event.entries.splice(index, 1, ...activity.segments.map((segment): EventEntry => ({ kind: "activity", activity: { id: segment.id, comment: "", segments: [segment] } })));
+  event.title ||= activityName(activity, name);
+  event.notes = joinText(event.notes, activity.comment);
 }
 
 /** Removes the session or activity and its Garmin links. */
