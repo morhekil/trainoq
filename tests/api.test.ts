@@ -126,9 +126,9 @@ describe("Worker tRPC boundary", () => {
     const customId = "e164c8eb-a785-4c78-a854-f7a9f0787215";
     const custom = emptyDay("2026-09-24");
     const activityId = "d34437b6-06c3-4b89-a9ed-37825a68822e";
-    addEventEntry(custom, { kind: "activity", activity: { id: "activity-2", exerciseId: activityId, comment: "Doubles", result: { minutes: 60, calories: 400 } } });
+    addEventEntry(custom, { kind: "activity", activity: { id: "activity-2", exerciseId: activityId, comment: "Doubles", effort: "med", result: { minutes: 60, calories: 400 } } });
     addEventEntry(custom, { kind: "session", session: { id: "custom", startedAt: "2026-09-24T07:00:00Z", endedAt: null, warmup: [], main: [
-      { kind: "superset", id: "ss", members: [{ id: "member", exerciseId: customId, comment: "", params: { perSet: ["weight", "reps"] } }], rounds: [{ id: "round", type: "working" }], results: [{ memberId: "member", roundId: "round", weight: 0, reps: 8 }] },
+      { kind: "superset", id: "ss", members: [{ id: "member", exerciseId: customId, comment: "", effort: "max", params: { perSet: ["weight", "reps"] } }], rounds: [{ id: "round", type: "working" }], results: [{ memberId: "member", roundId: "round", weight: 0, reps: 8 }] },
     ], cooldown: [], calories: null, notes: "" } });
     await expect(client.days.save.mutate({ date: custom.date, doc: custom, base: null })).rejects.toMatchObject({ data: { code: "BAD_REQUEST" } });
     await client.exercises.create.mutate({ id: customId, name: "Custom raise" });
@@ -138,7 +138,8 @@ describe("Worker tRPC boundary", () => {
     const saved = await client.days.save.mutate({ date: custom.date, doc: custom, base: null });
     expect(saved.ok).toBe(true);
     expect((await client.days.get.query(custom.date)).doc).toEqual(custom);
-    expect(logRows.some((row) => row.args[1] === "activity" && row.args[6] === activityId)).toBe(true);
+    expect(logRows.find((row) => row.args[1] === "activity" && row.args[6] === activityId)?.args[4]).toBe(JSON.stringify({ minutes: 60, calories: 400, effort: "med" }));
+    expect(JSON.parse(logRows.find((row) => row.args[6] === customId)?.args[4] as string)).toMatchObject({ effort: "max" });
     expect(await client.days.save.mutate({ date: custom.date, doc: custom, base: null })).toMatchObject({ ok: false, current: { doc: custom } });
     expect((await client.backup.export.query()).catalog).toContainEqual({ id: customId, name: "Custom raise", section: null, aliases: "" });
     const invalid = structuredClone(custom);

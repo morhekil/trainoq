@@ -166,8 +166,8 @@ interface ExerciseStat {
   sections: Partial<Record<ExerciseContext, number>>;
 }
 type ExerciseHistoryEntry =
-  | { date: string; section: Section; params: ParamSet; setup?: ParamValues; sets: (Pick<WorkSet, "type"> & ParamValues)[] }
-  | { date: string; section: "activity"; result: ActivityResult };
+  | { date: string; section: Section; params: ParamSet; setup?: ParamValues; sets: (Pick<WorkSet, "type"> & ParamValues)[]; effort?: Effort }
+  | { date: string; section: "activity"; result: ActivityResult; effort?: Effort };
 interface ExerciseLibrary {
   catalog: (Exercise & { section: ExerciseContext | "any" | null; aliases: string })[];
   stats: ExerciseStat[];

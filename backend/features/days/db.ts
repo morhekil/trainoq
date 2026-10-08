@@ -29,13 +29,13 @@ function logRows(doc: DayDoc): LogRow[] {
         for (const e of item.kind === "exercise" ? [item] : item.members)
           rows.push({
             section, exerciseId: e.exerciseId, name: seedExercise(e.exerciseId)?.name ?? "",
-            detail: JSON.stringify({ params: e.params, ...(e.setup ? { setup: e.setup } : {}), sets: itemSets(item, e.id).map(({ id: _id, ...set }) => set), superset: item.kind === "superset" }),
+            detail: JSON.stringify({ params: e.params, ...(e.setup ? { setup: e.setup } : {}), sets: itemSets(item, e.id).map(({ id: _id, ...set }) => set), superset: item.kind === "superset", ...(e.effort ? { effort: e.effort } : {}) }),
           });
   }
   for (const activity of dayActivities(doc))
     rows.push({
       section: "activity", exerciseId: activity.exerciseId, name: seedExercise(activity.exerciseId)?.name ?? "",
-      detail: JSON.stringify(activity.result),
+      detail: JSON.stringify({ ...activity.result, ...(activity.effort ? { effort: activity.effort } : {}) }),
     });
   return rows;
 }

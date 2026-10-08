@@ -7,6 +7,7 @@ import { formatEffort } from "../shared/exercises/format";
 import { createSuperset, dissolveSuperset } from "../shared/sessions/ops";
 import { copyItems } from "../frontend/features/sessions/ops";
 import { daySessions } from "../shared/days/model";
+import { exerciseLibrary } from "../backend/features/exercises/db";
 
 function effortDay(): DayDoc {
   const doc = emptyDay("2026-10-08");
@@ -67,5 +68,24 @@ describe("effort", () => {
     expect(copy[0]).not.toHaveProperty("effort");
     if (copy[1].kind !== "superset") throw new Error("expected superset");
     expect(copy[1].members[0]).not.toHaveProperty("effort");
+  });
+
+  it("comes back with exercise and activity history", async () => {
+    const squat = exerciseIdForName("Squat");
+    const run = exerciseIdForName("Run");
+    const db = { prepare: () => ({ all: async () => ({ results: [] }) }), async batch() { return [
+      { results: [] },
+      { results: [
+        { exercise_id: squat, name: "Squat", date: "2026-10-08", section: "main", detail: JSON.stringify({ params: { perSet: ["weight", "reps"] }, sets: [{ type: "working", weight: 80, reps: 5 }], effort: "high" }) },
+        { exercise_id: run, name: "Run", date: "2026-10-08", section: "activity", detail: JSON.stringify({ minutes: 30, calories: 250, effort: "low" }) },
+        { exercise_id: run, name: "Run", date: "2026-10-07", section: "activity", detail: JSON.stringify({ minutes: 20, calories: null }) },
+      ] },
+    ]; } } as unknown as D1Database;
+    const lib = await exerciseLibrary(db);
+    expect(lib.history[squat][0]).toMatchObject({ effort: "high" });
+    expect(lib.history[run]).toEqual([
+      { date: "2026-10-08", section: "activity", result: { minutes: 30, calories: 250 }, effort: "low" },
+      { date: "2026-10-07", section: "activity", result: { minutes: 20, calories: null } },
+    ]);
   });
 });

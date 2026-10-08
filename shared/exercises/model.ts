@@ -29,10 +29,10 @@ export interface ExerciseStat {
   last: string;
   sections: Partial<Record<ExerciseContext, number>>;
 }
-export type SessionHistoryEntry = { date: string; section: Section; params: ParamSet; setup?: ParamValues; sets: (Pick<WorkSet, "type"> & ParamValues)[] };
+export type SessionHistoryEntry = { date: string; section: Section; params: ParamSet; setup?: ParamValues; sets: (Pick<WorkSet, "type"> & ParamValues)[]; effort?: Effort };
 export type ExerciseHistoryEntry =
   | SessionHistoryEntry
-  | { date: string; section: "activity"; result: ActivityResult };
+  | { date: string; section: "activity"; result: ActivityResult; effort?: Effort };
 export interface ExerciseLibrary {
   catalog: (Exercise & { section: ExerciseContext | "any" | null; aliases: string })[];
   stats: ExerciseStat[];
