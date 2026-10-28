@@ -826,7 +826,7 @@ test("warm-up and cool-down can edit supersets with numeric sets", async ({ page
   }, { date: day, doc });
   await page.goto(`/#/d/${day}`);
 
-  for (const title of ["Warm-up", "Cool-down"]) {
+  for (const [title, type] of [["Warm-up", "W"], ["Cool-down", "B"]]) {
     const section = page.locator(".section").filter({ has: page.getByRole("heading", { name: title, exact: true }) });
     await section.getByRole("button", { name: "Superset", exact: true }).click();
     const block = section.locator(".block.superset");
@@ -839,19 +839,19 @@ test("warm-up and cool-down can edit supersets with numeric sets", async ({ page
     }
     await expect(block.locator(".exercise")).toHaveCount(2);
     await block.getByRole("button", { name: "Round", exact: true }).click();
-    await block.getByRole("textbox", { name: `${title} press W1 weight` }).fill("12");
-    await block.getByRole("textbox", { name: `${title} press W1 reps` }).fill("7");
-    await block.getByRole("textbox", { name: `${title} row W1 weight` }).fill("0");
-    await block.getByRole("textbox", { name: `${title} row W1 reps` }).fill("9");
+    await block.getByRole("textbox", { name: `${title} press ${type}1 weight` }).fill("12");
+    await block.getByRole("textbox", { name: `${title} press ${type}1 reps` }).fill("7");
+    await block.getByRole("textbox", { name: `${title} row ${type}1 weight` }).fill("0");
+    await block.getByRole("textbox", { name: `${title} row ${type}1 reps` }).fill("9");
     await block.getByRole("button", { name: "Round", exact: true }).click();
-    await expect(block.getByRole("textbox", { name: `${title} press W2 weight` })).toHaveValue("12");
-    await expect(block.getByRole("textbox", { name: `${title} press W2 reps` })).toHaveValue("7");
-    await expect(block.getByRole("textbox", { name: `${title} row W2 weight` })).toHaveValue("0");
-    await expect(block.getByRole("textbox", { name: `${title} row W2 reps` })).toHaveValue("9");
+    await expect(block.getByRole("textbox", { name: `${title} press ${type}2 weight` })).toHaveValue("12");
+    await expect(block.getByRole("textbox", { name: `${title} press ${type}2 reps` })).toHaveValue("7");
+    await expect(block.getByRole("textbox", { name: `${title} row ${type}2 weight` })).toHaveValue("0");
+    await expect(block.getByRole("textbox", { name: `${title} row ${type}2 reps` })).toHaveValue("9");
     await expect(block.locator(".exercise").first().locator(".set-row")).toHaveCount(2);
     await expect(block.locator(".exercise").last().locator(".set-row")).toHaveCount(2);
     await block.getByRole("button", { name: /Superset .* options/ }).click();
-    await page.getByRole("button", { name: "Delete round W1" }).click();
+    await page.getByRole("button", { name: `Delete round ${type}1` }).click();
     await page.getByRole("button", { name: "Undo" }).last().click();
     await expect(block.locator(".exercise").first().locator(".set-row")).toHaveCount(2);
     await checkWidth(page);
@@ -1020,7 +1020,7 @@ test("mismatched sets show an alignment preview before joining", async ({ page }
   await page.mouse.move(to!.x + to!.width / 2, to!.y + to!.height / 2, { steps: 8 });
   await page.mouse.up();
   const preview = page.getByRole("dialog", { name: "Align Squat with superset" });
-  await expect(preview).toContainText("Superset rounds: warmup, warmup");
+  await expect(preview).toContainText("Superset rounds: working, working");
   await expect(preview).toContainText("40kg×8");
   const before = await page.evaluate((date) => JSON.parse(localStorage.getItem(`tq:day:${date}`)!), day);
   expect(savedSessions(before.doc)[0].main).toHaveLength(2);

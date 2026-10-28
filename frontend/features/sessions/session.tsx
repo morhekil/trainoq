@@ -11,7 +11,7 @@ import { exerciseName } from "../exercises/catalog";
 import { lastTime, suggestedSetup } from "../exercises/library";
 import { paramsFor, setExerciseParams } from "../exercises/params";
 import { EffortPicker } from "../exercises/effort";
-import { blockLetter, copyItems, findItem, findSession, findStandalone, findSuperset, makeSet, move, newExercise, newMember, nextSetType, setLabels } from "./ops";
+import { blockLetter, copyItems, findItem, findSession, findStandalone, findSuperset, makeSet, move, newExercise, newMember, nextRoundType, nextSetType, setLabels } from "./ops";
 import { findRepeatSource } from "./recent";
 import { clockTime, nowLocal, withClock } from "../../../shared/days/time";
 import { uid } from "../../id";
@@ -196,7 +196,7 @@ function SupersetCard({ s, section, item, index, count, drag, over, startDrag, j
       <div className="block-head"><span className="tag">Superset {letter}</span><button type="button" className="icon-btn" aria-label={`Superset ${letter} options`} onClick={menu}><Icon name="more" /></button></div>
       {item.members.map((member, memberIndex) => <ExerciseEditor key={member.id} s={s} section={section} item={item} member={member} label={`${letter}${memberIndex + 1}`} index={index} count={count} memberIndex={memberIndex} startDrag={startDrag} drag={drag} over={over} roundMenu={menu} />)}
       {item.members.length === 0 && <div className="hint">Empty superset. Add an exercise or keep rounds for later.</div>}
-      <button type="button" className="btn ghost add-round" onClick={() => up((ss) => addRound(ss, uid(), ss.rounds.at(-1)?.type ?? "warmup"))}><Icon name="plus" size={18} />Round</button>
+      <button type="button" className="btn ghost add-round" onClick={() => up((ss) => addRound(ss, uid(), nextRoundType(ss, section)))}><Icon name="plus" size={18} />Round</button>
       <button type="button" className="link-btn" onClick={add}><Icon name="plus" size={16} />Add exercise to superset</button>
       {drag?.kind === "exercise" && <button type="button" className={`drop-target member-drop ${over === dropKey ? "drop-over" : ""}`} data-drop-key={dropKey} onClick={() => join(drag.id, item.id)}>Drop exercise into superset {letter}</button>}
     </div>

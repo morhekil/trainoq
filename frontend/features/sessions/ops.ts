@@ -33,10 +33,17 @@ export function newSession(): Session {
   return { id: uid(), startedAt: nowLocal(), endedAt: null, warmup: [], main: [], cooldown: [], calories: null, notes: "" };
 }
 
+// With nothing earlier to copy, a set starts on its section's usual type; a wrong guess of warm-up would hide real work from summaries.
+const SECTION_SET_TYPE: Record<Section, SetType> = { warmup: "warmup", main: "working", cooldown: "backoff" };
+
+export function nextRoundType(superset: Superset, section: Section): SetType {
+  return superset.rounds.at(-1)?.type ?? SECTION_SET_TYPE[section];
+}
+
 export function makeSet(exercise: StandaloneExercise, date: string, section: Section, type?: SetType): WorkSet {
   const params = exercise.params;
   const prev = exercise.sets.at(-1);
-  const t: SetType = type ?? prev?.type ?? suggestedSet(exercise.exerciseId, date, section, params)?.type ?? "warmup";
+  const t: SetType = type ?? prev?.type ?? suggestedSet(exercise.exerciseId, date, section, params)?.type ?? SECTION_SET_TYPE[section];
   const from = (set: ParamValues): WorkSet => ({ id: uid(), type: t, ...valuesOf(set, params) });
   const same = [...exercise.sets].reverse().find((set) => set.type === t);
   if (same) return from(same);

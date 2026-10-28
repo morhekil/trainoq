@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { copyItems, findItem, setLabels } from "../frontend/features/sessions/ops";
+import { copyItems, findItem, newExercise, nextRoundType, setLabels } from "../frontend/features/sessions/ops";
 import type { SessionItem } from "../shared/exercises/model";
 import { exerciseIdForName } from "../shared/exercises/catalog";
 
@@ -33,5 +33,12 @@ describe("session editing", () => {
     expect(findItem(session, "warmup", "e")).toBe(session.warmup[0]);
     expect(() => findItem(session, "main", "e")).toThrow();
     expect(setLabels([{ type: "warmup" }, { type: "working" }, { type: "working" }, { type: "backoff" }])).toEqual(["W1", "1", "2", "B1"]);
+  });
+
+  it("starts a first set or round on its section's usual type", () => {
+    const empty = { kind: "superset" as const, id: "ss", members: [], rounds: [], results: [] };
+    expect((["warmup", "main", "cooldown"] as const).map((section) => [newExercise("seed:0029", "2026-10-05", section).sets[0].type, nextRoundType(empty, section)]))
+      .toEqual([["warmup", "warmup"], ["working", "working"], ["backoff", "backoff"]]);
+    expect(nextRoundType({ ...empty, rounds: [{ id: "r1", type: "warmup" }] }, "main")).toBe("warmup");
   });
 });
