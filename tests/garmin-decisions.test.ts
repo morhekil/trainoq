@@ -25,6 +25,18 @@ it("suggests only one close completed strength session and preserves training de
   expect(doc.garminLinks).toEqual([]);
 });
 
+it("links a strength recording to a session left running and takes the recording's start and finish", () => {
+  const doc = emptyDay("2026-09-28");
+  addEventEntry(doc, { kind: "session", session: { ...session("open", "2026-09-28T15:40:00+10:00"), endedAt: null } });
+  addEventEntry(doc, { kind: "session", session: session("finished-late", "2026-09-28T16:30:00+10:00") });
+  expect(strengthMatches(doc, source)).toEqual(["open", "finished-late"]);
+  linkStrengthSession(doc, source, "open");
+  expect(daySessions(doc)[0]).toMatchObject({ startedAt: "2026-09-28T16:00:00+10:00", endedAt: "2026-09-28T17:01:40+10:00", calories: 362 });
+  linkStrengthSession(doc, { ...source, sourceKey: "garmin:2:2026-09-28T05:00:00.000Z:0", elapsedSeconds: null }, "finished-late");
+  expect(daySessions(doc)[1]).toMatchObject({ startedAt: "2026-09-28T16:00:00+10:00", endedAt: "2026-09-28T17:00:00+10:00" });
+  expect(daySchema.parse(doc)).toEqual(doc);
+});
+
 it("accepts activity values once, keeps corrections through re-import, and can ignore and restore", () => {
   const doc = emptyDay("2026-09-28");
   const activity = acceptActivity(doc, { ...source, sport: "running", title: "Run" }, "seed:0170");

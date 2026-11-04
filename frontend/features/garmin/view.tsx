@@ -235,7 +235,7 @@ function GarminRecord({ source }: { source: Listed }) {
   const status = entry?.dirty ? localStatus ?? "pending" : localStatus ?? source.status;
   const matches = strengthMatches(doc, source);
   const selected = choice || (matches.length === 1 ? matches[0] : "");
-  const completed = daySessions(doc).filter((session) => session.endedAt && !parts.some((item) => item.sourceKey && item.entry.kind === "session" && item.entry.session.id === session.id));
+  const linkable = daySessions(doc).filter((session) => !parts.some((item) => item.sourceKey && item.entry.kind === "session" && item.entry.session.id === session.id));
 
   const decide = async (action: (day: typeof doc) => void) => {
     try {
@@ -275,10 +275,10 @@ function GarminRecord({ source }: { source: Listed }) {
         <label>Trainoq date<input type="date" value={date} onChange={(event) => setDate(event.target.value)} /></label>
         <label>Activity name<input type="text" value={name} maxLength={200} onChange={(event) => setName(event.target.value)} /></label>
       </div>
-      {isStrength(source) && completed.length > 0 && <label className="garmin-select">Training session
+      {isStrength(source) && linkable.length > 0 && <label className="garmin-select">Training session
         <select value={selected} onChange={(event) => setChoice(event.target.value)}>
           <option value="">Choose a session</option>
-          {completed.map((session) => <option key={session.id} value={session.id}>{clockTime(session.startedAt)}{matches.includes(session.id) ? " · close match" : ""}</option>)}
+          {linkable.map((session) => <option key={session.id} value={session.id}>{clockTime(session.startedAt)}{matches.includes(session.id) ? " · close match" : ""}</option>)}
         </select>
       </label>}
       <div className="garmin-actions">

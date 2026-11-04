@@ -26,7 +26,7 @@ const isLinked = (doc: DayDoc, sessionId: string) => doc.garminLinks.some((link)
 export function strengthMatches(doc: DayDoc, source: GarminActivitySummary): string[] {
   if (source.localDate !== doc.date || source.subSport !== "strengthTraining") return [];
   const started = Date.parse(source.startUtc);
-  return daySessions(doc).filter((session) => session.endedAt && !isLinked(doc, session.id) && Math.abs(Date.parse(session.startedAt) - started) <= 60 * 60 * 1000).map((session) => session.id);
+  return daySessions(doc).filter((session) => !isLinked(doc, session.id) && Math.abs(Date.parse(session.startedAt) - started) <= 60 * 60 * 1000).map((session) => session.id);
 }
 
 export function acceptActivity(doc: DayDoc, source: GarminActivitySummary, exerciseId: string): Activity {
@@ -44,10 +44,15 @@ export function acceptActivity(doc: DayDoc, source: GarminActivitySummary, exerc
 
 export function linkStrengthSession(doc: DayDoc, source: GarminActivitySummary, sessionId: string): void {
   ensurePending(doc, source.sourceKey);
-  const session = daySessions(doc).find((item) => item.id === sessionId && item.endedAt && !isLinked(doc, item.id));
-  if (!session) throw new Error("Choose an unlinked completed session");
+  const session = daySessions(doc).find((item) => item.id === sessionId && !isLinked(doc, item.id));
+  if (!session) throw new Error("Choose an unlinked session");
   doc.garminLinks.push({ sourceKey: source.sourceKey, target: { kind: "session", id: session.id } });
   session.calories ??= source.activeCalories;
+  // The watch timed the workout, so it closes a session left running and corrects a late or early finish.
+  const offset = session.startedAt.slice(19);
+  const seconds = source.elapsedSeconds ?? source.timerSeconds;
+  session.startedAt = withOffset(source.startUtc, offset);
+  if (seconds != null) session.endedAt = withOffset(new Date(Date.parse(source.startUtc) + seconds * 1000).toISOString(), offset);
 }
 
 export function ignoreGarmin(doc: DayDoc, key: string): void {
