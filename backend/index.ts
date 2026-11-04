@@ -2,6 +2,7 @@ import { fetchRequestHandler } from "@trpc/server/adapters/fetch";
 import { appRouter } from "./router";
 import { readGarminConnection } from "./features/garmin/connection";
 import { syncGarminPage } from "./features/garmin/sync";
+import { autoImportGarmin } from "./features/garmin/auto";
 
 export default {
   fetch(req, env): Promise<Response> {
@@ -20,5 +21,6 @@ export default {
   async scheduled(_event, env): Promise<void> {
     const connection = await readGarminConnection(env.DB, env.APP_PASSWORD);
     if (connection?.row.status === "connected") await syncGarminPage(env.DB, env.APP_PASSWORD);
+    await autoImportGarmin(env.DB);
   },
 } satisfies ExportedHandler<Env>;

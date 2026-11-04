@@ -7,6 +7,7 @@ import { loginGarmin, verifyGarminMfa } from "./connect";
 import { readGarminConnection, saveGarminConnection, updateGarminConnection } from "./connection";
 import { garminSummariesByKeys, listGarmin } from "./db";
 import { syncGarminPage } from "./sync";
+import { autoImportGarmin } from "./auto";
 
 export const garminRouter = t.router({
   connection: authed.query(async ({ ctx }) => {
@@ -41,7 +42,11 @@ export const garminRouter = t.router({
     await ctx.env.DB.prepare("DELETE FROM garmin_connection WHERE id = 1").run();
     return { status: "disconnected" as const };
   }),
-  sync: authed.mutation(({ ctx }) => syncGarminPage(ctx.env.DB, ctx.env.APP_PASSWORD)),
+  sync: authed.mutation(async ({ ctx }) => {
+    const page = await syncGarminPage(ctx.env.DB, ctx.env.APP_PASSWORD);
+    await autoImportGarmin(ctx.env.DB);
+    return page;
+  }),
   list: authed.input(z.object({ from: dateSchema, to: dateSchema, includeLinked: z.boolean().optional(),
     cursor: z.object({ importedAt: z.iso.datetime(), sourceKey: z.string().min(1) }).optional(),
   }).refine(({ from, to }) => from <= to, "Invalid date range"))

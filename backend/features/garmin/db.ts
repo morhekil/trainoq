@@ -37,6 +37,19 @@ export async function allGarmin(db: D1Database): Promise<GarminActivitySummary[]
   return results.map((row) => summarySchema.parse(JSON.parse(row.summary)));
 }
 
+/** Pending recordings with a local date in the last 10 days that were never auto-imported, oldest first. */
+export async function autoImportCandidates(db: D1Database): Promise<GarminActivitySummary[]> {
+  const { results } = await db.prepare(`SELECT summary FROM garmin_activities WHERE auto_imported_at IS NULL
+    AND source_key NOT IN (SELECT source_key FROM garmin_links) AND json_extract(summary, '$.localDate') >= date('now', '-10 days')
+    ORDER BY json_extract(summary, '$.startUtc')`).all<{ summary: string }>();
+  return results.map((row) => summarySchema.parse(JSON.parse(row.summary)));
+}
+
+export async function markAutoImported(db: D1Database, sourceKeys: string[]): Promise<void> {
+  await db.prepare(`UPDATE garmin_activities SET auto_imported_at = ? WHERE source_key IN (${sourceKeys.map(() => "?").join(", ")})`)
+    .bind(new Date().toISOString(), ...sourceKeys).run();
+}
+
 export async function garminSummariesByKeys(db: D1Database, sourceKeys: string[]): Promise<GarminActivitySummary[]> {
   const { results } = await db.prepare(`SELECT summary FROM garmin_activities WHERE source_key IN (${sourceKeys.map(() => "?").join(", ")})`)
     .bind(...sourceKeys).all<{ summary: string }>();

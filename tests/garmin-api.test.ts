@@ -1,3 +1,4 @@
+import { readdirSync, readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { createTRPCClient, httpLink } from "@trpc/client";
 import { expect, it } from "vitest";
@@ -5,6 +6,8 @@ import worker from "../backend/index";
 import { importGarminSummaries } from "../backend/features/garmin/db";
 import type { AppRouter } from "../backend/router";
 import type { GarminActivitySummary } from "../shared/garmin/fit";
+import { addEventEntry, dayActivities, daySessions, emptyDay } from "../shared/days/model";
+import { unlinkGarmin } from "../shared/garmin/decisions";
 
 it("lists automatically imported Garmin summaries through the authenticated Worker and keeps revisions separate", async () => {
   const sqlite = new DatabaseSync(":memory:");
@@ -73,5 +76,67 @@ it("lists automatically imported Garmin summaries through the authenticated Work
   expect(secondPage.items.map((item) => item.title)).toEqual(["Run 1", "Run 0"]);
   expect(secondPage.nextCursor).toBeNull();
   expect((await client.backup.export.query()).garminActivities).toContainEqual(expect.objectContaining(corrected));
+  sqlite.close();
+});
+
+it("auto-imports recent pending recordings on the Worker schedule, once each", async () => {
+  const sqlite = new DatabaseSync(":memory:");
+  for (const file of readdirSync("migrations").sort()) sqlite.exec(readFileSync(`migrations/${file}`, "utf8"));
+  type Bound = { sql: string; args: unknown[] };
+  const prepare = (sql: string, args: unknown[] = []) => ({
+    sql, args,
+    bind(...values: unknown[]) { return prepare(sql, values); },
+    async first() { return sqlite.prepare(sql).get(...args as []) ?? null; },
+    async all() { return { results: sqlite.prepare(sql).all(...args as []) }; },
+    async run() { return { meta: { changes: sqlite.prepare(sql).run(...args as []).changes } }; },
+  });
+  const db = { prepare, async batch(statements: Bound[]) {
+    sqlite.exec("BEGIN");
+    try {
+      const results = statements.map(({ sql, args }) => ({ meta: { changes: sqlite.prepare(sql).run(...args as []).changes } }));
+      sqlite.exec("COMMIT");
+      return results;
+    } catch (error) { sqlite.exec("ROLLBACK"); throw error; }
+  } } as unknown as D1Database;
+  const env = { APP_PASSWORD: "test-password", DB: db } as Env;
+  let cookie = "";
+  const client = createTRPCClient<AppRouter>({ links: [httpLink({ url: "https://example.test/api/trpc", fetch: async (input, init) => {
+    const headers = new Headers(init?.headers);
+    if (cookie) headers.set("Cookie", cookie);
+    const response = await worker.fetch(new Request(input, { ...init, headers }) as Parameters<typeof worker.fetch>[0], env);
+    cookie = response.headers.get("Set-Cookie")?.split(";")[0] ?? cookie;
+    return response;
+  } })] });
+  const runSchedule = () => worker.scheduled({} as ScheduledController, env);
+  await client.auth.login.mutate({ password: "test-password" });
+
+  const date = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+  const old = new Date(Date.now() - 20 * 86_400_000).toISOString().slice(0, 10);
+  const recording = (key: number, day: string, title: string, subSport: string | null): GarminActivitySummary => ({
+    sourceKey: `garmin:${key}:${day}T06:00:00.000Z:0`, sport: title.toLowerCase(), subSport, title, startUtc: `${day}T06:00:00.000Z`,
+    localDate: day, offsetMinutes: 600, timerSeconds: 3000, elapsedSeconds: 3600, activeCalories: 300,
+  });
+  const strength = recording(1, date, "Strength", "strengthTraining");
+  const pickleball = recording(2, date, "Pickleball", null);
+  const oldWalk = recording(3, old, "Walk", null);
+  const day = emptyDay(date);
+  addEventEntry(day, { kind: "session", session: { id: "left-running", startedAt: `${date}T15:45:00+10:00`, endedAt: null, warmup: [], main: [], cooldown: [], calories: null, notes: "" } });
+  await client.days.save.mutate({ date, doc: day, base: null });
+  await importGarminSummaries(db, [strength, pickleball, oldWalk]);
+
+  await runSchedule();
+  const imported = await client.days.get.query(date);
+  expect(daySessions(imported.doc!)[0]).toMatchObject({ startedAt: `${date}T16:00:00+10:00`, endedAt: `${date}T17:00:00+10:00`, calories: 300 });
+  const [activity] = dayActivities(imported.doc!);
+  expect(activity.segments[0]).toMatchObject({ startedAt: `${date}T16:00:00+10:00`, result: { minutes: 50, calories: 300 } });
+  expect(sqlite.prepare("SELECT name FROM exercise_catalog WHERE id = ?").get(activity.segments[0].exerciseId)).toEqual({ name: "Pickleball" });
+  expect((await client.garmin.list.query({ from: old, to: date })).items.map((item) => item.title)).toEqual(["Walk"]);
+
+  const unlinked = structuredClone(imported.doc!);
+  unlinkGarmin(unlinked, pickleball.sourceKey);
+  await client.days.save.mutate({ date, doc: unlinked, base: imported.updatedAt });
+  await runSchedule();
+  expect(dayActivities((await client.days.get.query(date)).doc!)).toHaveLength(1);
+  expect((await client.garmin.list.query({ from: date, to: date })).items.map((item) => item.title)).toEqual(["Pickleball"]);
   sqlite.close();
 });

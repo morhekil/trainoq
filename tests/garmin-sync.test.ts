@@ -13,7 +13,8 @@ function database() {
   const sqlite = new DatabaseSync(":memory:");
   sqlite.exec(`CREATE TABLE garmin_connection (id INTEGER PRIMARY KEY, encrypted_state TEXT, status TEXT, next_offset INTEGER, last_sync_at TEXT, last_error TEXT, updated_at TEXT, sync_lock_until TEXT);
     CREATE TABLE garmin_downloads (activity_id TEXT PRIMARY KEY, imported_at TEXT NOT NULL);
-    CREATE TABLE garmin_activities (source_key TEXT PRIMARY KEY, summary TEXT NOT NULL, summary_hash TEXT NOT NULL, imported_at TEXT NOT NULL);`);
+    CREATE TABLE garmin_activities (source_key TEXT PRIMARY KEY, summary TEXT NOT NULL, summary_hash TEXT NOT NULL, imported_at TEXT NOT NULL, auto_imported_at TEXT);
+    CREATE TABLE garmin_links (source_key TEXT PRIMARY KEY, date TEXT NOT NULL, target_kind TEXT NOT NULL, target_id TEXT);`);
   const prepare = (sql: string, args: unknown[] = []) => ({
     bind(...values: unknown[]) { return prepare(sql, values); },
     async first() { return sqlite.prepare(sql).get(...args as []) ?? null; },
