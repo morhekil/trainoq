@@ -1,4 +1,4 @@
-import { addEventEntry, dayActivities, daySessions, linkedKeys, removeEventEntry, type Activity, type DayDoc } from "../days/model";
+import { addEventEntry, dayActivities, daySessions, linkedKeys, mergeEvents, removeEventEntry, type Activity, type DayDoc } from "../days/model";
 import { formatOffset, withOffset } from "../days/time";
 import { fitRecordingKey, type GarminActivitySummary } from "./fit";
 
@@ -53,6 +53,31 @@ export function linkStrengthSession(doc: DayDoc, source: GarminActivitySummary, 
   const seconds = source.elapsedSeconds ?? source.timerSeconds;
   session.startedAt = withOffset(source.startUtc, offset);
   if (seconds != null) session.endedAt = withOffset(new Date(Date.parse(source.startUtc) + seconds * 1000).toISOString(), offset);
+}
+
+/**
+ * Decides one day's pending recordings the way review usually would: a strength recording links to its only matching
+ * session, and any other recording becomes an activity, with the parts of one recording in one training event.
+ * Returns the decided source keys; the rest stay pending.
+ */
+export function autoImport(doc: DayDoc, sources: GarminActivitySummary[], exerciseId: (title: string) => string): string[] {
+  const decided: string[] = [];
+  const recordings = new Map<string, string[]>();
+  for (const source of sources) {
+    if (doc.garminLinks.some((link) => link.sourceKey === source.sourceKey)) continue;
+    if (source.subSport === "strengthTraining") {
+      const matches = strengthMatches(doc, source);
+      if (matches.length !== 1) continue;
+      linkStrengthSession(doc, source, matches[0]);
+    } else {
+      acceptActivity(doc, source, exerciseId(source.title));
+      const recording = fitRecordingKey(source.sourceKey);
+      recordings.set(recording, [...(recordings.get(recording) ?? []), doc.events.at(-1)!.id]);
+    }
+    decided.push(source.sourceKey);
+  }
+  for (const events of recordings.values()) if (events.length > 1) mergeEvents(doc, events);
+  return decided;
 }
 
 export function ignoreGarmin(doc: DayDoc, key: string): void {
