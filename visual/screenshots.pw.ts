@@ -265,6 +265,22 @@ test("reduced motion keeps live state visible without animation", async ({ page 
   expect(await sheet.evaluate((element) => getComputedStyle(element).animationName)).toBe("none");
 });
 
+test("editing a late session's finish keeps the first matching time after its start", async ({ page }) => {
+  await mockApi(page);
+  const session = { ...doc.sessions[0], startedAt: `${day}T20:51:00+10:00`, endedAt: "2026-09-16T00:03:00+10:00" };
+  await page.addInitScript(({ date, doc }) => {
+    localStorage.setItem("tq:authed", JSON.stringify(true));
+    localStorage.setItem(`tq:day:${date}`, JSON.stringify({ doc, base: null, dirty: false, rev: 1 }));
+  }, { date: day, doc: { ...doc, sessions: [session] } });
+  await page.goto(`/#/d/${day}`);
+  await page.getByLabel("Finish time").fill("21:20");
+  await expect(page.locator(".session .duration")).toHaveText("29 min");
+  await expect.poll(async () => savedSessions(await page.evaluate((date) => {
+    const saved = JSON.parse(localStorage.getItem(`tq:day:${date}`) ?? "null");
+    return saved.doc;
+  }, day))[0].endedAt).toBe(`${day}T21:20:00+10:00`);
+});
+
 test("the transparent date input shows a visible focus indicator", async ({ page }) => {
   await mockApi(page);
   await page.addInitScript(() => localStorage.setItem("tq:authed", JSON.stringify(true)));

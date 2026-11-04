@@ -1,5 +1,16 @@
 import type { SessionExercise, SessionItem, SetType, StandaloneExercise, Superset, WorkSet } from "../exercises/model";
 import { normalizeParams, PARAM_KEYS, valuesOf, type Param, type ParamSet, type ParamValues } from "../exercises/params";
+import { atClock } from "../days/time";
+
+/** Use the first occurrence of an edited finish clock at or after the session start. */
+export function finishAtClock(startedAt: string, endedAt: string, hhmm: string): string {
+  const date = startedAt.slice(0, 10);
+  const offset = endedAt.slice(19);
+  const candidate = atClock(date, hhmm, offset);
+  if (Date.parse(candidate) >= Date.parse(startedAt)) return candidate;
+  const nextDate = new Date(Date.parse(`${date}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+  return atClock(nextDate, hhmm, offset);
+}
 
 export function move<T>(items: T[], from: number, to: number): void {
   if (from < 0 || from >= items.length || to < 0 || to >= items.length) return;

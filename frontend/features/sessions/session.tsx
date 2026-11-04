@@ -6,7 +6,7 @@ import type { Section, SessionItem, SetType, SessionExercise, Superset, WorkSet 
 import { BAND_MAX, PARAMS, paramsName, sameParams, type Param, type ParamSet } from "../../../shared/exercises/params";
 import type { Session } from "../../../shared/sessions/model";
 import { removeEventEntry } from "../../../shared/days/model";
-import { addMember, addRound, addSet, createSuperset, deleteSuperset, dissolveSuperset, joinPerformance, moveMember, removeMember, removeRound, removeSet, removedValues, reorderRound, setRecordParams, setRoundType, takeOutMember } from "../../../shared/sessions/ops";
+import { addMember, addRound, addSet, createSuperset, deleteSuperset, dissolveSuperset, finishAtClock, joinPerformance, moveMember, removeMember, removeRound, removeSet, removedValues, reorderRound, setRecordParams, setRoundType, takeOutMember } from "../../../shared/sessions/ops";
 import { exerciseName } from "../exercises/catalog";
 import { lastTime, suggestedSetup } from "../exercises/library";
 import { paramsFor, setExerciseParams } from "../exercises/params";
@@ -53,7 +53,7 @@ export function SessionCard({ s, index, total, eventAction }: { s: Session; inde
           <h2 className="session-heading">{active && <span className="live-dot" aria-hidden="true" />}{total > 1 ? `Session ${index + 1}` : "Session"}{active ? " · in progress" : ""}</h2>
           <div className="session-times">
             <input type="time" className="time-input" aria-label="Start time" value={clockTime(s.startedAt)} onChange={(e) => e.target.value && up((x) => (x.startedAt = withClock(x.startedAt, e.target.value)))} />
-            {s.endedAt && <><span className="muted">–</span><input type="time" className="time-input" aria-label="Finish time" value={clockTime(s.endedAt)} onChange={(e) => e.target.value && up((x) => (x.endedAt = withClock(x.endedAt!, e.target.value)))} /></>}
+            {s.endedAt && <><span className="muted">–</span><input type="time" className="time-input" aria-label="Finish time" value={clockTime(s.endedAt)} onChange={(e) => e.target.value && up((x) => (x.endedAt = finishAtClock(x.startedAt, x.endedAt!, e.target.value)))} /></>}
             {(active || minutes > 0) && <span className="muted duration">{formatDuration(minutes)}</span>}
           </div>
         </div>

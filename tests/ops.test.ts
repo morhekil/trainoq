@@ -2,8 +2,16 @@ import { describe, expect, it } from "vitest";
 import { copyItems, findItem, newExercise, nextRoundType, setLabels } from "../frontend/features/sessions/ops";
 import type { SessionItem } from "../shared/exercises/model";
 import { exerciseIdForName } from "../shared/exercises/catalog";
+import { finishAtClock } from "../shared/sessions/ops";
 
 describe("session editing", () => {
+  it("anchors an edited finish clock to the first occurrence after the start", () => {
+    const start = "2026-10-12T20:51:00+11:00";
+    const tapped = "2026-10-13T00:03:00+11:00";
+    expect(finishAtClock(start, tapped, "21:20")).toBe("2026-10-12T21:20:00+11:00");
+    expect(finishAtClock(start, tapped, "00:20")).toBe("2026-10-13T00:20:00+11:00");
+  });
+
   it("repeats identity, grouping and round types without recorded values", () => {
     const items: SessionItem[] = [
       { kind: "exercise", id: "e", exerciseId: exerciseIdForName("Squat"), comment: "depth", params: { perSet: ["weight", "reps"] }, sets: [{ id: "set", type: "working", weight: 40, reps: 5 }] },
