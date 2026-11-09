@@ -14,6 +14,8 @@
     "db:migrate:local": "wrangler d1 migrations apply trainoq --local",
     "db:migrate:remote": "wrangler d1 migrations apply trainoq --remote",
     "deploy": "npm run build && npm run db:migrate:remote && wrangler deploy",
+    "report:physio": "esbuild scripts/physio_report.ts --bundle --platform=node --format=esm --packages=external --log-level=warning --outfile=node_modules/.tmp/physio_report.mjs && node node_modules/.tmp/physio_report.mjs",
+    "report:pt": "python3 -I scripts/pt_week_report.py",
     "cf-typegen": "wrangler types backend/worker-configuration.d.ts",
     "setup:local": "node -e \"require('fs').existsSync('.dev.vars')||require('fs').copyFileSync('.dev.vars.example','.dev.vars')\" && npm run db:migrate:local"
   },

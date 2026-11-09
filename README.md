@@ -57,6 +57,22 @@ Local password is whatever `APP_PASSWORD` is in `.dev.vars`.
 
 Run `npm run screenshots:baseline` only after reviewing an intentional visual change. It updates the reference images; inspect the changed PNGs before committing them.
 
+## Physio report
+
+`npm run report:physio -- trainoq-export.json report.html 2026-09-22` turns a backup from the menu's **Download backup (JSON)** into one self-contained HTML page for a physio, from the given date to the backup's date (pass a fourth date to end earlier). It charts back scores by time of day, training, daily active calories and effort on one day axis, then lists every day and exercise with sets, effort and comments as the app shows them. Run it again on a newer backup to refresh the page; effort appears for every entry that has one. Add `--period 2026-10-09..2026-10-12=Sick` (repeatable, dates inclusive) to shade a stretch such as illness or travel in the chart and tag its days in the list.
+
+## PT week report
+
+This page shows a run of training days for a PT, built from read-only dumps of D1:
+
+```sh
+npx wrangler d1 execute trainoq --remote --json --command "SELECT date, doc FROM days ORDER BY date" > days.json
+npx wrangler d1 execute trainoq --remote --json --command "SELECT * FROM exercise_log ORDER BY date" > log.json
+npm run report:pt -- days.json log.json report.html --from 2026-11-02 --to 2026-11-09 --pt 2026-11-05
+```
+
+It lists each day from `--from` to `--to`, newest first, then every exercise's history up to `--to`. The data does not mark PT sessions, so each `--pt` (repeatable) names one. `--note` replaces the sentence after the dates. Garmin fills a day's active calories once the day has finished, so a report ending today shows no calories for today.
+
 ## Deploy to Cloudflare
 
 First time:
