@@ -1,0 +1,576 @@
+<title>Back &amp; Training Report</title>
+<style>
+/* Layout: one 60rem column. Summary figures, one overview chart whose panels share a day axis, then day and exercise drill-downs. */
+:root {
+  --bg: #f4f4f1; --surface: #ffffff; --surface-2: #efefea; --text: #17191a; --muted: #676c69; --line: #e0e0da; --grid: #ebebe5;
+  --accent: #0e7a5b; --accent-soft: #dcf1e8; --wash: rgb(14 122 91 / 0.08); --weekend: #f7f7f3; --period: rgb(103 108 105 / 0.12);
+  --session: #0e7a5b; --activity: #2a78d6; --cal: #5b676e;
+  /* Back score 0 (no issues) to 5 (worst): one rust hue, validated as an ordinal ramp */
+  --b0: #dfa576; --b1: #d38650; --b2: #c06831; --b3: #a14d22; --b4: #7c3516; --b5: #55220c;
+  --b0-ink: #2b1406; --b1-ink: #2b1406; --b2-ink: #2b1406; --b3-ink: #ffffff; --b4-ink: #ffffff; --b5-ink: #ffffff;
+  /* Effort low to max: the familiar RPE green, yellow, orange, red; one set for both themes (adjacent CVD ΔE ≥ 8.9, normal ≥ 17) */
+  --e-low: #1d9d33; --e-med: #d2b22a; --e-high: #ed6a1f; --e-max: #bc2025;
+  --font: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #101211; --surface: #191c1b; --surface-2: #232726; --text: #eceeed; --muted: #9aa19e; --line: #2d3230; --grid: #252a28;
+    --accent: #43d19e; --accent-soft: #163428; --wash: rgb(67 209 158 / 0.09); --weekend: #1d2120; --period: rgb(154 161 158 / 0.11);
+    --session: #199e70; --activity: #3987e5; --cal: #9aa6ab;
+    --b0: #84451f; --b1: #a0552a; --b2: #bd6a36; --b3: #d8834b; --b4: #eca570; --b5: #f7c99d;
+    --b0-ink: #ffffff; --b1-ink: #ffffff; --b2-ink: #1a0c04; --b3-ink: #1a0c04; --b4-ink: #1a0c04; --b5-ink: #1a0c04;
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #101211; --surface: #191c1b; --surface-2: #232726; --text: #eceeed; --muted: #9aa19e; --line: #2d3230; --grid: #252a28;
+  --accent: #43d19e; --accent-soft: #163428; --wash: rgb(67 209 158 / 0.09); --weekend: #1d2120; --period: rgb(154 161 158 / 0.11);
+  --session: #199e70; --activity: #3987e5; --cal: #9aa6ab;
+  --b0: #84451f; --b1: #a0552a; --b2: #bd6a36; --b3: #d8834b; --b4: #eca570; --b5: #f7c99d;
+  --b0-ink: #ffffff; --b1-ink: #ffffff; --b2-ink: #1a0c04; --b3-ink: #1a0c04; --b4-ink: #1a0c04; --b5-ink: #1a0c04;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+body { background: var(--bg); color: var(--text); font: 15px/1.45 var(--font); }
+.page { max-width: 60rem; margin-inline: auto; padding-inline: 16px; padding-block: 28px 56px; display: grid; gap: 36px; }
+section { display: grid; gap: 14px; min-width: 0; }
+h1, h2, h3, h4, p { margin: 0; }
+h1 { font-size: 1.9rem; line-height: 1.15; font-weight: 650; letter-spacing: -0.01em; text-wrap: balance; }
+h2 { font-size: 1.15rem; font-weight: 650; }
+.eyebrow { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+.muted { color: var(--muted); }
+.num { font-variant-numeric: tabular-nums; }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+header { display: grid; gap: 6px; }
+header nav { display: flex; flex-wrap: wrap; gap: 4px 18px; padding-top: 8px; font-size: 0.9rem; }
+.legend-line { display: flex; flex-wrap: wrap; gap: 6px 14px; align-items: center; font-size: 0.82rem; color: var(--muted); }
+.legend-line .scale { display: inline-flex; gap: 3px; align-items: center; }
+
+/* Summary figures */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(12.5rem, 1fr)); gap: 0; border-block: 1px solid var(--line); }
+.tile { display: grid; gap: 2px; padding: 14px 16px 14px 0; align-content: start; }
+.tile + .tile { border-inline-start: 1px solid var(--line); padding-inline-start: 16px; }
+.tile .label { font-size: 0.8rem; color: var(--muted); }
+.tile .value { font-size: 1.75rem; font-weight: 650; line-height: 1.15; }
+.tile .value small { font-size: 0.95rem; font-weight: 500; color: var(--muted); }
+.tile .sub { font-size: 0.82rem; color: var(--muted); }
+@media (max-width: 30rem) {
+  .tiles { grid-template-columns: 1fr 1fr; }
+  .tile, .tile + .tile { padding: 12px 10px; border-inline-start: 0; }
+  .tile:nth-child(even) { border-inline-start: 1px solid var(--line); }
+  .tile:nth-child(n + 3) { border-block-start: 1px solid var(--line); }
+}
+
+/* Overview chart */
+.chart-card { position: relative; background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px 12px 8px; }
+.chart { width: 100%; min-height: 472px; }
+.chart svg { display: block; overflow: visible; font-family: var(--font); }
+.chart text { fill: var(--muted); font-size: 10px; }
+.chart .ptitle { fill: var(--text); font-size: 12px; font-weight: 600; }
+.chart .lg { fill: var(--muted); font-size: 11px; }
+.chart .grid { stroke: var(--grid); stroke-width: 1; }
+.chart .base { stroke: var(--line); stroke-width: 1; }
+.chart .weekend { fill: var(--weekend); }
+.chart .period { fill: var(--period); }
+.chart .plabel { fill: var(--text); font-size: 11px; font-weight: 600; }
+.chart .hit { fill: transparent; }
+.chart .daycol { cursor: pointer; outline: none; }
+.chart .daycol:hover .hit, .chart .daycol.hot .hit { fill: var(--wash); }
+.chart .daycol:focus-visible .hit { fill: var(--wash); stroke: var(--accent); stroke-width: 2; }
+.chart .trail { fill: none; stroke: var(--muted); stroke-width: 1.5; stroke-linejoin: round; opacity: 0.45; }
+.chart .dot { stroke: var(--surface); stroke-width: 2; }
+.chart .avg { stroke: var(--muted); stroke-width: 1; }
+.chart .daynum { fill: var(--text); }
+.chart .valuelabel { fill: var(--text); font-weight: 600; }
+.chart .empty { font-size: 11px; }
+.f-session { fill: var(--session); } .f-activity { fill: var(--activity); } .f-cal { fill: var(--cal); }
+.f-b0 { fill: var(--b0); } .f-b1 { fill: var(--b1); } .f-b2 { fill: var(--b2); } .f-b3 { fill: var(--b3); } .f-b4 { fill: var(--b4); } .f-b5 { fill: var(--b5); }
+.f-low { fill: var(--e-low); } .f-med { fill: var(--e-med); } .f-high { fill: var(--e-high); } .f-max { fill: var(--e-max); }
+.chart-foot { font-size: 0.8rem; color: var(--muted); padding: 6px 4px 4px; }
+
+.tip { position: absolute; z-index: 2; width: max-content; max-width: min(18rem, calc(100% - 16px)); background: var(--surface); color: var(--text);
+  border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 0.82rem; display: grid; gap: 5px; pointer-events: none;
+  box-shadow: 0 6px 24px rgb(0 0 0 / 0.12); }
+.tip[hidden] { display: none; }
+.tip .t-row { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+.tip .hint { color: var(--muted); font-size: 0.75rem; }
+
+/* Shared marks */
+.chip { display: inline-grid; place-items: center; min-width: 1.45rem; height: 1.45rem; padding-inline: 4px; border-radius: 6px; font-size: 0.8rem; font-weight: 650; font-variant-numeric: tabular-nums; }
+.chip.v0 { background: var(--b0); color: var(--b0-ink); } .chip.v1 { background: var(--b1); color: var(--b1-ink); } .chip.v2 { background: var(--b2); color: var(--b2-ink); }
+.chip.v3 { background: var(--b3); color: var(--b3-ink); } .chip.v4 { background: var(--b4); color: var(--b4-ink); } .chip.v5 { background: var(--b5); color: var(--b5-ink); }
+.eff { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; font-size: 0.8rem; color: var(--text); padding: 1px 7px 1px 5px; border-radius: 999px; background: var(--surface-2); }
+.eff i { width: 9px; height: 9px; border-radius: 3px; }
+.eff.low i { background: var(--e-low); } .eff.med i { background: var(--e-med); } .eff.high i { background: var(--e-high); } .eff.max i { background: var(--e-max); }
+.sw { display: inline-block; width: 10px; height: 10px; border-radius: 3px; vertical-align: -1px; }
+
+/* Day by day */
+.list { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; overflow: hidden; }
+details.day + details.day { border-block-start: 1px solid var(--line); }
+details.day > summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: 6.6rem minmax(0, 1.1fr) 4.6rem minmax(0, 2fr) 1rem; gap: 12px; align-items: center; padding: 11px 14px; }
+details.day > summary::-webkit-details-marker { display: none; }
+details.day > summary:hover { background: var(--wash); }
+details.day[open] > summary { background: var(--surface-2); }
+.d-date b { font-weight: 650; }
+.d-back { display: flex; flex-wrap: wrap; gap: 3px; }
+.d-cal { text-align: end; font-variant-numeric: tabular-nums; font-weight: 600; }
+.d-cal small { font-weight: 400; color: var(--muted); }
+.d-train { display: flex; flex-wrap: wrap; gap: 4px; }
+.tag { display: inline-flex; align-items: center; gap: 5px; font-size: 0.78rem; padding: 1px 7px 1px 5px; border-radius: 6px; background: var(--surface-2); white-space: nowrap; }
+.tag::before { content: ""; width: 8px; height: 8px; border-radius: 2px; background: var(--activity); }
+.tag.session::before { background: var(--session); height: 10px; }
+/* A marked period (illness, travel) is context, not training: outlined, no swatch */
+.tag.period { background: none; box-shadow: inset 0 0 0 1px var(--muted); padding-inline: 7px; }
+.tag.period::before { display: none; }
+.chev { width: 0.55rem; height: 0.55rem; border-inline-end: 2px solid var(--muted); border-block-end: 2px solid var(--muted); transform: rotate(-45deg); justify-self: end; transition: transform 0.15s; }
+details[open] > summary .chev { transform: rotate(45deg); }
+@media (max-width: 40rem) {
+  details.day > summary { grid-template-columns: minmax(0, 1fr) auto 1rem; gap: 6px 10px; }
+  .d-date { grid-column: 1; } .d-cal { grid-column: 2; grid-row: 1; } .chev { grid-column: 3; grid-row: 1; }
+  .d-back, .d-train { grid-column: 1 / -1; }
+}
+
+.daybody { padding: 6px 14px 16px; display: grid; gap: 0; }
+.tl { list-style: none; margin: 0; padding: 0; display: grid; }
+.tl > li { display: grid; grid-template-columns: 3.2rem minmax(0, 1fr); gap: 10px; padding-block: 10px; border-block-start: 1px dashed var(--line); scroll-margin-block: 80px; border-radius: 8px; transition: background-color 0.6s; }
+.tl > li:first-child { border-block-start: 0; }
+.tl time { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 0.85rem; padding-top: 1px; }
+.tl .body { display: grid; gap: 6px; min-width: 0; }
+.target { background: var(--accent-soft); }
+.c-line { display: flex; gap: 8px; align-items: baseline; }
+.c-line .chip { flex: none; }
+.c-metric { font-size: 0.78rem; color: var(--muted); }
+.part { display: grid; gap: 6px; min-width: 0; scroll-margin-block: 80px; border-radius: 8px; transition: background-color 0.6s; }
+.part + .part { border-block-start: 1px solid var(--line); padding-top: 8px; }
+.part-head { display: flex; flex-wrap: wrap; gap: 4px 8px; align-items: center; }
+.part-head b { font-weight: 650; }
+.part-head .tag { font-weight: 600; }
+.ev-title { font-weight: 650; }
+.sec { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; padding-top: 4px; }
+.ex { list-style: none; margin: 0; padding: 0; display: grid; gap: 2px; }
+.ex-row { display: grid; grid-template-columns: minmax(8rem, 13rem) minmax(0, 1fr) auto; gap: 2px 12px; align-items: baseline; padding-block: 3px; }
+.ex-name { font-weight: 550; }
+.ex-sets { font-variant-numeric: tabular-nums; }
+.ex-note { grid-column: 1 / -1; font-size: 0.85rem; color: var(--muted); }
+.superset { border-inline-start: 3px solid var(--line); padding-inline-start: 10px; margin-block: 4px; display: grid; gap: 2px; }
+.superset > .ss { font-size: 0.72rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.notes { font-size: 0.88rem; white-space: pre-line; }
+@media (max-width: 40rem) {
+  .ex-row { grid-template-columns: minmax(0, 1fr) auto; }
+  .ex-sets { grid-column: 1 / -1; grid-row: 2; color: var(--muted); }
+}
+
+/* Exercises */
+.filter { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+.filter input { font: inherit; font-size: 16px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface); color: var(--text); width: min(100%, 20rem); }
+details.exr + details.exr { border-block-start: 1px solid var(--line); }
+details.exr > summary { list-style: none; cursor: pointer; display: grid; grid-template-columns: minmax(0, 1fr) auto auto 1rem; gap: 12px; align-items: center; padding: 9px 14px; }
+details.exr > summary::-webkit-details-marker { display: none; }
+details.exr > summary:hover { background: var(--wash); }
+details.exr[open] > summary { background: var(--surface-2); }
+.x-count { font-variant-numeric: tabular-nums; color: var(--muted); font-size: 0.85rem; text-align: end; }
+.strip { display: flex; gap: 2px; }
+.strip i { width: 6px; height: 14px; border-radius: 2px; background: var(--grid); }
+.strip i.on { background: var(--session); }
+.strip.activity i.on { background: var(--activity); }
+.xtable-wrap { overflow-x: auto; padding: 4px 14px 14px; }
+.xtable { border-collapse: collapse; width: 100%; font-size: 0.88rem; }
+.xtable td { padding: 6px 10px 6px 0; vertical-align: baseline; border-block-start: 1px solid var(--line); }
+.xtable tr:first-child td { border-block-start: 0; }
+.xtable .when { white-space: nowrap; }
+.linkbtn { font: inherit; color: var(--accent); background: none; border: 0; padding: 0; cursor: pointer; text-decoration: underline; text-underline-offset: 2px; }
+@media (max-width: 40rem) { .strip { display: none; } }
+
+footer { display: grid; gap: 6px; font-size: 0.82rem; color: var(--muted); border-block-start: 1px solid var(--line); padding-top: 14px; }
+footer p { max-width: 65ch; }
+
+@media (prefers-reduced-motion: reduce) { .tl > li, .part, .chev { transition: none; } }
+</style>
+
+<main class="page">
+  <header>
+    <p class="eyebrow">Oleg Ivanov · physio report</p>
+    <h1>Back &amp; training</h1>
+    <p class="muted" id="range"></p>
+    <div class="legend-line">
+      <span>Back score</span>
+      <span class="scale"><span class="chip v0">0</span><span class="chip v1">1</span><span class="chip v2">2</span><span class="chip v3">3</span><span class="chip v4">4</span><span class="chip v5">5</span></span>
+      <span>0 no issues · 5 worst</span>
+    </div>
+    <nav><a href="#overview">Overview</a><a href="#days">Day by day</a><a href="#exercises">Exercises</a></nav>
+  </header>
+
+  <section id="overview" aria-label="Overview">
+    <div class="tiles" id="tiles"></div>
+    <div class="chart-card">
+      <div class="chart" id="chart"></div>
+      <div class="tip" id="tip" hidden></div>
+      <p class="chart-foot">Each back dot sits at the time of day it was noted. Weekends are shaded. Hover for a summary; select a day, dot or bar to open its details.</p>
+    </div>
+  </section>
+
+  <section id="days">
+    <h2>Day by day</h2>
+    <div class="list" id="day-list"></div>
+  </section>
+
+  <section id="exercises">
+    <h2>Exercises</h2>
+    <div class="filter">
+      <input type="search" id="ex-filter" placeholder="Filter exercises" aria-label="Filter exercises">
+      <span class="muted" id="ex-count"></span>
+    </div>
+    <div class="list" id="ex-list"></div>
+  </section>
+
+  <footer>
+    <p><b>Back score</b> 0 means no issues and 5 the worst. Scores from 22 Sep to 3 Oct were converted from notes on a 0–10 scale (halved, rounded up), and some of their times are estimates.</p>
+    <p><b>Effort</b> is one rating per exercise or activity. Rep exercises use reps in reserve: a lot = low, many = med, few = high, none = max. Timed holds and activities use RPE.</p>
+    <p><b>Calories</b> are active calories only; resting energy is excluded.</p>
+    <p id="updated"></p>
+  </footer>
+</main>
+
+<script id="report" type="application/json">/*REPORT*/</script>
+<script>
+(() => {
+  const R = JSON.parse(document.getElementById("report").textContent);
+  const days = R.days;
+  const EFFORTS = ["low", "med", "high", "max"];
+  const SVGNS = "http://www.w3.org/2000/svg";
+  const reduced = matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+  function h(tag, props, ...kids) {
+    const svg = tag.startsWith("svg:");
+    const el = svg ? document.createElementNS(SVGNS, tag.slice(4)) : document.createElement(tag);
+    for (const [k, v] of Object.entries(props || {})) {
+      if (v == null || v === false) continue;
+      if (k === "text") el.textContent = v;
+      else if (k.startsWith("on")) el.addEventListener(k.slice(2), v);
+      else el.setAttribute(k, v === true ? "" : v);
+    }
+    for (const kid of kids.flat(Infinity)) if (kid != null && kid !== false && kid !== "") el.append(kid instanceof Node ? kid : document.createTextNode(String(kid)));
+    return el;
+  }
+
+  const toMin = (t) => Number(t.slice(0, 2)) * 60 + Number(t.slice(3, 5));
+  const fmt = (n) => Math.round(n).toLocaleString("en-AU");
+  const isBack = (score) => score && score.metric.trim().toLowerCase() === "back";
+  const backs = (d) => d.comments.map((c, i) => ({ ...c, i })).filter((c) => isBack(c.score));
+  const parts = (d) => d.events.flatMap((e, ei) => e.parts.map((p, pi) => ({ ...p, target: `e-${d.date}-${ei}-${pi}` })));
+  const perfs = (p) => p.kind === "session" ? p.sections.flatMap((s) => s.items.flatMap((i) => i.perfs)) : [];
+  const efforts = (d) => parts(d).flatMap((p) => p.kind === "session" ? perfs(p).map((f) => f.effort) : [p.effort]).filter(Boolean);
+  const partName = (p) => p.kind === "session" ? "Session" : p.name;
+  const chip = (v) => h("span", { class: `chip v${v}`, text: v });
+  const eff = (effort, label) => effort ? h("span", { class: `eff ${effort}` }, h("i"), label) : null;
+  const longDate = (d) => `${d.label} ${d.date.slice(0, 4)}`;
+  const periodTag = (d) => d.period && h("span", { class: "tag period", text: d.period });
+
+  /* ---------- header and summary figures */
+  document.getElementById("range").textContent = `${longDate(days[0])} – ${longDate(days[days.length - 1])} · ${days.length} days`;
+  document.getElementById("updated").textContent = `Updated ${new Date(R.generatedAt).toLocaleString("en-AU", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" })}.`;
+
+  const dayLink = (d) => h("a", { href: `#d-${d.date}`, text: d.label });
+  const tile = (label, value, unit, sub) => h("div", { class: "tile" }, h("span", { class: "label", text: label }), h("span", { class: "value" }, value, unit && h("small", {}, unit)), h("span", { class: "sub" }, sub));
+  const tiles = document.getElementById("tiles");
+  const readings = days.flatMap(backs).map((c) => c.score.value).sort((a, b) => a - b);
+  if (readings.length) {
+    const mid = readings.length / 2;
+    const median = readings.length % 2 ? readings[Math.floor(mid)] : (readings[mid - 1] + readings[mid]) / 2;
+    const peak = readings[readings.length - 1];
+    const peakDays = days.filter((d) => backs(d).some((c) => c.score.value === peak));
+    tiles.append(
+      tile("Typical back score", String(median), "/5", `median of ${readings.length} readings`),
+      tile("Highest back score", String(peak), "/5", [`${peakDays.length} ${peakDays.length === 1 ? "day" : "days"}, latest `, dayLink(peakDays[peakDays.length - 1])]),
+    );
+  }
+  const cals = days.map((d) => d.calories).filter((v) => v != null);
+  if (cals.length) tiles.append(tile("Daily active calories", fmt(cals.reduce((a, b) => a + b, 0) / cals.length), " avg", `${fmt(Math.min(...cals))}–${fmt(Math.max(...cals))} a day`));
+  const all = days.flatMap(parts);
+  const sessions = all.filter((p) => p.kind === "session").length;
+  const minutes = all.reduce((t, p) => t + (p.minutes ?? 0), 0);
+  tiles.append(tile("Training time", String(Math.round(minutes / 60)), " h", `${sessions} sessions · ${all.length - sessions} activities`));
+
+  /* ---------- drill-down navigation */
+  function openDay(date, targetId) {
+    const day = document.getElementById(`d-${date}`);
+    if (!day) return;
+    day.open = true;
+    const target = (targetId && document.getElementById(targetId)) || day;
+    target.scrollIntoView({ block: target === day ? "start" : "center", behavior: reduced ? "auto" : "smooth" });
+    if (target !== day) {
+      target.classList.add("target");
+      setTimeout(() => target.classList.remove("target"), 2200);
+    }
+  }
+  document.addEventListener("click", (event) => {
+    const link = event.target.closest('a[href^="#d-"]');
+    if (!link) return;
+    event.preventDefault();
+    openDay(link.getAttribute("href").slice(3));
+  });
+
+  /* ---------- overview chart */
+  const chartEl = document.getElementById("chart");
+  const tip = document.getElementById("tip");
+  const card = chartEl.parentElement;
+
+  function tipContent(d) {
+    const b = backs(d);
+    const e = efforts(d);
+    const rows = [h("div", { class: "t-row" }, h("b", { text: longDate(d) }), periodTag(d))];
+    rows.push(h("div", { class: "t-row" }, b.length ? ["Back", ...b.map((c) => [chip(c.score.value), h("span", { class: "muted", text: c.time })])] : h("span", { class: "muted", text: "No back score" })));
+    if (d.calories != null) rows.push(h("div", { text: `${fmt(d.calories)} active cal` }));
+    for (const p of parts(d)) rows.push(h("div", { class: "t-row" }, h("span", { class: `tag ${p.kind}`, text: partName(p) }), h("span", { class: "muted", text: [p.start, p.minutes != null && `${p.minutes} min`].filter(Boolean).join(" · ") })));
+    if (e.length) rows.push(h("div", { class: "t-row" }, "Effort", EFFORTS.filter((k) => e.includes(k)).map((k) => eff(k, `${e.filter((x) => x === k).length} ${k}`))));
+    rows.push(h("span", { class: "hint", text: "Select to open the day" }));
+    return rows;
+  }
+  function showTip(d, col, clientY) {
+    tip.replaceChildren(...tipContent(d));
+    tip.hidden = false;
+    const box = card.getBoundingClientRect();
+    const colBox = col.getBoundingClientRect();
+    const w = tip.offsetWidth;
+    const right = colBox.right - box.left + 8;
+    const left = right + w <= box.width - 4 ? right : Math.max(4, colBox.left - box.left - w - 8);
+    const top = clientY == null ? 24 : Math.min(Math.max(4, clientY - box.top - 20), box.height - tip.offsetHeight - 4);
+    tip.style.left = `${left}px`;
+    tip.style.top = `${top}px`;
+  }
+  const hideTip = () => { tip.hidden = true; };
+
+  function renderChart() {
+    const W = Math.max(280, chartEl.clientWidth);
+    const L = 30, RM = 6, n = days.length, cw = (W - L - RM) / n;
+    const x0 = (i) => L + i * cw;
+    const xAt = (i, time) => x0(i) + (toMin(time) / 1440) * cw;
+    let y = days.some((d) => d.period) ? 20 : 0; // room above the panels for period labels
+    const panel = (h) => { const top = y + 24; y = top + h + 18; return { top, h, bottom: top + h }; };
+    const P = { back: panel(120), train: panel(22), cal: panel(84), eff: panel(52) };
+    const H = P.eff.bottom + 44;
+    const svg = h("svg:svg", { width: W, height: H, viewBox: `0 0 ${W} ${H}`, role: "group", "aria-label": "Daily overview: back scores, training, active calories and effort" });
+    chartEl.replaceChildren(svg);
+    const add = (parent, ...els) => { parent.append(...els); return els[0]; };
+
+    // Weekend columns and panel titles with legends
+    days.forEach((d, i) => { const wd = new Date(`${d.date}T00:00:00Z`).getUTCDay(); if (wd === 0 || wd === 6) add(svg, h("svg:rect", { class: "weekend", x: x0(i), y: P.back.top - 4, width: cw, height: P.eff.bottom - P.back.top + 4 })); });
+    // Marked periods: one band per run of days, labelled above the panels and kept inside the chart's right edge
+    days.forEach((d, i) => {
+      if (!d.period || days[i - 1]?.period === d.period) return;
+      let len = 1;
+      while (days[i + len]?.period === d.period) len++;
+      add(svg, h("svg:rect", { class: "period", x: x0(i), y: 0, width: len * cw, height: P.eff.bottom }));
+      const t = add(svg, h("svg:text", { class: "plabel", x: x0(i) + 5, y: 14, text: d.period }));
+      t.setAttribute("x", Math.min(x0(i) + 5, W - RM - t.getComputedTextLength()));
+    });
+    function title(p, label, items) {
+      const t = add(svg, h("svg:text", { class: "ptitle", x: 0, y: p.top - 10, text: label }));
+      let x = t.getComputedTextLength() + 14;
+      for (const [cls, text, tall] of items) {
+        if (cls === "avg") add(svg, h("svg:line", { class: cls, x1: x, x2: x + 9, y1: p.top - 14, y2: p.top - 14 }));
+        else if (cls) add(svg, h("svg:rect", { class: cls, x, y: p.top - (tall ? 20 : 19), width: 9, height: tall ? 11 : 9, rx: 2 }));
+        const lt = add(svg, h("svg:text", { class: "lg", x: x + (cls ? 13 : 0), y: p.top - 10, text }));
+        x += (cls ? 13 : 0) + lt.getComputedTextLength() + 10;
+      }
+    }
+    title(P.back, "Back score", [[null, "each dot is one reading"]]);
+    title(P.train, "Training", [["f-session", "session", true], ["f-activity", "activity"]]);
+    const calDays = days.map((d, i) => [d.calories, i]).filter(([v]) => v != null);
+    const avgCal = calDays.length ? calDays.reduce((t, [v]) => t + v, 0) / calDays.length : null;
+    title(P.cal, "Active calories", avgCal == null ? [] : [["avg", `daily average ${fmt(avgCal)}`]]);
+    title(P.eff, "Effort", [["f-low", "low"], ["f-med", "med"], ["f-high", "high"], ["f-max", "max"]]);
+
+    // Back panel grid and the trail joining readings in time order
+    const yb = (v) => P.back.bottom - (v / 5) * P.back.h;
+    for (let v = 0; v <= 5; v++) {
+      add(svg, h("svg:line", { class: v ? "grid" : "base", x1: L, x2: W - RM, y1: yb(v), y2: yb(v) }));
+      add(svg, h("svg:text", { x: L - 8, y: yb(v) + 3.5, "text-anchor": "end", text: v }));
+    }
+    const pts = days.flatMap((d, i) => backs(d).sort((a, b) => a.time.localeCompare(b.time)).map((c) => [xAt(i, c.time), yb(c.score.value)]));
+    if (pts.length > 1) add(svg, h("svg:path", { class: "trail", d: pts.map(([x, y], k) => `${k ? "L" : "M"}${x.toFixed(1)},${y.toFixed(1)}`).join("") }));
+
+    // Training lane, calorie and effort baselines
+    add(svg, h("svg:line", { class: "base", x1: L, x2: W - RM, y1: P.train.bottom, y2: P.train.bottom }));
+    const calMax = Math.max(500, ...days.map((d) => d.calories ?? 0));
+    const calTop = Math.ceil(calMax / 500) * 500;
+    const yc = (v) => P.cal.bottom - (v / calTop) * P.cal.h;
+    for (let v = 0; v <= calTop; v += 500) {
+      add(svg, h("svg:line", { class: v ? "grid" : "base", x1: L, x2: W - RM, y1: yc(v), y2: yc(v) }));
+      add(svg, h("svg:text", { x: L - 8, y: yc(v) + 3.5, "text-anchor": "end", text: v >= 1000 ? `${v / 1000}k` : v }));
+    }
+    const effMax = Math.max(0, ...days.map((d) => efforts(d).length));
+    const ye = (v) => P.eff.bottom - (v / Math.max(effMax, 1)) * P.eff.h;
+    add(svg, h("svg:line", { class: "base", x1: L, x2: W - RM, y1: P.eff.bottom, y2: P.eff.bottom }));
+    if (effMax) {
+      add(svg, h("svg:line", { class: "grid", x1: L, x2: W - RM, y1: ye(effMax), y2: ye(effMax) }));
+      add(svg, h("svg:text", { x: L - 8, y: ye(effMax) + 3.5, "text-anchor": "end", text: effMax }));
+      add(svg, h("svg:text", { x: L - 8, y: P.eff.bottom + 3.5, "text-anchor": "end", text: 0 }));
+    } else add(svg, h("svg:text", { class: "empty", x: L + (W - L - RM) / 2, y: P.eff.top + P.eff.h / 2, "text-anchor": "middle", text: "No effort recorded yet" }));
+
+    const every = Math.ceil(16 / cw); // label every day while two-digit dates fit, else every nth
+    const peakCal = calDays.reduce((best, cur) => (cur[0] > best[0] ? cur : best), [-1, -1]);
+
+    const bar = (x, w, top, bottom, r) => {
+      const rr = Math.min(r, w / 2, bottom - top);
+      return `M${x},${bottom}V${top + rr}Q${x},${top} ${x + rr},${top}H${x + w - rr}Q${x + w},${top} ${x + w},${top + rr}V${bottom}Z`;
+    };
+
+    days.forEach((d, i) => {
+      const b = backs(d);
+      const e = efforts(d);
+      const label = [longDate(d), d.period, b.length ? `back ${b.map((c) => c.score.value).join(", ")}` : "no back score", d.calories != null ? `${fmt(d.calories)} active calories` : null, `${parts(d).length} training entries`].filter(Boolean).join("; ");
+      const col = add(svg, h("svg:g", { class: "daycol", tabindex: 0, role: "button", "aria-label": label, "data-date": d.date }));
+      add(col, h("svg:rect", { class: "hit", x: x0(i), y: P.back.top - 6, width: cw, height: P.eff.bottom - P.back.top + 26, rx: 4 }));
+
+      for (const p of parts(d)) {
+        const x = xAt(i, p.start);
+        const w = Math.max(2.5, ((p.minutes ?? 30) / 1440) * cw);
+        const tall = p.kind === "session";
+        add(col, h("svg:rect", { class: tall ? "f-session" : "f-activity", x: Math.min(x, x0(i) + cw - w), width: w, y: tall ? P.train.top : P.train.top + 6, height: tall ? P.train.h : P.train.h - 6, rx: 1.5, "data-target": p.target }));
+      }
+      if (d.calories != null) {
+        const w = Math.min(24, cw * 0.62);
+        add(col, h("svg:path", { class: "f-cal", d: bar(x0(i) + (cw - w) / 2, w, yc(d.calories), P.cal.bottom, 4) }));
+        if (i === peakCal[1]) add(col, h("svg:text", { class: "valuelabel", x: x0(i) + cw / 2, y: yc(d.calories) - 5, "text-anchor": "middle", text: fmt(d.calories) }));
+      }
+      if (e.length) {
+        const w = Math.min(24, cw * 0.62);
+        let base = P.eff.bottom;
+        for (const k of EFFORTS) {
+          const c = e.filter((x) => x === k).length;
+          if (!c) continue;
+          const top = ye(e.filter((x) => EFFORTS.indexOf(x) <= EFFORTS.indexOf(k)).length);
+          add(col, h("svg:rect", { class: `f-${k}`, x: x0(i) + (cw - w) / 2, y: top + 1, width: w, height: Math.max(1, base - top - 2), rx: 1.5 }));
+          base = top;
+        }
+      }
+      for (const c of b) add(col, h("svg:circle", { class: `dot f-b${c.score.value}`, cx: xAt(i, c.time), cy: yb(c.score.value), r: 4.5, "data-target": `c-${d.date}-${c.i}` }));
+
+      // Day axis: weekday initial, date, and the month where it starts
+      const cx = x0(i) + cw / 2;
+      if (i % every === 0) {
+        add(svg, h("svg:text", { x: cx, y: P.eff.bottom + 14, "text-anchor": "middle", text: d.label.slice(0, 1) }));
+        add(svg, h("svg:text", { class: "daynum", x: cx, y: P.eff.bottom + 26, "text-anchor": "middle", text: Number(d.date.slice(8)) }));
+      }
+      if (i === 0 || d.date.slice(8) === "01") add(svg, h("svg:text", { x: cx, y: P.eff.bottom + 38, "text-anchor": "middle", text: d.label.slice(-3) }));
+
+      col.addEventListener("pointerenter", (ev) => { if (ev.pointerType !== "touch") showTip(d, col, ev.clientY); });
+      col.addEventListener("pointermove", (ev) => { if (ev.pointerType !== "touch") showTip(d, col, ev.clientY); });
+      col.addEventListener("pointerleave", hideTip);
+      col.addEventListener("focus", () => showTip(d, col));
+      col.addEventListener("blur", hideTip);
+      col.addEventListener("click", (ev) => { hideTip(); openDay(d.date, ev.target.closest("[data-target]")?.getAttribute("data-target")); });
+      col.addEventListener("keydown", (ev) => { if (ev.key === "Enter" || ev.key === " ") { ev.preventDefault(); hideTip(); openDay(d.date); } });
+    });
+    if (avgCal != null) add(svg, h("svg:line", { class: "avg", x1: L, x2: W - RM, y1: yc(avgCal), y2: yc(avgCal), "pointer-events": "none" }));
+  }
+  renderChart();
+  let lastWidth = chartEl.clientWidth;
+  new ResizeObserver(() => { if (chartEl.clientWidth !== lastWidth) { lastWidth = chartEl.clientWidth; renderChart(); } }).observe(chartEl);
+
+  /* ---------- day by day */
+  function exRow(f) {
+    return h("li", { class: "ex-row" },
+      h("span", { class: "ex-name", text: f.name }),
+      h("span", { class: "ex-sets", text: f.sets || "–" }),
+      eff(f.effort, f.effortText) || h("span"),
+      f.comment && h("p", { class: "ex-note", text: f.comment }));
+  }
+  function partEl(p) {
+    if (p.kind === "activity") {
+      return h("div", { class: "part", id: p.target },
+        h("div", { class: "part-head" }, h("span", { class: "tag activity", text: p.name }),
+          h("span", { class: "num", text: [p.minutes != null && `${p.minutes} min`, p.calories != null && `${fmt(p.calories)} cal`].filter(Boolean).join(" · ") }),
+          eff(p.effort, p.effortText)),
+        p.breakdown && h("p", { class: "muted", text: p.breakdown }),
+        p.comment && h("p", { class: "notes", text: p.comment }));
+    }
+    return h("div", { class: "part", id: p.target },
+      h("div", { class: "part-head" }, h("span", { class: "tag session", text: "Session" }),
+        h("span", { class: "num", text: [`${p.start}${p.end ? `–${p.end}` : ""}`, p.minutes != null && `${p.minutes} min`, p.calories != null && `${fmt(p.calories)} cal`].filter(Boolean).join(" · ") })),
+      p.sections.map((s) => [
+        h("h4", { class: "sec", text: s.title }),
+        h("ul", { class: "ex" }, s.items.map((item) => item.superset
+          ? h("li", { class: "superset" }, h("span", { class: "ss", text: "Superset" }), h("ul", { class: "ex" }, item.perfs.map(exRow)))
+          : exRow(item.perfs[0]))),
+      ]),
+      p.notes && h("p", { class: "notes" }, h("b", { text: "Notes " }), p.notes));
+  }
+  function commentEl(d, c, i) {
+    const text = c.text ? h("span", { text: c.text }) : !c.score && h("span", { class: "muted", text: "Empty comment" });
+    const metric = c.score && h("div", { class: "c-metric", text: `${c.score.metric} ${c.score.value}/5` });
+    return h("li", { id: `c-${d.date}-${i}` }, h("time", { text: c.time }),
+      h("div", { class: "body" }, h("div", { class: "c-line" }, c.score && chip(c.score.value), h("div", {}, metric, text))));
+  }
+  function dayBody(d) {
+    const items = [
+      ...d.comments.map((c, i) => ({ time: c.time, el: commentEl(d, c, i) })),
+      ...d.events.map((e, ei) => ({ time: e.time, el: h("li", {}, h("time", { text: e.time }),
+        h("div", { class: "body" },
+          e.title && h("p", { class: "ev-title", text: e.title }),
+          e.notes && h("p", { class: "notes", text: e.notes }),
+          e.parts.map((p, pi) => partEl({ ...p, target: `e-${d.date}-${ei}-${pi}` })))) })),
+    ].sort((a, b) => a.time.localeCompare(b.time));
+    return h("div", { class: "daybody" }, items.length ? h("ol", { class: "tl" }, items.map((x) => x.el)) : h("p", { class: "muted", text: "Nothing recorded." }));
+  }
+  document.getElementById("day-list").append(...days.toReversed().map((d) => { // newest first
+    const b = backs(d);
+    return h("details", { class: "day", id: `d-${d.date}` },
+      h("summary", {},
+        h("span", { class: "d-date" }, h("b", { text: d.label.slice(0, 3) }), ` ${d.label.slice(4)}`),
+        h("span", { class: "d-back", "aria-label": b.length ? `Back ${b.map((c) => c.score.value).join(", ")}` : "No back score" }, b.length ? b.map((c) => chip(c.score.value)) : h("span", { class: "muted", text: "no score" })),
+        h("span", { class: "d-cal" }, d.calories != null ? fmt(d.calories) : "–", h("small", { text: " cal" })),
+        h("span", { class: "d-train" }, periodTag(d), parts(d).map((p) => h("span", { class: `tag ${p.kind}`, text: `${partName(p)}${p.minutes != null ? ` ${p.minutes} min` : ""}` }))),
+        h("span", { class: "chev", "aria-hidden": "true" })),
+      dayBody(d));
+  }));
+
+  /* ---------- exercises */
+  const index = new Map();
+  days.forEach((d, di) => parts(d).forEach((p) => {
+    const add = (key, name, kind, row) => {
+      if (!index.has(key)) index.set(key, { name, kind, rows: [] });
+      index.get(key).rows.push({ d, di, target: p.target, ...row });
+    };
+    if (p.kind === "activity") add(`a:${p.name}`, p.name, "activity", { where: "Activity", sets: [p.minutes != null && `${p.minutes} min`, p.calories != null && `${fmt(p.calories)} cal`].filter(Boolean).join(" · "), effort: p.effort, effortText: p.effortText, comment: p.comment });
+    else p.sections.forEach((s) => s.items.forEach((item) => item.perfs.forEach((f) =>
+      add(f.exerciseId, f.name, "session", { where: item.superset ? `${s.title}, superset` : s.title, sets: f.sets, effort: f.effort, effortText: f.effortText, comment: f.comment }))));
+  }));
+  const exercises = [...index.values()].sort((a, b) => b.rows.length - a.rows.length || a.name.localeCompare(b.name));
+  const exList = document.getElementById("ex-list");
+  exList.append(...exercises.map((x) => {
+    const on = new Set(x.rows.map((r) => r.di));
+    const el = h("details", { class: "exr" },
+      h("summary", {},
+        h("span", { class: "ex-name" }, h("span", { class: `tag ${x.kind}`, text: x.name })),
+        h("span", { class: `strip ${x.kind}`, "aria-hidden": "true" }, days.map((_, i) => h("i", { class: on.has(i) ? "on" : null }))),
+        h("span", { class: "x-count", text: `${x.rows.length}× · last ${x.rows[x.rows.length - 1].d.label}` }),
+        h("span", { class: "chev", "aria-hidden": "true" })),
+      h("div", { class: "xtable-wrap" }, h("table", { class: "xtable" }, h("tbody", {}, x.rows.map((r) => h("tr", {},
+        h("td", { class: "when" }, h("button", { type: "button", class: "linkbtn", text: r.d.label, onclick: () => openDay(r.d.date, r.target) })),
+        h("td", { class: "muted", text: r.where }),
+        h("td", { class: "num", text: r.sets || "–" }),
+        h("td", {}, eff(r.effort, r.effortText)),
+        h("td", { class: "muted", text: r.comment })))))));
+    el.dataset.name = x.name.toLowerCase();
+    return el;
+  }));
+  const count = document.getElementById("ex-count");
+  const filter = document.getElementById("ex-filter");
+  const applyFilter = () => {
+    const q = filter.value.trim().toLowerCase();
+    let shown = 0;
+    for (const el of exList.children) { el.hidden = !el.dataset.name.includes(q); shown += el.hidden ? 0 : 1; }
+    count.textContent = `${shown} of ${exercises.length}`;
+  };
+  filter.addEventListener("input", applyFilter);
+  applyFilter();
+
+  if (/^#d-\d{4}-\d{2}-\d{2}$/.test(location.hash)) openDay(location.hash.slice(3));
+})();
+</script>
