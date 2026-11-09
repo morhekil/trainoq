@@ -3,6 +3,7 @@ import { readGarminConnection, updateGarminConnection } from "./connection";
 import { GarminSignInError, loginGarmin } from "./connect";
 import { downloadGarminFits, GarminUnauthorizedError, GarminUnusableExportError, listGarminActivityIds, refreshGarminTokens } from "./remote";
 import { importGarminSummaries } from "./db";
+import { syncGarminDailyCalories } from "./daily";
 
 const pageSize = 20;
 const historyDays = 10;
@@ -67,6 +68,7 @@ export async function syncGarminPage(db: D1Database, secret: string, fetcher: Fe
       if (accepted) await db.prepare("INSERT INTO garmin_downloads (activity_id, imported_at) VALUES (?, ?)")
         .bind(id, new Date().toISOString()).run();
     }
+    await syncGarminDailyCalories(db, withToken, fetcher);
     const complete = ids.length < pageSize;
     const nextOffset = complete ? 0 : offset + ids.length;
     await db.prepare(`UPDATE garmin_connection SET next_offset = ?, last_sync_at = ?, last_error = NULL,

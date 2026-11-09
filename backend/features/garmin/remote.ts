@@ -47,6 +47,35 @@ export async function listGarminActivityIds(tokens: GarminTokens, start: number,
   });
 }
 
+export async function getGarminDisplayName(tokens: GarminTokens, fetcher: Fetcher = fetch): Promise<string> {
+  const response = await fetcher(`${api}/userprofile-service/socialProfile`, { headers: apiHeaders(tokens, "application/json") });
+  checkResponse(response);
+  const data: unknown = await response.json();
+  if (!data || typeof data !== "object" || !("displayName" in data) || typeof data.displayName !== "string" || !data.displayName)
+    throw new Error("Garmin returned an invalid profile.");
+  return data.displayName;
+}
+
+export interface GarminDailyCalories { activeCalories: number; complete: boolean; endUtc: string }
+
+/** A day's active calories, or null when Garmin has none. It is complete once the summary reaches the next local midnight. */
+export async function getGarminDailyCalories(tokens: GarminTokens, displayName: string, date: string, fetcher: Fetcher = fetch): Promise<GarminDailyCalories | null> {
+  const response = await fetcher(`${api}/usersummary-service/usersummary/daily/${encodeURIComponent(displayName)}?${new URLSearchParams({ calendarDate: date })}`,
+    { headers: apiHeaders(tokens, "application/json") });
+  checkResponse(response);
+  const data: unknown = await response.json();
+  if (!data || typeof data !== "object") throw new Error("Garmin returned an invalid daily summary.");
+  const summary = data as Record<string, unknown>;
+  if (summary.activeKilocalories == null) return null;
+  const { activeKilocalories: calories, calendarDate, wellnessEndTimeLocal: endLocal, wellnessEndTimeGmt: endGmt } = summary;
+  if (calendarDate !== date || typeof calories !== "number" || !Number.isFinite(calories) || calories < 0
+    || typeof endLocal !== "string" || typeof endGmt !== "string" || Number.isNaN(Date.parse(`${endGmt.slice(0, 19)}Z`)))
+    throw new Error("Garmin returned an invalid daily summary.");
+  const next = new Date(Date.parse(`${date}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+  return { activeCalories: Math.round(calories), complete: endLocal.startsWith(`${next}T00:00:00`),
+    endUtc: new Date(`${endGmt.slice(0, 19)}Z`).toISOString() };
+}
+
 export async function downloadGarminFits(tokens: GarminTokens, activityId: string, fetcher: Fetcher = fetch): Promise<Uint8Array[]> {
   if (!/^[1-9]\d*$/.test(activityId)) throw new Error("Invalid Garmin activity ID.");
   const response = await fetcher(`${api}/download-service/files/activity/${activityId}`, { headers: apiHeaders(tokens, "*/*") });

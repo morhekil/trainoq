@@ -1,7 +1,10 @@
+import { readFileSync } from "node:fs";
 import { DatabaseSync } from "node:sqlite";
 import { createTRPCClient, httpLink } from "@trpc/client";
 import { zipSync } from "fflate";
 import { expect, it, vi } from "vitest";
+import { getDay, putDay } from "../backend/features/days/db";
+import { emptyDay } from "../shared/days/model";
 import { readGarminConnection, saveGarminConnection } from "../backend/features/garmin/connection";
 import { syncGarminPage } from "../backend/features/garmin/sync";
 import worker from "../backend/index";
@@ -14,15 +17,49 @@ function database() {
   sqlite.exec(`CREATE TABLE garmin_connection (id INTEGER PRIMARY KEY, encrypted_state TEXT, status TEXT, next_offset INTEGER, last_sync_at TEXT, last_error TEXT, updated_at TEXT, sync_lock_until TEXT);
     CREATE TABLE garmin_downloads (activity_id TEXT PRIMARY KEY, imported_at TEXT NOT NULL);
     CREATE TABLE garmin_activities (source_key TEXT PRIMARY KEY, summary TEXT NOT NULL, summary_hash TEXT NOT NULL, imported_at TEXT NOT NULL, auto_imported_at TEXT);
-    CREATE TABLE garmin_links (source_key TEXT PRIMARY KEY, date TEXT NOT NULL, target_kind TEXT NOT NULL, target_id TEXT);`);
+    CREATE TABLE days (date TEXT PRIMARY KEY, doc TEXT NOT NULL, updated_at TEXT NOT NULL);
+    CREATE TABLE exercise_log (id INTEGER PRIMARY KEY, date TEXT, section TEXT, name TEXT, name_key TEXT, detail TEXT, ord INTEGER, exercise_id TEXT);
+    CREATE TABLE garmin_links (source_key TEXT PRIMARY KEY, date TEXT NOT NULL, target_kind TEXT NOT NULL, target_id TEXT);
+    ${readFileSync("migrations/0009_garmin_daily.sql", "utf8")}`);
+  type Bound = { sql: string; args: unknown[] };
   const prepare = (sql: string, args: unknown[] = []) => ({
+    sql, args,
     bind(...values: unknown[]) { return prepare(sql, values); },
     async first() { return sqlite.prepare(sql).get(...args as []) ?? null; },
     async all() { return { results: sqlite.prepare(sql).all(...args as []) }; },
     async run() { return { meta: { changes: sqlite.prepare(sql).run(...args as []).changes } }; },
   });
-  return { sqlite, db: { prepare } as unknown as D1Database };
+  const db = { prepare, async batch(statements: Bound[]) {
+    sqlite.exec("BEGIN");
+    try {
+      const results = statements.map(({ sql, args }) => ({ meta: { changes: sqlite.prepare(sql).run(...args as []).changes } }));
+      sqlite.exec("COMMIT");
+      return results;
+    } catch (error) { sqlite.exec("ROLLBACK"); throw error; }
+  } };
+  return { sqlite, db: db as unknown as D1Database };
 }
+
+/** Garmin's daily summary for a Sydney (UTC+11) day; a finished day ends at the next local midnight. */
+function daily(date: string, activeKilocalories: number | null, endLocal = `${nextDate(date)}T00:00:00.0`) {
+  const endGmt = new Date(Date.parse(`${endLocal.slice(0, 19)}Z`) - 11 * 3_600_000).toISOString().slice(0, 19) + ".0";
+  return new Response(JSON.stringify(activeKilocalories === null ? { calendarDate: date, activeKilocalories: null }
+    : { calendarDate: date, activeKilocalories, wellnessEndTimeLocal: endLocal, wellnessEndTimeGmt: endGmt }));
+}
+
+function nextDate(date: string) {
+  return new Date(Date.parse(`${date}T00:00:00Z`) + 86_400_000).toISOString().slice(0, 10);
+}
+
+/** Answers the profile and daily summary requests, with no wellness data unless `days` gives a response. */
+function wellness(url: string, days: Record<string, () => Response> = {}): Response | null {
+  if (url.endsWith("/userprofile-service/socialProfile")) return new Response(JSON.stringify({ displayName: "me" }));
+  const date = url.match(/\/usersummary-service\/usersummary\/daily\/me\?calendarDate=(\d{4}-\d{2}-\d{2})$/)?.[1];
+  return date ? days[date]?.() ?? daily(date, null) : null;
+}
+
+const dailyRequests = (fetcher: ReturnType<typeof vi.fn>, date: string) =>
+  fetcher.mock.calls.filter(([url]) => String(url).endsWith(`calendarDate=${date}`)).length;
 
 it("backfills original FITs once, then skips recorded Garmin IDs", async () => {
   const { sqlite, db } = database();
@@ -32,6 +69,8 @@ it("backfills original FITs once, then skips recorded Garmin IDs", async () => {
   const archive = zipSync({ "activity.fit": fit });
   const fetcher = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
+    const summary = wellness(url);
+    if (summary) return summary;
     if (url.includes("/activities/search/activities")) return new Response(JSON.stringify([{ activityId: 123 }]));
     if (url.endsWith("/activity/123")) return new Response(archive as BodyInit);
     throw new Error(`Unexpected Garmin URL ${url}`);
@@ -55,6 +94,8 @@ it("refreshes an expired Garmin token and persists the replacement", async () =>
   const archive = zipSync({ "activity.fit": fit });
   const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
+    const summary = wellness(url);
+    if (summary) return summary;
     if (url.includes("/activities/search/activities") && (init?.headers as Record<string, string>).Authorization === "Bearer old")
       return new Response("", { status: 401 });
     if (url.includes("/di-oauth2-service/oauth/token")) return new Response(JSON.stringify({ access_token: "fresh", refresh_token: "next" }));
@@ -77,6 +118,8 @@ it("continues after an unusable FIT and retries that Garmin ID on the next scan"
   const archive = zipSync({ "activity.fit": fit });
   const fetcher = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
+    const summary = wellness(url);
+    if (summary) return summary;
     if (url.includes("/activities/search/activities")) return new Response(JSON.stringify([{ activityId: 122 }, { activityId: 123 }]));
     if (url.endsWith("/activity/122")) return new Response((firstExportIsBad ? zipSync({ "bad.fit": Uint8Array.from([1]) }) : archive) as BodyInit);
     if (url.endsWith("/activity/123")) return new Response(archive as BodyInit);
@@ -108,15 +151,29 @@ it("syncs through the authenticated Worker API and its scheduled handler", async
   const archive = zipSync({ "activity.fit": fit });
   vi.stubGlobal("fetch", vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
+    const summary = wellness(url);
+    if (summary) return summary;
     if (url.includes("/activities/search/activities")) return new Response(JSON.stringify([{ activityId: 123 }]));
     if (url.endsWith("/activity/123")) return new Response(archive as BodyInit);
     throw new Error(`Unexpected Garmin URL ${url}`);
   }));
   await expect(client.garmin.sync.mutate()).rejects.toMatchObject({ data: { code: "UNAUTHORIZED" } });
   await client.auth.login.mutate({ password: "app-secret" });
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-11-04T12:00:00Z"));
+  vi.mocked(fetch).mockImplementation(async (input: RequestInfo | URL) => {
+    const url = String(input);
+    const summary = wellness(url, { "2026-11-03": () => daily("2026-11-03", 1547) });
+    if (summary) return summary;
+    if (url.includes("/activities/search/activities")) return new Response(JSON.stringify([{ activityId: 123 }]));
+    if (url.endsWith("/activity/123")) return new Response(archive as BodyInit);
+    throw new Error(`Unexpected Garmin URL ${url}`);
+  });
   expect(await client.garmin.sync.mutate()).toMatchObject({ scanned: 1, inserted: 1, complete: true });
+  expect((await client.days.get.query("2026-11-03")).doc?.totalCalories).toBe(1547);
   await worker.scheduled({ cron: "*/5 * * * *" } as ScheduledEvent, env);
   expect(sqlite.prepare("SELECT COUNT(*) AS count FROM garmin_downloads").get()).toMatchObject({ count: 1 });
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   sqlite.close();
 });
@@ -129,6 +186,8 @@ it("signs in again with the stored password when Garmin rejects the refresh toke
   const archive = zipSync({ "activity.fit": fit });
   const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
+    const summary = wellness(url);
+    if (summary) return summary;
     if (url.includes("/activities/search/activities") && (init?.headers as Record<string, string>).Authorization === "Bearer old") return new Response("", { status: 401 });
     if (url.includes("/di-oauth2-service/oauth/token") && String(init?.body).includes("refresh_token=expired")) return new Response("", { status: 400 });
     if (url.includes("/mobile/api/login")) {
@@ -152,6 +211,8 @@ it("asks for verification if a reconnect triggers Garmin's MFA challenge", async
   } }, "connected");
   const fetcher = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
+    const summary = wellness(url);
+    if (summary) return summary;
     if (url.includes("/activities/search/activities")) return new Response("", { status: 401 });
     if (url.includes("/di-oauth2-service/oauth/token")) return new Response("", { status: 400 });
     if (url.includes("/mobile/api/login")) return new Response(JSON.stringify({ responseStatus: { type: "MFA_REQUIRED" } }), { headers: { "Set-Cookie": "SSO=abc; Path=/" } });
@@ -172,6 +233,8 @@ it("stops scheduled retries after Garmin rejects the stored password", async () 
   } }, "connected");
   const fetcher = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
+    const summary = wellness(url);
+    if (summary) return summary;
     if (url.includes("/activities/search/activities")) return new Response("", { status: 401 });
     if (url.includes("/di-oauth2-service/oauth/token")) return new Response("", { status: 400 });
     if (url.includes("/mobile/api/login")) return new Response(JSON.stringify({ responseStatus: { type: "INVALID_USERNAME_PASSWORD" } }));
@@ -214,6 +277,8 @@ it("continues past an activity whose original export is unavailable", async () =
   const archive = zipSync({ "activity.fit": fit });
   const fetcher = vi.fn(async (input: RequestInfo | URL) => {
     const url = String(input);
+    const summary = wellness(url);
+    if (summary) return summary;
     if (url.includes("/activities/search/activities")) return new Response(JSON.stringify([{ activityId: 122 }, { activityId: 123 }]));
     if (url.endsWith("/activity/122")) return new Response("", { status: 404 });
     if (url.endsWith("/activity/123")) return new Response(archive as BodyInit);
@@ -231,9 +296,82 @@ it("lists only Garmin activities from the last 10 days", async () => {
   await saveGarminConnection(db, "app-secret", { email: "me@example.com", password: "password", tokens: {
     accessToken: "access", refreshToken: "refresh", clientId: "client",
   } }, "connected");
-  const fetcher = vi.fn(async (_input: RequestInfo | URL) => new Response("[]"));
+  const fetcher = vi.fn(async (input: RequestInfo | URL) => wellness(String(input)) ?? new Response("[]"));
   expect(await syncGarminPage(db, "app-secret", fetcher)).toMatchObject({ scanned: 0, complete: true });
   expect(String(fetcher.mock.calls[0][0])).toContain("startDate=2026-09-19");
+  vi.useRealTimers();
+  sqlite.close();
+});
+
+async function connected() {
+  const { sqlite, db } = database();
+  await saveGarminConnection(db, "app-secret", { email: "me@example.com", password: "password", tokens: {
+    accessToken: "access", refreshToken: "refresh", clientId: "client",
+  } }, "connected");
+  return { sqlite, db };
+}
+
+it("fills finished days' active calories from Garmin and keeps typed totals and today alone", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  vi.setSystemTime(new Date("2026-11-04T12:00:00Z"));
+  const { sqlite, db } = await connected();
+  await putDay(db, "2026-11-02", { ...emptyDay("2026-11-02"), totalCalories: 900 }, null);
+  const fetcher = vi.fn(async (input: RequestInfo | URL) => wellness(String(input), {
+    "2026-11-02": () => daily("2026-11-02", 1100),
+    "2026-11-03": () => daily("2026-11-03", 1547),
+    "2026-11-04": () => daily("2026-11-04", 1200, "2026-11-04T20:39:00.0"),
+  }) ?? new Response("[]"));
+
+  await syncGarminPage(db, "app-secret", fetcher);
+
+  expect((await getDay(db, "2026-11-03"))?.doc).toEqual({ ...emptyDay("2026-11-03"), totalCalories: 1547 });
+  expect((await getDay(db, "2026-11-02"))?.doc.totalCalories).toBe(900);
+  expect(await getDay(db, "2026-11-04")).toBeNull();
+  expect(sqlite.prepare("SELECT COUNT(*) AS count FROM days").get()).toMatchObject({ count: 2 });
+  for (const date of ["2026-10-29", "2026-11-04"]) expect(dailyRequests(fetcher, date)).toBe(1);
+  expect(dailyRequests(fetcher, "2026-10-28")).toBe(0);
+  vi.useRealTimers();
+  sqlite.close();
+});
+
+it("updates a Garmin-filled total every 30 minutes until 12 hours after the day ends", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  const { sqlite, db } = await connected();
+  let calories = 1500;
+  const fetcher = vi.fn(async (input: RequestInfo | URL) =>
+    wellness(String(input), { "2026-11-03": () => daily("2026-11-03", calories) }) ?? new Response("[]"));
+  const syncAt = async (iso: string) => { vi.setSystemTime(new Date(iso)); await syncGarminPage(db, "app-secret", fetcher); };
+
+  await syncAt("2026-11-04T00:30:00Z");
+  expect((await getDay(db, "2026-11-03"))?.doc.totalCalories).toBe(1500);
+  calories = 1547;
+  await syncAt("2026-11-04T00:45:00Z");
+  expect(dailyRequests(fetcher, "2026-11-03")).toBe(1);
+  await syncAt("2026-11-04T01:05:00Z");
+  expect((await getDay(db, "2026-11-03"))?.doc.totalCalories).toBe(1547);
+  calories = 1600;
+  await syncAt("2026-11-04T02:00:00Z");
+  expect(dailyRequests(fetcher, "2026-11-03")).toBe(2);
+  expect((await getDay(db, "2026-11-03"))?.doc.totalCalories).toBe(1547);
+  vi.useRealTimers();
+  sqlite.close();
+});
+
+it("leaves a total typed over a Garmin-filled value", async () => {
+  vi.useFakeTimers({ toFake: ["Date"] });
+  const { sqlite, db } = await connected();
+  let calories = 1500;
+  const fetcher = vi.fn(async (input: RequestInfo | URL) =>
+    wellness(String(input), { "2026-11-03": () => daily("2026-11-03", calories) }) ?? new Response("[]"));
+  vi.setSystemTime(new Date("2026-11-04T00:30:00Z"));
+  await syncGarminPage(db, "app-secret", fetcher);
+  const filled = await getDay(db, "2026-11-03");
+  await putDay(db, "2026-11-03", { ...filled!.doc, totalCalories: 1450 }, filled!.updatedAt);
+  calories = 1547;
+  vi.setSystemTime(new Date("2026-11-04T01:05:00Z"));
+  await syncGarminPage(db, "app-secret", fetcher);
+  expect(dailyRequests(fetcher, "2026-11-03")).toBe(2);
+  expect((await getDay(db, "2026-11-03"))?.doc.totalCalories).toBe(1450);
   vi.useRealTimers();
   sqlite.close();
 });
