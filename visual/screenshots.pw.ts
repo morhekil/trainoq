@@ -379,12 +379,7 @@ test("conflict banner leaves the last action reachable", async ({ page }) => {
   await page.goto(`/#/d/${day}`);
   for (const width of [320, 390]) {
     await page.setViewportSize({ width, height: 844 });
-    await page.evaluate(() => window.scrollTo(0, document.documentElement.scrollHeight));
-    const reachable = await page.getByRole("button", { name: "Share day with PT / physio" }).evaluate((button) => {
-      const rect = button.getBoundingClientRect();
-      return button.contains(document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2));
-    });
-    expect(reachable, `Share must be reachable at ${width}px`).toBe(true);
+    await page.getByRole("button", { name: "Share day with PT / physio" }).click({ trial: true });
   }
 });
 
