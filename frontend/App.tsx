@@ -5,6 +5,7 @@ import { DayHeader, SyncBadge } from "./features/days/header";
 import { HistoryView } from "./features/days/history";
 import { ShareSheet } from "./features/days/share";
 import { GarminView } from "./features/garmin/view";
+import { WithingsView } from "./features/withings/view";
 import { useToday } from "./features/days/dates";
 import { Icon } from "./icons";
 import { OverlayProvider, useOverlays } from "./overlays";
@@ -19,7 +20,7 @@ import { lsGet, lsSet } from "./storage";
 
 // ---------------------------------------------------------------- routing (hash based)
 
-type Route = { view: "day"; date: string | null } | { view: "history" } | { view: "garmin" } | { view: "exercises" } | { view: "exercise"; id: string };
+type Route = { view: "day"; date: string | null } | { view: "history" } | { view: "garmin" } | { view: "withings" } | { view: "exercises" } | { view: "exercise"; id: string };
 
 function useOnline() {
   return useSyncExternalStore(
@@ -39,6 +40,7 @@ function parseHash(): Route {
   const h = location.hash.replace(/^#\/?/, "");
   if (h === "history") return { view: "history" };
   if (h === "garmin") return { view: "garmin" };
+  if (h === "withings" || h.startsWith("withings?")) return { view: "withings" };
   if (h === "exercises") return { view: "exercises" };
   const exercise = h.match(/^exercises\/(.+)$/);
   if (exercise) return { view: "exercise", id: decodeURIComponent(exercise[1]) };
@@ -135,6 +137,7 @@ function Main({ onSignedOut }: { onSignedOut: () => void }) {
         { label: "History", icon: "history", onClick: () => (location.hash = "#/history") },
         { label: "Exercises", icon: "repeat", onClick: () => (location.hash = "#/exercises") },
         { label: "Garmin activities", icon: "download", onClick: () => (location.hash = "#/garmin") },
+        { label: "Withings weight", icon: "download", onClick: () => (location.hash = "#/withings") },
         { label: "Share this day", icon: "share", onClick: () => setSharing(date) },
         { label: "Download backup (JSON)", icon: "download", onClick: () => void downloadBackup() },
         {
@@ -166,7 +169,7 @@ function Main({ onSignedOut }: { onSignedOut: () => void }) {
           <button type="button" className="icon-btn" aria-label="Back" onClick={() => (location.hash = route.view === "exercise" ? "#/exercises" : "#/")}>
             <Icon name="back" />
           </button>
-          <h1 className="topbar-title">{route.view === "history" ? "History" : route.view === "garmin" ? "Garmin activities" : route.view === "exercise" ? exerciseName(route.id) : "Exercises"}</h1>
+          <h1 className="topbar-title">{route.view === "history" ? "History" : route.view === "garmin" ? "Garmin activities" : route.view === "withings" ? "Withings weight" : route.view === "exercise" ? exerciseName(route.id) : "Exercises"}</h1>
           <SyncBadge />
         </header>
       ) : (
@@ -174,7 +177,7 @@ function Main({ onSignedOut }: { onSignedOut: () => void }) {
       )}
       {!online && <div className="offline-bar">Offline – everything is saved on this phone and syncs when you're back online.</div>}
       <main className="content">
-        {route.view === "history" ? <HistoryView /> : route.view === "garmin" ? <GarminView /> : route.view === "exercises" ? <ExercisesView /> : route.view === "exercise" ? <ExerciseDetail key={route.id} id={route.id} /> : (
+        {route.view === "history" ? <HistoryView /> : route.view === "garmin" ? <GarminView /> : route.view === "withings" ? <WithingsView /> : route.view === "exercises" ? <ExercisesView /> : route.view === "exercise" ? <ExerciseDetail key={route.id} id={route.id} /> : (
           <>
             <DayView key={date} date={date} />
             <button type="button" className="btn big secondary share-btn" onClick={() => setSharing(date)}>

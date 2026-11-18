@@ -24,6 +24,7 @@ import { formatNum } from "../../../shared/exercises/format";
 import type { ActivityResult } from "../../../shared/exercises/model";
 import { EffortPicker } from "../exercises/effort";
 import { request, trpc } from "../../api";
+import { DayWeight } from "../withings/view";
 
 export function DayView({ date }: { date: string }) {
   useSyncExternalStore(subscribeLibrary, libraryVersion);
@@ -91,6 +92,7 @@ export function DayView({ date }: { date: string }) {
   return (
     <DayContext.Provider value={ctx}>
       {entry?.conflict && <ConflictBanner date={date} local={doc} other={entry.conflict.doc} />}
+      <DayWeight date={date} />
       {recordingGroups.map((ids) => {
         const count = ids.reduce((total, id) => total + (doc.events.find((event) => event.id === id)?.entries.length ?? 0), 0);
         return <button key={ids[0]} type="button" className="btn big secondary recording-suggestion" onClick={() => undoable("Recording parts grouped", (day) => mergeEvents(day, ids))}>

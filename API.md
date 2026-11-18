@@ -28,6 +28,8 @@ Register an app in the [Withings developer dashboard](https://developer.withings
 
 All Withings procedures require the Trainoq session cookie. Tokens and OAuth state are excluded from backups and API responses.
 
+The **Withings weight** screen lists readings newest first and offers **Load more** for older readings. Each timestamp links to its source-local training day. A read-only **Body weight** card on that day shows all its imported readings without modifying its document. These source views require a network connection; training drafts keep their existing offline behavior.
+
 | Procedure | Kind | Input | Result |
 | --- | --- | --- | --- |
 | `withings.connection` | query | none | `{ configured, connected, userId, lastSyncAt, lastError, historyComplete }` |

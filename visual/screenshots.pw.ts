@@ -49,7 +49,8 @@ async function mockApi(page: Page, signedIn = true) {
     if (procedure === "exercises.saveTemplate") templates.set(input.id, input);
     if (procedure === "exercises.deleteTemplate") templates.delete(input.id);
     if (procedure === "exercises.setParams") params.set(input.exerciseId, input.params);
-    const data = procedure === "auth.me" ? { ok: true }
+    const data = procedure === "withings.measurements" ? { items: [], nextCursor: null }
+      : procedure === "auth.me" ? { ok: true }
       : procedure === "days.get" ? { date: day, doc: null, updatedAt: null }
       : procedure === "days.list" ? []
       : procedure === "exercises.library" ? { catalog: [], stats: [], history: {}, params: Object.fromEntries(params), templates: [...templates.values()] }

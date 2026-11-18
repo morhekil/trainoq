@@ -24,7 +24,8 @@ test("reviews pending Garmin recordings in pages and keeps a newly added row unt
     const start = input.cursor ? visible.findIndex((source) => source.sourceKey === input.cursor.sourceKey) + 1 : 0;
     const items = visible.slice(start, start + 20).map((source) => source.title === "Run 21" && added ? { ...source, status: "activity", targetId: "saved" } : source);
     const last = items.at(-1);
-    const data = procedure === "auth.me" ? { ok: true }
+    const data = procedure === "withings.measurements" ? { items: [], nextCursor: null }
+      : procedure === "auth.me" ? { ok: true }
       : procedure === "garmin.connection" ? disconnected
       : procedure === "garmin.list" ? { items, nextCursor: start + 20 < visible.length && last ? { importedAt: last.importedAt, sourceKey: last.sourceKey } : null }
       : procedure === "days.get" ? { date: "2026-09-28", doc: null, updatedAt: null }
@@ -76,7 +77,8 @@ test("accepts one FIT recording's thirteen parts as one event and leaves another
   await page.route("**/api/trpc/**", async (route) => {
     const procedure = new URL(route.request().url()).pathname.split("/").at(-1);
     if (procedure === "days.save") added = true;
-    const data = procedure === "auth.me" ? { ok: true }
+    const data = procedure === "withings.measurements" ? { items: [], nextCursor: null }
+      : procedure === "auth.me" ? { ok: true }
       : procedure === "garmin.connection" ? disconnected
       : procedure === "garmin.list" ? { items: added ? sources.slice(-1) : sources, nextCursor: null }
       : procedure === "days.get" ? { date: "2026-09-28", doc: null, updatedAt: null }
@@ -130,7 +132,8 @@ test("connects Garmin and backfills every page", async ({ page }) => {
       status = "connected";
     }
     if (procedure === "garmin.sync") pageCount++;
-    const data = procedure === "auth.me" ? { ok: true }
+    const data = procedure === "withings.measurements" ? { items: [], nextCursor: null }
+      : procedure === "auth.me" ? { ok: true }
       : procedure === "garmin.list" ? { items: [], nextCursor: null }
       : procedure === "garmin.connection" ? { status, email: status === "connected" ? "me@example.com" : null, nextOffset: pageCount * 20, lastSyncAt: null, lastError: null }
       : procedure === "garmin.connect" ? { status: "connected" }
@@ -162,7 +165,8 @@ test("shows a code field only when Garmin requests verification", async ({ page 
     const procedure = new URL(route.request().url()).pathname.split("/").at(-1);
     if (procedure === "garmin.connect") status = "mfa";
     if (procedure === "garmin.verifyMfa") status = "connected";
-    const data = procedure === "auth.me" ? { ok: true }
+    const data = procedure === "withings.measurements" ? { items: [], nextCursor: null }
+      : procedure === "auth.me" ? { ok: true }
       : procedure === "garmin.connection" ? { ...disconnected, status, email: "me@example.com" }
       : procedure === "garmin.connect" ? { status: "mfa" }
       : procedure === "garmin.verifyMfa" ? { status: "connected" }
@@ -186,7 +190,8 @@ test("explains a failed scheduled sign-in and accepts replacement credentials", 
   await page.route("**/api/trpc/**", async (route) => {
     const procedure = new URL(route.request().url()).pathname.split("/").at(-1);
     if (procedure === "garmin.connect") status = "connected";
-    const data = procedure === "auth.me" ? { ok: true }
+    const data = procedure === "withings.measurements" ? { items: [], nextCursor: null }
+      : procedure === "auth.me" ? { ok: true }
       : procedure === "garmin.connection" ? { ...disconnected, status, email: "me@example.com", lastError: status === "error" ? "Garmin rejected the email or password." : null }
       : procedure === "garmin.connect" ? { status: "connected" }
       : procedure === "garmin.sync" ? { scanned: 0, inserted: 0, unchanged: 0, updated: 0, rejected: 0, nextOffset: 0, complete: true }
@@ -206,7 +211,8 @@ test("Garmin review can ignore and restore a recording in the local day draft", 
   const source = { sourceKey: "garmin:123:2026-09-28T01:22:05.000Z:0", sport: "running", subSport: "generic", title: "Run", startUtc: "2026-09-28T01:22:05.000Z", localDate: "2026-09-28", offsetMinutes: 600, timerSeconds: 1561.339, elapsedSeconds: 1561.339, activeCalories: 172, importedAt: "2026-09-28T08:00:00.000Z", status: "pending", targetId: null, decisionDate: null };
   await page.route("**/api/trpc/**", async (route) => {
     const procedure = new URL(route.request().url()).pathname.split("/").at(-1);
-    const data = procedure === "auth.me" ? { ok: true }
+    const data = procedure === "withings.measurements" ? { items: [], nextCursor: null }
+      : procedure === "auth.me" ? { ok: true }
       : procedure === "garmin.connection" ? disconnected
       : procedure === "garmin.list" ? { items: [source], nextCursor: null }
       : procedure === "days.get" ? { date: "2026-09-28", doc: null, updatedAt: null }
@@ -239,7 +245,8 @@ test("Garmin review can ignore and restore a recording in the local day draft", 
 test("shows only Garmin connection and review controls", async ({ page }) => {
   await page.route("**/api/trpc/**", async (route) => {
     const procedure = new URL(route.request().url()).pathname.split("/").at(-1);
-    const data = procedure === "auth.me" ? { ok: true }
+    const data = procedure === "withings.measurements" ? { items: [], nextCursor: null }
+      : procedure === "auth.me" ? { ok: true }
       : procedure === "garmin.connection" ? disconnected
       : procedure === "garmin.list" ? { items: [], nextCursor: null }
       : procedure === "exercises.library" ? { catalog: [], stats: [], history: {} }
@@ -258,7 +265,8 @@ test("edits an accepted activity's Garmin local start time", async ({ page }) =>
   const doc = { v: 6, date: "2026-09-28", comments: [], sessions: [], activities: [{ id: "run", exerciseId: "seed:0170", comment: "", startedAt: "2026-09-28T06:00:00.000Z", sourceOffsetMinutes: 330, garminSourceKey: "garmin:123:2026-09-28T06:00:00.000Z:0", result: { minutes: 26, calories: 172 } }], ignoredGarminSourceKeys: [], totalCalories: null };
   await page.route("**/api/trpc/**", async (route) => {
     const procedure = new URL(route.request().url()).pathname.split("/").at(-1);
-    const data = procedure === "auth.me" ? { ok: true }
+    const data = procedure === "withings.measurements" ? { items: [], nextCursor: null }
+      : procedure === "auth.me" ? { ok: true }
       : procedure === "garmin.connection" ? disconnected
       : procedure === "days.get" ? { date: doc.date, doc, updatedAt: "base" }
       : procedure === "exercises.library" ? { catalog: [], stats: [], history: {} }
@@ -297,7 +305,8 @@ test("moves an accepted activity to a corrected Trainoq day", async ({ page }) =
       if (date === old.date) { await new Promise((resolve) => setTimeout(resolve, 900)); oldCompleted = true; }
       else if (!oldCompleted) newStartedBeforeOldComplete = true;
     }
-    const data = procedure === "auth.me" ? { ok: true }
+    const data = procedure === "withings.measurements" ? { items: [], nextCursor: null }
+      : procedure === "auth.me" ? { ok: true }
       : procedure === "garmin.connection" ? disconnected
       : procedure === "garmin.list" ? { items: [source], nextCursor: null }
       : procedure === "days.get" ? { date: requestedDate, doc: requestedDate === old.date ? old : null, updatedAt: requestedDate === old.date ? "base" : null }
@@ -337,7 +346,8 @@ test("a segment of a combined activity shows as added and explains why it cannot
     garminLinks: [0, 1].map((i) => ({ sourceKey: `${fit}:${i}`, target: { kind: "segment", id: `part-${i}` } })) };
   await page.route("**/api/trpc/**", async (route) => {
     const procedure = new URL(route.request().url()).pathname.split("/").at(-1);
-    const data = procedure === "auth.me" ? { ok: true }
+    const data = procedure === "withings.measurements" ? { items: [], nextCursor: null }
+      : procedure === "auth.me" ? { ok: true }
       : procedure === "garmin.connection" ? disconnected
       : procedure === "garmin.list" ? { items: [source], nextCursor: null }
       : procedure === "days.get" ? { date: doc.date, doc, updatedAt: "base" }
@@ -370,7 +380,8 @@ test("requires an explicit session choice when strength matches are ambiguous", 
   const doc = { v: 6, date: "2026-09-28", comments: [], sessions: [session("first", "2026-09-28T05:45:00.000Z"), session("second", "2026-09-28T06:10:00.000Z")], activities: [], ignoredGarminSourceKeys: [], totalCalories: null };
   await page.route("**/api/trpc/**", async (route) => {
     const procedure = new URL(route.request().url()).pathname.split("/").at(-1);
-    const data = procedure === "auth.me" ? { ok: true }
+    const data = procedure === "withings.measurements" ? { items: [], nextCursor: null }
+      : procedure === "auth.me" ? { ok: true }
       : procedure === "garmin.connection" ? disconnected
       : procedure === "garmin.list" ? { items: [source], nextCursor: null }
       : procedure === "days.get" ? { date: doc.date, doc, updatedAt: "base" }

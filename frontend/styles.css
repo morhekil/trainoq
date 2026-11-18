@@ -856,6 +856,30 @@ textarea {
 .garmin-record-head {
   justify-content: space-between;
 }
+.withings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.withings-readings {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: grid;
+  gap: 12px;
+}
+.withings-reading {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 16px;
+  font-variant-numeric: tabular-nums;
+}
+.withings-reading a {
+  color: var(--accent);
+  font-size: 14px;
+}
 .garmin-record-head h2 {
   margin: 0;
   font-size: 17px;
