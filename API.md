@@ -20,7 +20,7 @@ const day = await api.days.get.query("2026-09-26");
 
 Withings source measurements use `WeightMeasurement`: `{ sourceId, userId, groupId, measuredAt, timezone, localDate, weightKg }`. `measuredAt` is UTC; `localDate` uses the Withings account timezone. A source ID includes the account and measurement group IDs, so repeat imports update the same reading and multiple weigh-ins remain distinct. Weight is converted from Withings' integer and decimal exponent to kilograms. Only actual measurements (category 1, type 1) are imported. Provider responses are validated before storage.
 
-Provider contracts: [OAuth tokens](https://developer.withings.com/api-reference/#operation/oauth2-requesttoken), [measurements](https://developer.withings.com/api-reference/#operation/measure-getmeas).
+Provider contracts: [OAuth tokens](https://developer.withings.com/api-reference/#operation/oauth2-requesttoken), [measurements](https://developer.withings.com/api-reference/#operation/measure-getmeas). Update timestamps accept integer JSON values and the numeric strings documented by Withings; invalid timestamps stop the page before storage or checkpoint advancement.
 
 ### Withings
 

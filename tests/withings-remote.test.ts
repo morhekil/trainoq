@@ -16,6 +16,11 @@ it("keeps every real weigh-in in kilograms, with stable account-scoped IDs and t
   ]);
 });
 
+it("accepts the numeric-string update timestamp documented by Withings", () => {
+  expect(parseWeightPage({ ...body, updatetime: "1794950000" }, "7").updatedAt).toBe(1794950000);
+  expect(() => parseWeightPage({ ...body, updatetime: "invalid" }, "7")).toThrow();
+});
+
 it.each([
   { ...body, timezone: "unknown" },
   { ...body, measuregrps: [{ ...body.measuregrps[0], date: -1 }] },

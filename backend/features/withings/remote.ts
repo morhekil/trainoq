@@ -35,7 +35,8 @@ export async function requestWithingsTokens(env: Credentials, grant: { grant_typ
 }
 
 const pageSchema = z.object({
-  updatetime: z.number().int().nonnegative(), timezone: z.string().min(1), more: z.union([z.literal(0), z.literal(1)]).default(0), offset: z.number().int().nonnegative().optional(),
+  updatetime: z.union([z.number(), z.string().regex(/^\d+$/).transform(Number)]).pipe(z.number().int().nonnegative().max(Number.MAX_SAFE_INTEGER)),
+  timezone: z.string().min(1), more: z.union([z.literal(0), z.literal(1)]).default(0), offset: z.number().int().nonnegative().optional(),
   measuregrps: z.array(z.object({ grpid: id, date: z.number().int().nonnegative(), category: z.number().int(),
     measures: z.array(z.object({ type: z.number().int(), value: z.number().finite(), unit: z.number().int() })),
   })),
