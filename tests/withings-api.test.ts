@@ -56,6 +56,26 @@ async function connect(s: ReturnType<typeof setup>) {
   return state;
 }
 
+it("answers unauthenticated Withings HEAD probes before setup without touching OAuth state or tokens", async () => {
+  const s = setup(false);
+  const prepare = vi.spyOn(s.env.DB, "prepare");
+  const fetcher = vi.fn(); vi.stubGlobal("fetch", fetcher);
+  for (const query of ["", "?state=untrusted&code=probe"]) {
+    const response = await worker.fetch(new Request(`https://trainoq.test/api/withings/callback${query}`, { method: "HEAD" }) as never, s.env);
+    expect(response.status).toBe(200);
+    expect(await response.text()).toBe("");
+    expect(response.headers.get("Cache-Control")).toBe("no-store");
+    expect(response.headers.get("Set-Cookie")).toBeNull();
+    expect(response.headers.get("Location")).toBeNull();
+  }
+  expect((await s.callback("untrusted", "code=probe", false)).status).toBe(401);
+  for (const [method, path] of [["POST", "/api/withings/callback"], ["HEAD", "/api/withings/unknown"]]) {
+    expect((await worker.fetch(new Request(`https://trainoq.test${path}`, { method }) as never, s.env)).status).toBe(404);
+  }
+  expect(prepare).not.toHaveBeenCalled();
+  expect(fetcher).not.toHaveBeenCalled();
+});
+
 it("requires auth, binds a one-use OAuth state to this browser, and keeps tokens out of status and backups", async () => {
   const s = setup();
   await expect(s.client.withings.authorize.mutate()).rejects.toMatchObject({ data: { code: "UNAUTHORIZED" } });

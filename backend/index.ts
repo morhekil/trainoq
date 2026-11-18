@@ -9,7 +9,7 @@ import { readConnection } from "./features/withings/db";
 
 export default {
   fetch(req, env): Promise<Response> {
-    if (new URL(req.url).pathname === "/api/withings/callback" && req.method === "GET") return withingsCallback(req, env);
+    if (new URL(req.url).pathname === "/api/withings/callback" && (req.method === "GET" || req.method === "HEAD")) return withingsCallback(req, env);
     if (!new URL(req.url).pathname.startsWith("/api/trpc/")) {
       return Promise.resolve(new Response("Not found", { status: 404 }));
     }

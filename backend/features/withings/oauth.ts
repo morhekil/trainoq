@@ -24,6 +24,7 @@ export async function authorizeWithings(req: Request, headers: Headers, env: Env
 
 export async function withingsCallback(req: Request, env: Env): Promise<Response> {
   const headers = new Headers({ "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
+  if (req.method === "HEAD") return new Response(null, { headers });
   if (!(await isAuthed(req, env))) return new Response("Sign in to Trainoq, then reconnect Withings from the menu.", { status: 401, headers });
   const params = new URL(req.url).searchParams;
   const state = params.get("state");
