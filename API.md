@@ -22,6 +22,24 @@ Withings source measurements use `WeightMeasurement`: `{ sourceId, userId, group
 
 Provider contracts: [OAuth tokens](https://developer.withings.com/api-reference/#operation/oauth2-requesttoken), [measurements](https://developer.withings.com/api-reference/#operation/measure-getmeas).
 
+### Withings
+
+Register an app in the [Withings developer dashboard](https://developer.withings.com/dashboard/) with `https://<your-trainoq-host>/api/withings/callback` as its callback URL. Set `WITHINGS_CLIENT_ID` and `WITHINGS_CLIENT_SECRET` using `npx wrangler secret put <name>`; for local development put them in `.dev.vars` and register the local origin's callback too. Apply migration `0011_withings.sql` before running the updated Worker. Withings remains optional; Garmin and training continue without these secrets. Open **Menu → Withings weight → Connect Withings** to authorize measurement access. First sync imports history one page at a time; the five-minute schedule continues it automatically. **Sync now** fetches the next page immediately. Reconnect if authorization has expired. Disconnect stops Trainoq polling and removes local tokens; remove Trainoq's access in Withings too if you want to revoke provider-side consent.
+
+All Withings procedures require the Trainoq session cookie. Tokens and OAuth state are excluded from backups and API responses.
+
+| Procedure | Kind | Input | Result |
+| --- | --- | --- | --- |
+| `withings.connection` | query | none | `{ configured, connected, userId, lastSyncAt, lastError, historyComplete }` |
+| `withings.authorize` | mutation | none | `{ url }` for Withings consent; sets a ten-minute HttpOnly state cookie |
+| `withings.sync` | mutation | none | `{ imported, complete }` for one provider page; repeat until complete to finish history |
+| `withings.measurements` | query | `{ from?, to?, limit?: 1..200, cursor?: { measuredAt, sourceId } }` | `{ items: WeightMeasurement[], nextCursor }`, newest first, filtered by inclusive source-local dates |
+| `withings.disconnect` | mutation | none | `{ ok: true }`; removes local tokens and pending authorization, keeps imported readings |
+
+Withings redirects to `GET /api/withings/callback`. The Worker checks the Trainoq session and browser-bound state, atomically consumes the expiring state, exchanges the code, encrypts tokens with AES-GCM using an `APP_PASSWORD`-derived key, and redirects to `/#/withings`. Failed or cancelled authorization redirects to `/#/withings?error=authorization` and preserves any existing connection. Changing `APP_PASSWORD` requires reconnecting Withings.
+
+The existing five-minute schedule polls each connected provider independently, so a Garmin failure does not prevent a Withings poll. Withings imports all available weight history one page per run, then requests changes using `lastupdate`. Pagination keeps its original filter until the sweep completes; the next sweep overlaps the oldest provider update timestamp by one second. Each page atomically upserts its readings and checkpoint. A five-minute lease serializes token refresh, scheduled and manual sync, reconnection and disconnect. Rotated tokens are stored before use; rejected access tokens are refreshed once. Failure leaves the page cursor intact and exposes a safe, retryable error. Imported source records stay outside `DayDoc`, so imports never overwrite offline drafts or change day revisions. `backup.export.withingsMeasurements` contains all imported readings in chronological order. Provider-side deletions are not propagated; backups retain readings already imported.
+
 | Procedure | Kind | Input | Result |
 | --- | --- | --- | --- |
 | `auth.login` | mutation | `{ password: string }` | `{ ok: true }`; sets a session cookie |

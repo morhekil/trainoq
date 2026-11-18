@@ -3,6 +3,7 @@ import { authed } from "../auth/router";
 import { exportAll } from "./db";
 import { catalog } from "../exercises/db";
 import { allGarmin } from "../garmin/db";
+import { allWeights } from "../withings/db";
 
 export const backupRouter = t.router({
   export: authed.query(async ({ ctx }) => ({
@@ -10,6 +11,7 @@ export const backupRouter = t.router({
     days: await exportAll(ctx.env.DB),
     catalog: await catalog(ctx.env.DB),
     garminActivities: await allGarmin(ctx.env.DB),
+    withingsMeasurements: await allWeights(ctx.env.DB),
     exerciseParams: (await ctx.env.DB.prepare("SELECT exercise_id, params, updated_at FROM exercise_params ORDER BY exercise_id")
       .all<{ exercise_id: string; params: string; updated_at: string }>()).results.map((row) => ({ exerciseId: row.exercise_id, params: JSON.parse(row.params), updatedAt: row.updated_at })),
     paramTemplates: (await ctx.env.DB.prepare("SELECT id, name, params FROM param_templates ORDER BY name")

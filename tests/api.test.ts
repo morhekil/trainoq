@@ -30,6 +30,7 @@ describe("Worker tRPC boundary", () => {
           },
           async all() {
             if (sql.includes("FROM garmin_activities")) return { results: [] };
+            if (sql.includes("FROM withings_measurements")) return { results: [] };
             if (sql.includes("FROM exercise_params")) return { results: [...paramsRows].map(([exercise_id, row]) => ({ exercise_id, ...row })) };
             if (sql.includes("FROM param_templates")) return { results: [...templateRows].map(([id, row]) => ({ id, ...row })) };
             if (sql.includes("FROM exercise_log")) return { results: [] };

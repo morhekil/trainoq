@@ -17,6 +17,7 @@ it("lists automatically imported Garmin summaries through the authenticated Work
     CREATE TABLE param_templates (id TEXT PRIMARY KEY, name TEXT NOT NULL, params TEXT NOT NULL);
     CREATE TABLE garmin_activities (source_key TEXT PRIMARY KEY, summary TEXT NOT NULL, summary_hash TEXT NOT NULL, imported_at TEXT NOT NULL);
     CREATE TABLE garmin_links (source_key TEXT PRIMARY KEY, date TEXT NOT NULL, target_kind TEXT NOT NULL, target_id TEXT);`);
+  sqlite.exec(readFileSync("migrations/0011_withings.sql", "utf8"));
   type Bound = { sql: string; args: unknown[] };
   const prepare = (sql: string, args: unknown[] = []) => ({
     sql, args,

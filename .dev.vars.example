@@ -1,2 +1,5 @@
 # Local development only. In production set it with: npx wrangler secret put APP_PASSWORD
 APP_PASSWORD=change-me
+# Optional Withings developer app credentials; set both as Worker secrets in production.
+# WITHINGS_CLIENT_ID=
+# WITHINGS_CLIENT_SECRET=
